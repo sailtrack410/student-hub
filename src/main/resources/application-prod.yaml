@@ -1,0 +1,13 @@
+studenthub:
+  security:
+    session-store: redis
+    password-login-enabled: false
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+knife4j:
+  enable: false

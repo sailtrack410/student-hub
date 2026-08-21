@@ -1,0 +1,10 @@
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/devdata
+
+studenthub:
+  security:
+    password-login-enabled: true
+    allowed-origins:
+      - http://localhost:3000
+      - http://localhost:5173

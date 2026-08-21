@@ -4,22 +4,27 @@
 
 ## 1. 项目定位
 
-Student Hub 是面向高校学生的自助服务与校园事务智能助手，主要提供：
+Student Hub 是面向学生、教师、后勤服务人员和校园管理人员的综合服务与事务协同平台，主要提供：
 
 - 校园办事指南、政策和通知查询
 - 课表、成绩、缴费、申请进度等个人信息查询
 - 报修、请假、证明申请等事务导航和受控办理
 - AI 对话、意图识别、表单信息收集和结果解释
-- 面向辅导员、学院和系统管理员的管理后台
+- 报修、咨询、预约等服务申请与工单闭环
+- 面向服务人员、调度员、部门负责人和平台管理员的角色工作台
 
 ### 当前阶段的架构决策
 
 - 学生入口优先支持微信小程序，H5 作为补充；管理端使用桌面 Web。
 - 后端采用 Spring Boot 模块化单体，不拆分微服务。
+- 一个用户可以拥有多个角色；功能权限、组织数据范围和流程状态权限分别校验。
+- 认证使用 Spring Security 和服务端不透明会话。开发环境可使用内存会话，部署环境使用 Redis。
+- Token 不携带姓名、角色或个人信息，退出时删除服务端会话并立即失效。
 - AI 只调用外部模型 API，直接由 Java 后端调用，不单独部署 Python 容器。
 - 模型供应商通过适配层隔离，业务代码不得绑定某一家模型厂商的 SDK。
 - 真正的事务办理由规则、权限和校园系统接口执行，模型不能直接修改业务数据。
 - 只有在出现复杂文档解析、RAG、异步 Agent 或本地模型需求时，才评估独立 AI 服务。
+- 教务系统没有正式 API 时，账号密码仅用于当次登录；只加密保存短期教务 Session，失效后重新认证。
 
 ## 2. 技术栈
 
@@ -32,7 +37,8 @@ Student Hub 是面向高校学生的自助服务与校园事务智能助手，�
 | 数据库 | MySQL 8.0+，统一使用 `utf8mb4` |
 | 缓存 | Redis，用于会话、限流、短期缓存和幂等键 |
 | API 文档 | OpenAPI 3 + Knife4j/SpringDoc |
-| 认证 | 校园统一身份认证适配器；短期会话使用 HttpOnly Cookie 或 Bearer Token |
+| 认证 | Spring Security + 不透明 Bearer Token + Redis 服务端会话 |
+| 数据库迁移 | Flyway；所有表结构和种子数据必须通过迁移文件管理 |
 | AI | 外部模型 API；通过 `AiProvider`/`AiChatService` 统一封装 |
 | HTTP 客户端 | Spring `RestClient` 或项目统一 HTTP 客户端，禁止业务代码各自创建客户端 |
 | 日志 | SLF4J + Logback；生产环境支持结构化日志 |
@@ -48,31 +54,26 @@ Student Hub 是面向高校学生的自助服务与校园事务智能助手，�
 
 ## 3. 后端目录和分层
 
-推荐的基础目录如下：
+采用模块化单体。公共技术能力放在 `common/config/integration`，业务代码按领域放在 `modules`：
 
 ```text
-src/main/java/com/example/studenthub/
+src/main/java/com/studenthub/
 ├── StudentHubApplication.java
-├── common/                 # Result、分页、常量、枚举、工具
+├── common/                 # Result、分页、持久化基类、常量
 ├── config/                 # Spring、Redis、OpenAPI、HTTP 客户端配置
-├── controller/
-│   ├── student/            # 学生端接口
-│   ├── admin/              # 管理端接口
-│   └── common/             # 登录、AI、文件等跨端接口
-├── controller/**/dto/      # 请求/响应 DTO
-├── controller/**/query/    # 查询条件
-├── entity/                 # 持久化实体，禁止跨层暴露
-├── mapper/                 # MyBatis Mapper
-├── service/                # 业务接口
-├── service/impl/           # 业务实现
-├── convert/                # MapStruct 转换器
 ├── integration/            # 校园系统、微信、模型、短信等外部适配器
+├── modules/
+│   ├── identity/           # 用户、角色、权限、组织、认证会话
+│   ├── servicecatalog/     # 服务目录
+│   ├── servicerequest/     # 服务申请
+│   ├── workorder/          # 工单执行与状态机
+│   ├── notification/       # 消息通知
+│   └── evaluation/         # 评价与申诉
 ├── exception/              # 业务异常和全局异常处理
-├── interceptor/            # 认证、审计、幂等、限流等拦截器
 └── utils/                  # 无业务含义的通用工具
 ```
 
-业务代码按 `controller -> service -> mapper` 依赖。`controller` 不直接访问 Mapper，`entity` 不出现在 Controller 的入参或出参中。
+每个模块内部按 `controller -> service -> mapper` 依赖。`controller` 不直接访问 Mapper，`entity` 不出现在 Controller 的入参或出参中。禁止按学生、教师、后勤角色复制同一套业务 Service；角色差异由权限、数据范围和响应视图控制。
 
 新增业务模块至少应明确：接口、DTO/Query、Entity、Mapper、Service、ServiceImpl、ConvertMapper、错误码和测试。简单只读接口可以省略不需要的文件，但不得为了凑目录创建空类。
 
@@ -81,7 +82,7 @@ src/main/java/com/example/studenthub/
 ### 路径
 
 - 根路径统一为 `/api`。
-- 学生端：`/api/student/{resource}`。
+- 小程序公共业务：按领域使用 `/api/{resource}` 或 `/api/app/{resource}`。
 - 管理端：`/api/admin/{resource}`。
 - 公共能力：`/api/common/{resource}`。
 - URL 全部使用小写；多词使用 `/` 或 `-`，禁止驼峰。
@@ -121,7 +122,7 @@ src/main/java/com/example/studenthub/
 ### 命名
 
 - 表名和字段名使用小写下划线。
-- 系统表使用 `sys_` 前缀；学生业务表使用 `stu_`；校园事务表使用 `affair_`；知识和 AI 相关表使用 `ai_` 或 `kb_`。
+- 系统表使用 `sys_` 前缀；服务申请使用 `service_`；工单使用 `work_order_`；知识和 AI 相关表使用 `ai_` 或 `kb_`。
 - 主键字段统一使用 `id` 或项目决定的统一 ID 方案；同一项目不得混用自增、UUID 和雪花 ID。
 - 时间字段使用 `created_at`、`updated_at`；状态字段使用明确的枚举值，不用魔法数字。
 - 所有表必须有主键、创建时间和更新时间；需要审计的表增加创建人、更新人和逻辑删除字段。
@@ -138,10 +139,12 @@ src/main/java/com/example/studenthub/
 ## 6. 认证、授权和隐私
 
 - 学生身份优先接入学校统一身份认证；微信登录只作为入口适配，不替代学校身份确认。
-- 权限至少区分学生、辅导员/教师、学院管理员、系统管理员。
+- 基础角色包括服务申请人、服务人员、调度员、部门负责人、平台管理员；教师、学生等身份可以与功能角色并存。
+- 角色分配可绑定组织和 `data_scope`，至少支持本人、被指派、当前组织、当前组织及下级、校区和全部数据。
 - 资源访问必须校验“当前用户是否拥有该资源”，不能只校验登录状态。
 - 管理端和学生端使用不同的权限范围、菜单和接口拦截规则。
-- Token、Cookie、Session 的有效期、刷新、注销和并发登录策略必须写入配置和文档。
+- 平台访问 Token 是随机不透明值，Redis 只使用 Token 的 SHA-256 指纹作为 Key；不得改为在 Token 中写入角色和个人信息。
+- 教务 Session 与平台登录 Session 分开存储、分开失效，禁止相互替代。
 - 密码、JWT 密钥、模型 API Key、数据库密码、云服务凭证不得进入 Git；使用环境变量、密钥服务或部署平台 Secret。
 - 任何日志、异常、AI 提示词和埋点都要避免泄露完整身份证号、手机号、成绩、家庭信息和认证凭证。
 - 文件上传必须校验大小、扩展名、MIME、内容和访问权限；下载使用短时签名 URL。
@@ -219,14 +222,14 @@ Controller -> AiChatService -> AiProvider -> 外部模型 API
 
 Code Review 发现的问题按 `P0/P1/P2/P3` 记录，必须包含文件、行号、影响、修复建议和状态。P0/P1 问题未处理时不得合并或部署。
 
-提交信息使用：
+提交信息沿用参考仓库格式：
 
 ```text
-feat: add repair application query
-fix: prevent duplicate affair submission
-refactor: isolate ai provider adapter
-docs: update campus integration contract
-test: add student authorization cases
+feat: 1、新增报修申请
+fix: 1、修复重复派单
+refactor: 1、隔离校园系统适配器
+docs: 1、更新权限矩阵
+test: 1、补充工单状态测试
 ```
 
 一次提交只解决一个清晰主题，禁止把格式化、无关重构和业务修改混在一起。

@@ -7,11 +7,19 @@ spring:
   sql:
     init:
       mode: never
+  flyway:
+    locations: classpath:db/migration,classpath:db/devdata
   data:
     redis:
       repositories:
         enabled: false
 
 studenthub:
+  security:
+    session-store: memory
+    session-ttl: 8h
+    password-login-enabled: true
+    allowed-origins:
+      - http://localhost:3000
   ai:
     enabled: false

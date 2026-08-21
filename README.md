@@ -6,8 +6,10 @@
 
 - Spring Boot 3 + Java 17 + Maven
 - 统一 `Result<T>` 响应和全局异常处理
+- Spring Security、多角色权限、组织数据范围和不透明服务端会话
+- Flyway 数据库迁移与开发环境种子数据
 - MySQL、Redis 配置及本地 Docker Compose 依赖
-- OpenAPI 文档：`/api/swagger-ui.html`
+- Knife4j 接口调试：`/doc.html`；Swagger UI：`/api`
 - 健康检查：`GET /api/common/system/health`
 - 外部模型 API 的 `AiProvider` 抽象和 OpenAI-compatible 适配器
 - AI 默认关闭；配置 `AI_ENABLED=true` 后才允许调用外部模型
@@ -49,7 +51,43 @@ AI_API_KEY=your-key
 AI_MODEL=deepseek-chat
 ```
 
-当前只提供 Provider 和 Service 基础抽象，学生身份认证、会话持久化、Prompt 版本管理和工具调用将在明确校园系统契约后接入。
+当前提供 Provider 和 Service 基础抽象；Prompt 版本管理、AI 工具调用及正式校园身份适配将在明确外部系统契约后接入。
+
+## 开发认证
+
+`dev/test` 环境提供四个开发账号，统一密码为 `DevOnly123!`：
+
+| 用户名 | 角色 | 数据范围 |
+|---|---|---|
+| `admin` | 平台管理员 | 全部 |
+| `requester` | 服务申请人 | 本人 |
+| `worker` | 服务人员 | 被指派工单 |
+| `dispatcher` | 调度员 | 后勤部门及下级 |
+
+```bash
+curl -X POST http://localhost:9000/api/common/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"DevOnly123!"}'
+```
+
+生产环境强制关闭密码开发登录。微信、校园统一身份认证和管理端正式登录后续接入同一套服务端会话。
+
+## 接口调试
+
+开发环境启用 Knife4j，启动后访问：
+
+- Knife4j 调试页：[http://localhost:9000/doc.html](http://localhost:9000/doc.html)
+- Swagger UI 调试页：[http://localhost:9000/api](http://localhost:9000/api)
+- OpenAPI JSON：[http://localhost:9000/api/openapi.json](http://localhost:9000/api/openapi.json)
+
+先调用开发登录接口获取 `accessToken`，再在文档页的全局授权中填入 Token，即可调试受保护接口。生产环境默认关闭接口文档。
+
+## 数据库迁移
+
+- 正式表结构：`src/main/resources/db/migration`
+- 开发种子数据：`src/main/resources/db/devdata`
+- `dev/test` 会加载两者，`prod` 只加载正式迁移。
+- 已应用的迁移文件禁止修改；结构变化必须新增版本文件。
 
 ## 目录约定
 

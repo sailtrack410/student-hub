@@ -21,7 +21,8 @@ public class GlobalExceptionHandler {
                                                         HttpServletRequest request) {
         log.warn("业务请求失败, method={}, path={}, code={}",
                 request.getMethod(), request.getRequestURI(), exception.getCode());
-        return ResponseEntity.ok(Result.failed(exception.getCode(), exception.getMessage()));
+        return ResponseEntity.status(exception.getHttpStatus())
+                .body(Result.failed(exception.getCode(), exception.getMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

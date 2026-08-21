@@ -11,6 +11,9 @@ spring:
     username: ${DB_USERNAME:student_hub}
     password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -23,6 +26,11 @@ mybatis-plus:
     map-underscore-to-camel-case: true
 
 studenthub:
+  security:
+    session-store: ${SESSION_STORE:memory}
+    session-ttl: ${SESSION_TTL:8h}
+    password-login-enabled: ${PASSWORD_LOGIN_ENABLED:false}
+    allowed-origins: ${ALLOWED_ORIGINS:}
   ai:
     enabled: ${AI_ENABLED:false}
     base-url: ${AI_BASE_URL:https://api.deepseek.com}
@@ -45,7 +53,13 @@ springdoc:
   api-docs:
     path: /api/openapi.json
   swagger-ui:
-    path: /api/swagger-ui.html
+    path: /api
+    tags-sorter: alpha
+    operations-sorter: alpha
+    try-it-out-enabled: true
+
+knife4j:
+  enable: true
 
 logging:
   level:
