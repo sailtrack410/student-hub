@@ -1,0 +1,53 @@
+server:
+  port: ${SERVER_PORT:9000}
+
+spring:
+  application:
+    name: student-hub-api
+  profiles:
+    default: dev
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/student_hub?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:student_hub}
+    password: ${DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+mybatis-plus:
+  mapper-locations: classpath:/mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+studenthub:
+  ai:
+    enabled: ${AI_ENABLED:false}
+    base-url: ${AI_BASE_URL:https://api.deepseek.com}
+    api-key: ${AI_API_KEY:}
+    model: ${AI_MODEL:deepseek-chat}
+    connect-timeout-seconds: ${AI_CONNECT_TIMEOUT_SECONDS:5}
+    read-timeout-seconds: ${AI_READ_TIMEOUT_SECONDS:60}
+    max-input-characters: ${AI_MAX_INPUT_CHARACTERS:12000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+springdoc:
+  api-docs:
+    path: /api/openapi.json
+  swagger-ui:
+    path: /api/swagger-ui.html
+
+logging:
+  level:
+    root: INFO
+    com.studenthub: INFO
