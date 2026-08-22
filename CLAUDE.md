@@ -75,17 +75,19 @@ src/main/java/com/studenthub/
 
 每个模块内部按 `controller -> service -> mapper` 依赖。`controller` 不直接访问 Mapper，`entity` 不出现在 Controller 的入参或出参中。禁止按学生、教师、后勤角色复制同一套业务 Service；角色差异由权限、数据范围和响应视图控制。
 
-新增业务模块至少应明确：接口、DTO/Query、Entity、Mapper、Service、ServiceImpl、ConvertMapper、错误码和测试。简单只读接口可以省略不需要的文件，但不得为了凑目录创建空类。
+新增业务模块至少应明确：接口、DTO/Query、Entity、Mapper、Service、ServiceImpl、ConvertMapper、错误码和测试。即使是简单只读接口，也必须遵守 DTO/Query、Response DTO/VO 和分层规范；只有确实不需要的技术文件才可以省略，不得为了凑目录创建空类。
 
 ## 4. Controller 和 API 规范
 
-### 路径
+### 建议接口格式
 
-- 根路径统一为 `/api`。
-- 小程序公共业务：按领域使用 `/api/{resource}` 或 `/api/app/{resource}`。
-- 管理端：`/api/admin/{resource}`。
-- 公共能力：`/api/common/{resource}`。
-- URL 全部使用小写；多词使用 `/` 或 `-`，禁止驼峰。
+以下是接口路径的建议格式，不预先强制固定所有业务资源名称；具体模块应在接口评审时确定，并在模块内部保持一致：
+
+- 根路径建议使用 `/api`。
+- 小程序公共业务建议按领域使用 `/api/{resource}` 或 `/api/app/{resource}`。
+- 管理端建议使用 `/api/admin/{resource}`。
+- 公共能力建议使用 `/api/common/{resource}`。
+- URL 确定后统一使用小写；多词使用 `/` 或 `-`，禁止驼峰。
 
 示例：`GET /api/student/course/schedule`、`POST /api/student/affair/apply`。
 
