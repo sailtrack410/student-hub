@@ -25,5 +25,8 @@ public class UserEntity extends BaseEntity {
     private String phone;
     private String avatarUrl;
     private String status;
+    private String wechatOpenId;
+    private String identityType;
+    private String authorizationStatus;
     private LocalDateTime lastLoginAt;
 }

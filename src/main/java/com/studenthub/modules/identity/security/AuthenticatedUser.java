@@ -8,6 +8,8 @@ public record AuthenticatedUser(
         Long defaultOrganizationId,
         String username,
         String displayName,
+        String identityType,
+        String authorizationStatus,
         List<RoleScope> roleScopes,
         List<String> permissionCodes) {
 

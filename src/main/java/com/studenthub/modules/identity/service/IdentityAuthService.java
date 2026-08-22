@@ -7,6 +7,8 @@ public interface IdentityAuthService {
 
     LoginResponse login(String username, String password);
 
+    LoginResponse wechatLogin(String code);
+
     void logout(String rawToken);
 
     CurrentUserResponse currentUser();

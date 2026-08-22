@@ -72,6 +72,72 @@ curl -X POST http://localhost:9000/api/common/auth/login \
 
 生产环境强制关闭密码开发登录。微信、校园统一身份认证和管理端正式登录后续接入同一套服务端会话。
 
+## 微信登录
+
+小程序用户通过微信登录，没有单独的注册接口；首次登录自动创建平台账号。
+
+### 接口
+
+```
+POST /api/common/auth/wechat-login
+```
+
+前端只需提交微信 `wx.login()` 获取的 `code`，后端不返回 `session_key`：
+
+```json
+{
+  "code": "微信登录code"
+}
+```
+
+响应符合项目统一 `Result<T>` 结构：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "accessToken": "随机不透明Token",
+    "expiresAt": "2026-08-22T12:00:00Z",
+    "isNewUser": true,
+    "user": {
+      "userId": 1,
+      "username": "wx_openid_prefix",
+      "displayName": "微信用户",
+      "identityType": "STUDENT",
+      "authorizationStatus": "BASIC",
+      "roles": ["REQUESTER"]
+    }
+  },
+  "timestamp": "2026-08-22T11:00:00Z"
+}
+```
+
+首次登录自动创建用户：`identityType` 设为 `STUDENT`，`authorizationStatus` 设为 `BASIC`，并绑定 `REQUESTER`（服务申请人）基础权限角色。
+
+### 环境配置
+
+| 环境 | WECHAT_MODE | 说明 |
+|---|---|---|
+| 开发/测试 | `mock` | 不请求微信接口，非空且不以 invalid 开头的 code 可用于 Mock 登录 |
+| 生产 | `real` | 真实调用微信 `jscode2session` 接口 |
+
+生产环境还需配置：
+
+```bash
+WECHAT_MODE=real
+WECHAT_APP_ID=你的小程序AppID
+WECHAT_APP_SECRET=你的小程序AppSecret
+```
+
+可选超时配置（单位：秒）：
+
+| 环境变量 | 默认值 | 说明 |
+|---|---|---|
+| `WECHAT_CONNECT_TIMEOUT_SECONDS` | `5` | 连接微信接口的建立超时 |
+| `WECHAT_READ_TIMEOUT_SECONDS` | `10` | 等待微信接口响应的读取超时 |
+
 ## 接口调试
 
 开发环境启用 Knife4j，启动后访问：

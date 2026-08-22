@@ -91,4 +91,95 @@ class IdentityAuthIntegrationTest {
                 .andExpect(jsonPath("$.data.user.permissions", hasItem("service-request:create")))
                 .andExpect(jsonPath("$.data.user.permissions", not(hasItem("work-order:dispatch"))));
     }
+
+    @Test
+    void wechatLoginCreatesNewUserAndReturnsSessionWithIsNewUserTrue() throws Exception {
+        String responseBody = mockMvc.perform(post("/api/common/auth/wechat-login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"test-mock-code-001"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.data.isNewUser").value(true))
+                .andExpect(jsonPath("$.data.user.identityType").value("STUDENT"))
+                .andExpect(jsonPath("$.data.user.authorizationStatus").value("BASIC"))
+                .andExpect(jsonPath("$.data.user.username").value(org.hamcrest.Matchers.startsWith("wx_")))
+                .andExpect(jsonPath("$.data.user.roles", hasItem("REQUESTER")))
+                .andExpect(jsonPath("$.data.user.permissions", hasItem("service-request:create")))
+                .andExpect(jsonPath("$.data.user.permissions", hasItem("service-request:view:self")))
+                .andExpect(jsonPath("$.data.user.roleScopes[0].dataScope").value("SELF"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        JsonNode response = objectMapper.readTree(responseBody);
+        String token = response.path("data").path("accessToken").asText();
+
+        mockMvc.perform(get("/api/common/auth/me")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.identityType").value("STUDENT"))
+                .andExpect(jsonPath("$.data.authorizationStatus").value("BASIC"));
+
+        mockMvc.perform(post("/api/common/auth/logout")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/common/auth/me")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void wechatLoginReturnsExistingUserOnSecondCall() throws Exception {
+        String firstBody = mockMvc.perform(post("/api/common/auth/wechat-login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"test-mock-code-repeat"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.isNewUser").value(true))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        JsonNode firstResponse = objectMapper.readTree(firstBody);
+        Long userId = firstResponse.path("data").path("user").path("userId").asLong();
+
+        String secondBody = mockMvc.perform(post("/api/common/auth/wechat-login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"test-mock-code-repeat"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.isNewUser").value(false))
+                .andExpect(jsonPath("$.data.user.userId").value(userId))
+                .andExpect(jsonPath("$.data.user.roles", hasItem("REQUESTER")))
+                .andExpect(jsonPath("$.data.user.permissions", hasItem("service-request:create")))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+    }
+
+    @Test
+    void wechatLoginRejectsInvalidCode() throws Exception {
+        mockMvc.perform(post("/api/common/auth/wechat-login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"invalid-test-code"}
+                                """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_401_02"));
+    }
+
+    @Test
+    void wechatLoginRejectsBlankCode() throws Exception {
+        mockMvc.perform(post("/api/common/auth/wechat-login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":""}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
 }

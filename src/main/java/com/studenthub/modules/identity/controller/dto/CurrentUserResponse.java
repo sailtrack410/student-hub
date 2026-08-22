@@ -11,6 +11,8 @@ public record CurrentUserResponse(
         Long defaultOrganizationId,
         String username,
         String displayName,
+        String identityType,
+        String authorizationStatus,
         List<String> roles,
         List<RoleScope> roleScopes,
         List<String> permissions) {
@@ -22,6 +24,8 @@ public record CurrentUserResponse(
                 user.defaultOrganizationId(),
                 user.username(),
                 user.displayName(),
+                user.identityType(),
+                user.authorizationStatus(),
                 user.roleCodes(),
                 user.roleScopes(),
                 user.permissionCodes());

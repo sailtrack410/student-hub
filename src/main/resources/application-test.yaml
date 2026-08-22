@@ -21,5 +21,8 @@ studenthub:
     password-login-enabled: true
     allowed-origins:
       - http://localhost:3000
+  wechat:
+    mode: mock
+    default-campus-id: 1
   ai:
     enabled: false

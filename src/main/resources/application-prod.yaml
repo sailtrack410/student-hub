@@ -2,6 +2,8 @@ studenthub:
   security:
     session-store: redis
     password-login-enabled: false
+  wechat:
+    mode: real
 
 springdoc:
   api-docs:

@@ -46,6 +46,7 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/common/system/health",
                                 "/api/common/auth/login",
+                                "/api/common/auth/wechat-login",
                                 "/actuator/health",
                                 "/api",
                                 "/api/openapi.json",
