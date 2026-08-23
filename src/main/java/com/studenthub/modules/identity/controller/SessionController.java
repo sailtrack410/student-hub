@@ -24,13 +24,13 @@ public class SessionController {
     private final IdentityAuthService identityAuthService;
 
     @GetMapping("/me")
-    @Operation(summary = "查询当前用户", operationId = "getCurrentUser")
+    @Operation(summary = "查询当前用户", description = "根据 Bearer Token 返回当前用户、固定身份、角色和权限。", operationId = "getCurrentUser")
     public Result<CurrentUserResponse> currentUser() {
         return Result.success(identityAuthService.currentUser());
     }
 
     @PostMapping("/logout")
-    @Operation(summary = "退出登录", operationId = "logout")
+    @Operation(summary = "退出登录", description = "使当前 Bearer Token 立即失效。", operationId = "logout")
     public Result<Void> logout(HttpServletRequest request) {
         String rawToken = BearerTokenResolver.resolve(request)
                 .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));

@@ -59,7 +59,7 @@ management:
 
 springdoc:
   api-docs:
-    path: /api/openapi.json
+    path: /v3/api-docs
   swagger-ui:
     path: /api
     tags-sorter: alpha

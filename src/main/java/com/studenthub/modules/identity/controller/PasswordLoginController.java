@@ -24,7 +24,8 @@ public class PasswordLoginController {
     private final IdentityAuthService identityAuthService;
 
     @PostMapping("/login")
-    @Operation(summary = "开发环境密码登录", operationId = "passwordLogin")
+    @Operation(summary = "开发环境密码登录", description = "仅用于 dev/test 环境调试，生产环境关闭。", operationId = "passwordLogin")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "提交开发环境账号和密码")
     public Result<LoginResponse> login(@RequestBody @Valid PasswordLoginRequest request) {
         return Result.success(identityAuthService.login(request.username(), request.password()));
     }

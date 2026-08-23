@@ -144,7 +144,7 @@ WECHAT_APP_SECRET=你的小程序AppSecret
 
 - Knife4j 调试页：[http://localhost:9000/doc.html](http://localhost:9000/doc.html)
 - Swagger UI 调试页：[http://localhost:9000/api](http://localhost:9000/api)
-- OpenAPI JSON：[http://localhost:9000/api/openapi.json](http://localhost:9000/api/openapi.json)
+- OpenAPI JSON：[http://localhost:9000/v3/api-docs](http://localhost:9000/v3/api-docs)
 
 先调用开发登录接口获取 `accessToken`，再在文档页的全局授权中填入 Token，即可调试受保护接口。生产环境默认关闭接口文档。
 

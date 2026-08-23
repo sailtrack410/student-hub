@@ -32,11 +32,18 @@ class SystemControllerTest {
         mockMvc.perform(get("/doc.html"))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(get("/api/openapi.json"))
+        mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.openapi").value("3.0.1"))
                 .andExpect(jsonPath("$.info.title").value("Student Hub API"))
                 .andExpect(jsonPath("$.components.securitySchemes.bearerAuth").exists())
-                .andExpect(jsonPath("$.paths['/api/common/auth/login']").exists());
+                .andExpect(jsonPath("$.paths['/api/common/auth/login']").exists())
+                .andExpect(jsonPath("$.components.schemas.WechatLoginRequest.properties.code.description").exists())
+                .andExpect(jsonPath("$.components.schemas.PasswordLoginRequest.properties.username.description").exists())
+                .andExpect(jsonPath("$.components.schemas.LoginResponse.properties.accessToken.description").exists())
+                .andExpect(jsonPath("$.components.schemas.CurrentUserResponse.properties.identityType.description").exists());
+
+        mockMvc.perform(get("/v3/api-docs/swagger-config"))
+                .andExpect(status().isOk());
     }
 }

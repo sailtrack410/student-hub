@@ -22,7 +22,8 @@ public class WechatLoginController {
     private final IdentityAuthService identityAuthService;
 
     @PostMapping("/wechat-login")
-    @Operation(summary = "微信登录", operationId = "wechatLogin")
+    @Operation(summary = "微信登录", description = "使用微信 wx.login() 获取的 code 登录；首次登录会自动创建学生基础账号。", operationId = "wechatLogin")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "仅提交微信 wx.login() 返回的 code")
     public Result<LoginResponse> login(@RequestBody @Valid WechatLoginRequest request) {
         return Result.success(identityAuthService.wechatLogin(request.code()));
     }
