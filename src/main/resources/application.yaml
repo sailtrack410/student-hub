@@ -40,7 +40,7 @@ studenthub:
     read-timeout-seconds: ${AI_READ_TIMEOUT_SECONDS:60}
     max-input-characters: ${AI_MAX_INPUT_CHARACTERS:12000}
   wechat:
-    mode: ${WECHAT_MODE:mock}
+    mode: ${WECHAT_MODE:real}
     app-id: ${WECHAT_APP_ID:}
     app-secret: ${WECHAT_APP_SECRET:}
     api-base-url: ${WECHAT_API_BASE_URL:https://api.weixin.qq.com}

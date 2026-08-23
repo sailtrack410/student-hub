@@ -14,3 +14,7 @@ studenthub:
     allowed-origins:
       - http://localhost:3000
       - http://localhost:5173
+  wechat:
+    mode: real
+    app-id: ${WECHAT_APP_ID:***REMOVED***}
+    app-secret: ${WECHAT_APP_SECRET:***REMOVED***}

@@ -1,5 +1,6 @@
 package com.studenthub.integration.wechat;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studenthub.common.ErrorCode;
 import com.studenthub.exception.BusinessException;
 import com.sun.net.httpserver.HttpServer;
@@ -33,9 +34,13 @@ class WechatApiIdentityProviderTest {
         mockServer.createContext("/sns/jscode2session", exchange -> {
             String query = exchange.getRequestURI().getQuery();
             String responseBody;
+            String contentType = "application/json";
 
             if (query != null && query.contains("js_code=bad-code")) {
                 responseBody = "{\"errcode\":40029,\"errmsg\":\"invalid code\"}";
+            } else if (query != null && query.contains("js_code=text-plain")) {
+                responseBody = "{\"openid\":\"text-plain-open-id\",\"session_key\":\"ignored\"}";
+                contentType = "text/plain";
             } else if (query != null && query.contains("js_code=empty-openid")) {
                 responseBody = "{\"openid\":\"\",\"errcode\":0}";
             } else if (query != null && query.contains("js_code=server-error")) {
@@ -45,7 +50,7 @@ class WechatApiIdentityProviderTest {
             }
 
             byte[] responseBytes = responseBody.getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.getResponseHeaders().set("Content-Type", contentType);
             exchange.sendResponseHeaders(200, responseBytes.length);
             exchange.getResponseBody().write(responseBytes);
             exchange.close();
@@ -57,7 +62,7 @@ class WechatApiIdentityProviderTest {
         properties.setAppSecret("test-app-secret");
         properties.setApiBaseUrl("http://localhost:" + port);
 
-        provider = new WechatApiIdentityProvider(RestClient.builder(), properties);
+        provider = new WechatApiIdentityProvider(RestClient.builder(), properties, new ObjectMapper());
     }
 
     @AfterEach
@@ -72,6 +77,13 @@ class WechatApiIdentityProviderTest {
         WechatIdentity identity = provider.exchange("valid-code");
 
         assertEquals("test-open-id-abc123", identity.openId());
+    }
+
+    @Test
+    void exchangeParsesJsonWhenWechatRespondsWithTextPlain() {
+        WechatIdentity identity = provider.exchange("text-plain");
+
+        assertEquals("text-plain-open-id", identity.openId());
     }
 
     @Test
@@ -98,5 +110,19 @@ class WechatApiIdentityProviderTest {
     @Test
     void defaultCampusIdReturnsConfiguredValue() {
         assertEquals(1L, provider.defaultCampusId());
+    }
+
+    @Test
+    void exchangeRejectsMissingWechatCredentialsWithoutCallingApi() {
+        WechatProperties properties = new WechatProperties();
+        properties.setAppId("test-app-id");
+        properties.setApiBaseUrl("http://localhost:" + mockServer.getAddress().getPort());
+        WechatApiIdentityProvider unconfiguredProvider =
+                new WechatApiIdentityProvider(RestClient.builder(), properties, new ObjectMapper());
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> unconfiguredProvider.exchange("valid-code"));
+
+        assertEquals(ErrorCode.WECHAT_NOT_CONFIGURED.getCode(), ex.getCode());
     }
 }

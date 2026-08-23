@@ -11,6 +11,7 @@ public enum ErrorCode {
     UNAUTHORIZED("AUTH_401", "请先完成身份认证", HttpStatus.UNAUTHORIZED),
     INVALID_CREDENTIALS("AUTH_401_01", "用户名或密码错误", HttpStatus.UNAUTHORIZED),
     WECHAT_LOGIN_FAILED("AUTH_401_02", "微信登录失败，请稍后重试", HttpStatus.UNAUTHORIZED),
+    WECHAT_NOT_CONFIGURED("AUTH_503_01", "微信登录服务尚未配置", HttpStatus.SERVICE_UNAVAILABLE),
     ACCOUNT_DISABLED("AUTH_403_01", "账号已停用", HttpStatus.FORBIDDEN),
     FORBIDDEN("AUTH_403", "没有执行该操作的权限", HttpStatus.FORBIDDEN),
     NOT_FOUND("COMMON_404", "资源不存在", HttpStatus.NOT_FOUND),

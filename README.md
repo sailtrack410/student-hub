@@ -120,16 +120,19 @@ POST /api/common/auth/wechat-login
 
 | 环境 | WECHAT_MODE | 说明 |
 |---|---|---|
-| 开发/测试 | `mock` | 不请求微信接口，非空且不以 invalid 开头的 code 可用于 Mock 登录 |
-| 生产 | `real` | 真实调用微信 `jscode2session` 接口 |
+| 开发 | `real` | 使用小程序真实 AppID 和 AppSecret 调用微信 `jscode2session` |
+| 测试 | `mock` | 仅自动化测试使用，不请求微信接口 |
+| 生产 | `real` | 使用生产配置调用微信 `jscode2session` 接口 |
 
-生产环境还需配置：
+开发和生产环境必须配置同一个小程序对应的 AppID 与 AppSecret：
 
 ```bash
 WECHAT_MODE=real
 WECHAT_APP_ID=你的小程序AppID
 WECHAT_APP_SECRET=你的小程序AppSecret
 ```
+
+缺少 AppID 或 AppSecret 时，登录接口返回 `AUTH_503_01`，不会回退到 Mock 登录。
 
 可选超时配置（单位：秒）：
 
