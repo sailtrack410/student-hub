@@ -1,0 +1,10 @@
+{
+  "pages": [
+    "pages/index/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "Student Hub",
+    "navigationBarBackgroundColor": "#4F46E5",
+    "navigationBarTextStyle": "white"
+  }
+}

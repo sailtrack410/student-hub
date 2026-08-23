@@ -1,0 +1,65 @@
+<view class="container">
+  <view class="header">
+    <image class="logo" src="/images/logo.png" mode="aspectFit"></image>
+    <text class="title">Student Hub</text>
+    <text class="subtitle">学生自助服务平台</text>
+  </view>
+
+  <view class="card">
+    <view class="status">
+      <text class="label">登录状态:</text>
+      <text class="value {{logged ? 'success' : 'info'}}">
+        {{logged ? '已登录' : '未登录'}}
+      </text>
+    </view>
+
+    <view wx:if="{{logged && user}}" class="user-info">
+      <view class="info-item">
+        <text class="info-label">用户ID:</text>
+        <text class="info-value">{{user.userId}}</text>
+      </view>
+      <view class="info-item">
+        <text class="info-label">用户名:</text>
+        <text class="info-value">{{user.username}}</text>
+      </view>
+      <view class="info-item">
+        <text class="info-label">昵称:</text>
+        <text class="info-value">{{user.displayName}}</text>
+      </view>
+      <view class="info-item">
+        <text class="info-label">身份类型:</text>
+        <text class="info-value">{{user.identityType}}</text>
+      </view>
+      <view class="info-item">
+        <text class="info-label">角色:</text>
+        <text class="info-value">{{user.roles[0]}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="actions">
+    <button
+      wx:if="{{!logged}}"
+      type="primary"
+      loading="{{loading}}"
+      disabled="{{loading}}"
+      bindtap="handleLogin"
+    >
+      微信登录
+    </button>
+
+    <block wx:if="{{logged}}">
+      <button type="default" bindtap="handleGetUser">
+        获取用户信息
+      </button>
+      <button type="warn" bindtap="handleLogout">
+        退出登录
+      </button>
+    </block>
+  </view>
+
+  <view wx:if="{{result}}" class="result">
+    <text class="result-title">请求结果:</text>
+    <text class="result-content" selectable="true">{{result}}</text>
+  </view>
+</view>

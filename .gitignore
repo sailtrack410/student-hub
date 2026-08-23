@@ -5,3 +5,4 @@ target/
 logs/
 *.log
 .DS_Store
+student-hub-weapp/project.private.config.json
