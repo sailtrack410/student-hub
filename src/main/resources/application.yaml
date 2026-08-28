@@ -6,6 +6,9 @@ spring:
     name: student-hub-api
   profiles:
     default: dev
+  # 自动加载根目录未跟踪的 .env（KEY=VALUE 格式），IDE 直接启动无需先 source
+  config:
+    import: optional:file:.env[.properties]
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/student_hub?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
     username: ${DB_USERNAME:student_hub}

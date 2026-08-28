@@ -24,11 +24,10 @@
 ```bash
 cp .env.example .env
 docker compose up -d mysql redis
-set -a; source .env; set +a
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
-开发环境的数据库连接与微信凭证通过 `.env` 注入，不要把真实值提交到 Git。
+根目录未跟踪的 `.env` 由 Spring Boot 启动时自动加载（无需先 source），数据库连接与微信凭证都在其中配置，不要把真实值提交到 Git。
 
 也可以直接启动全部容器：
 
