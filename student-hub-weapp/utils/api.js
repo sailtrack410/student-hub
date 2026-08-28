@@ -12,6 +12,13 @@ module.exports = {
   updateIdentity: (identityType) =>
     request({ url: '/api/app/profile/identity', method: 'POST', data: { identityType } }),
 
+  // 教务认证
+  jwCaptcha: () => request({ url: '/api/app/jw/captcha', silent: true }),
+  jwAuth: (data) => request({ url: '/api/app/jw/auth', method: 'POST', data, silent: true }),
+  jwStatus: () => request({ url: '/api/app/jw/status', silent: true }),
+  jwUnbind: () => request({ url: '/api/app/jw/unbind', method: 'POST' }),
+  jwProfile: () => request({ url: '/api/app/jw/profile', silent: true }),
+
   // 服务目录
   getCatalog: () => request({ url: '/api/app/services' }),
   getServiceItem: (itemId) => request({ url: `/api/app/services/${itemId}` }),

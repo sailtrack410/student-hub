@@ -127,6 +127,20 @@
   text-overflow: ellipsis;
 }
 
+.jw-UNBOUND {
+  color: var(--text-3);
+}
+
+.jw-AUTHENTICATED {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.jw-EXPIRED {
+  color: var(--warning);
+  font-weight: 600;
+}
+
 .menu {
   display: flex;
   align-items: center;

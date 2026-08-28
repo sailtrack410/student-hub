@@ -21,6 +21,12 @@ const IDENTITY_TEXT = {
   LOGISTICS: '后勤职工'
 };
 
+const JW_STATUS_TEXT = {
+  UNBOUND: '未认证',
+  AUTHENTICATED: '已认证',
+  EXPIRED: '已失效'
+};
+
 // 允许自行申报的身份；其余身份由平台分配
 const SELF_IDENTITIES = [
   { type: 'STUDENT', label: '学生' },
@@ -33,6 +39,8 @@ Page({
     roleText: '',
     authText: '',
     identityText: '',
+    jwStatusText: '未认证',
+    jwStatusTheme: 'UNBOUND',
     isWorker: false,
     processingCount: 0,
     completedCount: 0,
@@ -44,6 +52,7 @@ Page({
     if (user) {
       this.applyUser(user);
       this.loadStats();
+      this.loadJwStatus();
     } else {
       this.setData({ user: null, processingCount: 0, completedCount: 0, unreadCount: app.globalData.unreadCount || 0 });
     }
@@ -64,6 +73,27 @@ Page({
     saveSession(getToken(), user);
     app.globalData.user = user;
     this.applyUser(user);
+  },
+
+  /** 教务认证三态：未认证/已认证/已失效，点击进入认证页 */
+  loadJwStatus() {
+    api.jwStatus()
+      .then((status) => {
+        let text = JW_STATUS_TEXT[status.status] || status.status;
+        if (status.status === 'AUTHENTICATED' && status.jwName) {
+          text = `已认证 · ${status.jwName}`;
+        }
+        this.setData({
+          jwStatusText: text,
+          jwStatusTheme: status.status
+        });
+      })
+      .catch(() => {});
+  },
+
+  goJwAuth() {
+    if (!app.ensureLogin()) return;
+    wx.navigateTo({ url: '/pages/jw/auth' });
   },
 
   editDisplayName() {

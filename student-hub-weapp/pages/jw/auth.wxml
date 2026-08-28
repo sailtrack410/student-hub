@@ -1,0 +1,61 @@
+<view class="jw">
+  <!-- 当前状态 -->
+  <view class="card status-card">
+    <view class="status-row">
+      <text class="status-label">当前状态</text>
+      <text class="status-value status-{{statusTheme}}">{{statusText}}</text>
+    </view>
+    <view wx:if="{{bound}}" class="status-row">
+      <text class="status-label">绑定账号</text>
+      <text class="status-info">{{ssoAccount}}</text>
+    </view>
+    <view wx:if="{{bound && jwName}}" class="status-row">
+      <text class="status-label">教务姓名</text>
+      <text class="status-info">{{jwName}}</text>
+    </view>
+    <view wx:if="{{bound}}" class="status-row">
+      <text class="status-label">认证有效期至</text>
+      <text class="status-info">{{expiresText}}</text>
+    </view>
+  </view>
+
+  <!-- 认证表单 -->
+  <view class="card form">
+    <view class="form-title">{{bound ? '重新认证' : '绑定教务账号'}}</view>
+    <view class="field">
+      <view class="field-label">统一身份账号（学号/工号）</view>
+      <input class="field-input" value="{{ssoAccount}}" placeholder="请输入统一身份账号"
+             placeholder-class="ph" bindinput="onAccountInput" />
+    </view>
+    <view class="field">
+      <view class="field-label">统一身份密码</view>
+      <input class="field-input" password value="{{password}}" placeholder="请输入密码"
+             placeholder-class="ph" bindinput="onPasswordInput" />
+      <view class="field-tip">密码仅用于本次登录教务系统，不会被保存</view>
+    </view>
+    <view class="field">
+      <view class="field-label">验证码</view>
+      <view class="captcha-row">
+        <input class="field-input captcha-input" value="{{captchaCode}}" placeholder="计算图中算式"
+               placeholder-class="ph" bindinput="onCaptchaInput" />
+        <image wx:if="{{captchaSrc}}" class="captcha-img" src="{{captchaSrc}}" mode="aspectFit" bindtap="refreshCaptcha" />
+        <view wx:else class="captcha-img captcha-loading" bindtap="refreshCaptcha">加载中</view>
+      </view>
+      <view class="field-tip">看不清？点击图片刷新</view>
+    </view>
+
+    <button class="btn-primary submit" loading="{{authing}}" disabled="{{authing}}" bindtap="handleSubmit">
+      {{bound ? '重新认证' : '立即认证'}}
+    </button>
+  </view>
+
+  <view wx:if="{{bound}}" class="card section">
+    <view class="menu" bindtap="onUnbind">
+      <text class="menu-text danger">解除教务绑定</text>
+      <text class="menu-arrow">›</text>
+    </view>
+  </view>
+
+  <view class="page-tip">认证后系统将按教务身份自动设置为 学生 或 教师，并可用于后续课表等功能</view>
+  <view class="safe-bottom"></view>
+</view>

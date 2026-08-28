@@ -49,6 +49,12 @@
       <text class="menu-value">{{identityText}}</text>
       <text class="menu-arrow">›</text>
     </view>
+    <view class="menu" bindtap="goJwAuth">
+      <image class="menu-icon" src="/assets/category/cat-certificate.png" mode="aspectFit" />
+      <text class="menu-text">教务认证</text>
+      <text class="menu-value jw-{{jwStatusTheme}}">{{jwStatusText}}</text>
+      <text class="menu-arrow">›</text>
+    </view>
   </view>
 
   <!-- 服务人员工作台入口 -->
