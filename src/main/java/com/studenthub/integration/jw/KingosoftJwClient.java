@@ -36,6 +36,14 @@ public class KingosoftJwClient {
 
     private static final Pattern HOME_IDENTITY = Pattern.compile("\\[(\\d{6,})\\]([\\u4e00-\\u9fa5·]{2,15})");
     private static final Pattern HIDDEN_XH = Pattern.compile("name=\"xh\"[^>]*value=\"(\\d+)\"");
+    /** showUserInfo.action 正文（去标签后）的学生信息行 */
+    private static final Pattern STUDENT_INFO = Pattern.compile(
+            "\\[(\\d+)\\]([\\u4e00-\\u9fa5·]{2,15})\\s*\\(([^)]+)\\)"
+                    + ".*?年级[：:]\\s*([0-9]{4})"
+                    + ".*?院\\(系\\)/部[：:]\\s*(\\S+)"
+                    + ".*?专业[：:]\\s*(\\S+)"
+                    + ".*?班级[：:]\\s*(\\S+)",
+            Pattern.DOTALL);
 
     private final JwProperties properties;
     private final PublicKey rsaPublicKey;
@@ -146,8 +154,10 @@ public class KingosoftJwClient {
 
             // 3. 从落地页解析身份（含子框架与编码兜底）
             JwProfile profile = extractProfile(casResponse.body(), casResponse.headers(), client, cookieHeader);
+            profile = mergeStudentInfo(client, cookieHeader, profile);
             return new JwLoginResult(cookieHeader, finalUri.toString(), profile.ssoAccount(), profile.jwName(),
-                    profile.identityKind(), profile.jwStudentNo());
+                    profile.identityKind(), profile.jwStudentNo(),
+                    profile.grade(), profile.college(), profile.major(), profile.className());
         } catch (BusinessException exception) {
             throw exception;
         } catch (Exception exception) {
@@ -169,13 +179,52 @@ public class KingosoftJwClient {
             if (response.statusCode() != 200) {
                 throw new BusinessException(ErrorCode.JW_SESSION_EXPIRED);
             }
-            return extractProfile(response.body(), response.headers(), client, cookieHeader);
+            JwProfile profile = extractProfile(response.body(), response.headers(), client, cookieHeader);
+            return mergeStudentInfo(client, cookieHeader, profile);
         } catch (BusinessException exception) {
             throw exception;
         } catch (Exception exception) {
             log.error("拉取教务个人信息异常", exception);
             throw new BusinessException(ErrorCode.JW_SESSION_EXPIRED);
         }
+    }
+
+    /**
+     * 学生账号追加解析年级/院系/专业/班级（showUserInfo.action，GBK）。
+     * 解析失败不影响认证与基本信息返回。
+     */
+    private JwProfile mergeStudentInfo(HttpClient client, String cookieHeader, JwProfile profile) {
+        if (!"STUDENT".equals(profile.identityKind())) {
+            return profile;
+        }
+        try {
+            HttpResponse<byte[]> response = client.send(
+                    HttpRequest.newBuilder(URI.create(properties.getJwBaseUrl() + "/frame/desk/showUserInfo.action"))
+                            .timeout(Duration.ofSeconds(properties.getReadTimeoutSeconds()))
+                            .header("Cookie", cookieHeader)
+                            .GET().build(),
+                    HttpResponse.BodyHandlers.ofByteArray());
+            if (response.statusCode() != 200) {
+                return profile;
+            }
+            // GBK 优先尝试，其次 UTF-8；去标签与 &ensp; 后按标签字段解析
+            for (String charset : new String[]{"GBK", "UTF-8"}) {
+                String text = new String(response.body(), charset)
+                        .replaceAll("<[^>]+>", " ")
+                        .replace("&ensp;", " ")
+                        .replaceAll("[ \t]+", " ");
+                Matcher matcher = STUDENT_INFO.matcher(text);
+                if (matcher.find()) {
+                    return new JwProfile(profile.ssoAccount(), profile.jwName(), profile.identityKind(),
+                            profile.jwStudentNo(), matcher.group(4), matcher.group(5),
+                            matcher.group(6), matcher.group(7));
+                }
+            }
+            log.info("学生信息页未解析出年级院系专业班级");
+        } catch (Exception exception) {
+            log.warn("解析学生年级院系专业班级失败", exception);
+        }
+        return profile;
     }
 
     /**
@@ -261,7 +310,8 @@ public class KingosoftJwClient {
         String userType = parseJsVar(js, "_usertype");
         String identityKind = userType != null && (userType.startsWith("TEA") || userType.startsWith("TCH"))
                 ? "TEACHER" : "STUDENT";
-        return new JwProfile(loginId, userName, identityKind, parseJsVar(js, "G_USER_CODE"));
+        return new JwProfile(loginId, userName, identityKind, parseJsVar(js, "G_USER_CODE"),
+                null, null, null, null);
     }
 
     private String parseJsVar(String js, String name) {
@@ -279,12 +329,13 @@ public class KingosoftJwClient {
         }
     }
 
+
     private JwProfile buildProfile(Matcher matcher, String html, HttpClient client, String cookieHeader) {
         String ssoAccount = matcher.group(1);
         String jwName = matcher.group(2);
         String identityKind = detectIdentityKind(html, ssoAccount);
         String studentNo = fetchInternalStudentNo(client, cookieHeader, identityKind);
-        return new JwProfile(ssoAccount, jwName, identityKind, studentNo);
+        return new JwProfile(ssoAccount, jwName, identityKind, studentNo, null, null, null, null);
     }
 
     /** 提取页面里的 frame/iframe 地址 */
@@ -503,12 +554,14 @@ public class KingosoftJwClient {
     }
 
     public record JwLoginResult(String cookieHeader, String homeUrl, String ssoAccount, String jwName,
-                                String identityKind, String jwStudentNo) {
+                                String identityKind, String jwStudentNo,
+                                String grade, String college, String major, String className) {
     }
 
     public record JwCaptcha(String uid, String imageBase64) {
     }
 
-    public record JwProfile(String ssoAccount, String jwName, String identityKind, String jwStudentNo) {
+    public record JwProfile(String ssoAccount, String jwName, String identityKind, String jwStudentNo,
+                            String grade, String college, String major, String className) {
     }
 }

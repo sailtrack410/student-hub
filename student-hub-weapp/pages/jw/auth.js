@@ -44,6 +44,10 @@ Page({
         bound,
         ssoAccount: status.ssoAccount || '',
         jwName: status.jwName || '',
+        grade: status.grade || '',
+        college: status.college || '',
+        major: status.major || '',
+        className: status.className || '',
         expiresText: status.sessionExpiresAt ? format.formatTime(status.sessionExpiresAt) : ''
       });
     } catch (error) {

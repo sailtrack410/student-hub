@@ -65,7 +65,8 @@ public class JwAuthServiceImpl implements JwAuthService {
     public JwStatusResponse status(Long userId) {
         JwBindingEntity binding = jwBindingMapper.findByUserId(userId);
         if (binding == null) {
-            return new JwStatusResponse(JwStatusResponse.UNBOUND, null, null, null, null, null);
+            return new JwStatusResponse(JwStatusResponse.UNBOUND, null, null, null, null, null, null, null, null,
+                    null);
         }
         boolean sessionAlive = jwSessionStore.find(userId).isPresent()
                 && binding.getSessionExpiresAt() != null
@@ -73,7 +74,8 @@ public class JwAuthServiceImpl implements JwAuthService {
         String status = "AUTHENTICATED".equals(binding.getAuthStatus()) && sessionAlive
                 ? JwStatusResponse.AUTHENTICATED : JwStatusResponse.EXPIRED;
         return new JwStatusResponse(status, binding.getSsoAccount(), binding.getJwName(),
-                binding.getIdentityKind(), binding.getLastAuthAt(), binding.getSessionExpiresAt());
+                binding.getIdentityKind(), binding.getGrade(), binding.getCollege(), binding.getMajor(),
+                binding.getClassName(), binding.getLastAuthAt(), binding.getSessionExpiresAt());
     }
 
     @Override
@@ -107,6 +109,10 @@ public class JwAuthServiceImpl implements JwAuthService {
         binding.setJwName(loginResult.jwName());
         binding.setJwStudentNo(loginResult.jwStudentNo());
         binding.setIdentityKind(loginResult.identityKind());
+        binding.setGrade(loginResult.grade());
+        binding.setCollege(loginResult.college());
+        binding.setMajor(loginResult.major());
+        binding.setClassName(loginResult.className());
         binding.setAuthStatus("AUTHENTICATED");
         binding.setLastAuthAt(now);
         binding.setSessionExpiresAt(now.plus(ttl));
@@ -157,8 +163,7 @@ public class JwAuthServiceImpl implements JwAuthService {
         try {
             KingosoftJwClient.JwProfile profile = jwClient.fetchProfile(session.get().cookieHeader(),
                     session.get().homeUrl());
-            return new JwProfileResponse(profile.ssoAccount(), profile.jwName(),
-                    profile.jwStudentNo(), profile.identityKind());
+            return JwProfileResponse.from(profile);
         } catch (BusinessException exception) {
             if (exception.getCode().equals(ErrorCode.JW_SESSION_EXPIRED.getCode())) {
                 markExpired(binding);

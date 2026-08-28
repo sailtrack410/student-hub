@@ -27,6 +27,14 @@ public class JwBindingEntity extends BaseEntity {
     private String identityKind;
     /** AUTHENTICATED / EXPIRED */
     private String authStatus;
+    /** 年级（学生），如 2023 */
+    private String grade;
+    /** 院(系)/部（学生） */
+    private String college;
+    /** 专业（学生） */
+    private String major;
+    /** 班级（学生），如 计科B2316 */
+    private String className;
     private LocalDateTime lastAuthAt;
     private LocalDateTime sessionExpiresAt;
 }

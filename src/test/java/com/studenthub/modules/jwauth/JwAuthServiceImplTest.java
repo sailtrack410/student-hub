@@ -79,7 +79,8 @@ class JwAuthServiceImplTest {
 
         request = new JwAuthRequest("2023590397", "secret-password", "captcha-uid", "11");
         loginResult = new KingosoftJwClient.JwLoginResult(
-                "JSESSIONID=abc", "https://jwgl.mycc.edu.cn/frame/homes.action?v=1", "2023590397", "王同学", "STUDENT", "202500002077");
+                "JSESSIONID=abc", "https://jwgl.mycc.edu.cn/frame/homes.action?v=1", "2023590397", "王同学", "STUDENT", "202500002077",
+                "2023", "人工智能学院", "计算机科学与技术", "计科B2316");
         when(jwClient.login(eq("2023590397"), any(), eq("captcha-uid"), eq("11"))).thenReturn(loginResult);
 
         AuthenticatedUser refreshed = new AuthenticatedUser(USER_ID, 1L, 10L, "requester",
@@ -114,7 +115,8 @@ class JwAuthServiceImplTest {
     @Test
     void authSwitchesIdentityToTeacherWhenDetected() {
         KingosoftJwClient.JwLoginResult teacherLogin = new KingosoftJwClient.JwLoginResult(
-                "JSESSIONID=teacher", "https://jwgl.mycc.edu.cn/frame/homes.action?v=2", "T0001", "李老师", "TEACHER", null);
+                "JSESSIONID=teacher", "https://jwgl.mycc.edu.cn/frame/homes.action?v=2", "T0001", "李老师", "TEACHER", null,
+                null, null, null, null);
         when(jwClient.login(eq("T0001"), any(), eq("captcha-uid"), eq("11"))).thenReturn(teacherLogin);
         when(jwBindingMapper.findBySsoAccount("T0001")).thenReturn(null);
 

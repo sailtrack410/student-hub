@@ -13,6 +13,14 @@
       <text class="status-label">教务姓名</text>
       <text class="status-info">{{jwName}}</text>
     </view>
+    <view wx:if="{{bound && college}}" class="status-row">
+      <text class="status-label">院系 / 专业</text>
+      <text class="status-info">{{college}} · {{major}}</text>
+    </view>
+    <view wx:if="{{bound && className}}" class="status-row">
+      <text class="status-label">班级</text>
+      <text class="status-info">{{className}}（{{grade}} 级）</text>
+    </view>
     <view wx:if="{{bound}}" class="status-row">
       <text class="status-label">认证有效期至</text>
       <text class="status-info">{{expiresText}}</text>

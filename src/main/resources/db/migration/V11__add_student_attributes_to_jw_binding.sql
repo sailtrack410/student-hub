@@ -1,0 +1,4 @@
+ALTER TABLE jw_binding ADD COLUMN grade VARCHAR(16);
+ALTER TABLE jw_binding ADD COLUMN college VARCHAR(128);
+ALTER TABLE jw_binding ADD COLUMN major VARCHAR(128);
+ALTER TABLE jw_binding ADD COLUMN class_name VARCHAR(128);

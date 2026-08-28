@@ -10,6 +10,10 @@ public record JwStatusResponse(
         @Schema(description = "SSO 账号", nullable = true) String ssoAccount,
         @Schema(description = "教务姓名", nullable = true) String jwName,
         @Schema(description = "身份：STUDENT/TEACHER", nullable = true) String identityKind,
+        @Schema(description = "年级（学生）", nullable = true) String grade,
+        @Schema(description = "院(系)/部（学生）", nullable = true) String college,
+        @Schema(description = "专业（学生）", nullable = true) String major,
+        @Schema(description = "班级（学生）", nullable = true) String className,
         @Schema(description = "最后认证时间", nullable = true) LocalDateTime lastAuthAt,
         @Schema(description = "会话到期时间", nullable = true) LocalDateTime sessionExpiresAt) {
 
