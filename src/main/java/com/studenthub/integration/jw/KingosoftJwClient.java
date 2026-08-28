@@ -221,8 +221,62 @@ public class KingosoftJwClient {
                 log.warn("抓取教务子框架失败, url={}", frameUrl);
             }
         }
+
+        // SetMainInfo.jsp 是按会话生成的主信息脚本，含账号/姓名/身份/内部学号等全部字段
+        try {
+            HttpResponse<byte[]> infoResponse = client.send(
+                    HttpRequest.newBuilder(URI.create(properties.getJwBaseUrl() + "/frame/home/js/SetMainInfo.jsp"))
+                            .timeout(Duration.ofSeconds(properties.getReadTimeoutSeconds()))
+                            .header("Cookie", cookieHeader)
+                            .GET().build(),
+                    HttpResponse.BodyHandlers.ofByteArray());
+            if (infoResponse.statusCode() == 200) {
+                for (String js : decodeVariants(infoResponse.body(), infoResponse.headers())) {
+                    JwProfile profile = parseSetMainInfo(js);
+                    if (profile != null) {
+                        return profile;
+                    }
+                }
+                java.nio.file.Files.writeString(java.nio.file.Path.of("/tmp/jw-setmaininfo.js"),
+                        decodeVariants(infoResponse.body(), infoResponse.headers()).get(0));
+            }
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            log.warn("抓取 SetMainInfo 失败", exception);
+        }
+
         log.info("教务页面及子框架均未解析到身份信息, homeLength={}, frames={}", variants.get(0).length(), frameUrls.size());
+        dumpForDebug(variants.get(0), body);
         throw new BusinessException(ErrorCode.JW_SESSION_EXPIRED);
+    }
+
+    /** 解析 SetMainInfo.jsp 的会话级 JS 变量 */
+    private JwProfile parseSetMainInfo(String js) {
+        String loginId = parseJsVar(js, "_loginid");
+        String userName = parseJsVar(js, "_userName");
+        if (loginId == null || userName == null) {
+            return null;
+        }
+        String userType = parseJsVar(js, "_usertype");
+        String identityKind = userType != null && (userType.startsWith("TEA") || userType.startsWith("TCH"))
+                ? "TEACHER" : "STUDENT";
+        return new JwProfile(loginId, userName, identityKind, parseJsVar(js, "G_USER_CODE"));
+    }
+
+    private String parseJsVar(String js, String name) {
+        Matcher matcher = Pattern.compile("var\\s+" + name + "\\s*=\\s*'([^']*)'").matcher(js);
+        return matcher.find() ? matcher.group(1) : null;
+    }
+
+    /** 开发期诊断：身份解析失败时把原始落地页写到 /tmp 供分析 */
+    private void dumpForDebug(String html, byte[] rawBody) {
+        try {
+            java.nio.file.Files.writeString(java.nio.file.Path.of("/tmp/jw-landing.html"), html);
+            java.nio.file.Files.write(java.nio.file.Path.of("/tmp/jw-landing.bin"), rawBody);
+        } catch (Exception exception) {
+            log.warn("诊断转储失败", exception);
+        }
     }
 
     private JwProfile buildProfile(Matcher matcher, String html, HttpClient client, String cookieHeader) {
