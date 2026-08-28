@@ -1,18 +1,7 @@
-const api = require('../../utils/api');
 const format = require('../../utils/format');
+const directory = require('../../utils/directory');
+const api = require('../../utils/api');
 const app = getApp();
-
-const HOT_ITEM_CODES = ['REPAIR-DORM', 'AFFAIR-LEAVE', 'CERT-ENROLL', 'AFFAIR-VENUE'];
-
-// 快捷入口：4 列两行，六个常用服务，最后一格为「更多」
-const QUICK_SERVICES = [
-  { code: 'REPAIR-DORM', label: '一键报修', icon: 'cat-repair' },
-  { code: 'AFFAIR-LEAVE', label: '请假申请', icon: 'cat-leave' },
-  { code: 'CERT-ENROLL', label: '证明开具', icon: 'cat-certificate' },
-  { code: 'AFFAIR-VENUE', label: '场地申请', icon: 'cat-activity' },
-  { code: 'GUIDE-CONSULT', label: '校园咨询', icon: 'cat-consult' },
-  { code: 'REPAIR-PUBLIC', label: '教室报修', icon: 'cat-repair' }
-];
 
 Page({
   data: {
@@ -20,7 +9,7 @@ Page({
     userName: '同学',
     latestRequest: null,
     hotItems: [],
-    quickServices: QUICK_SERVICES
+    quickServices: []
   },
 
   onShow() {
@@ -34,8 +23,18 @@ Page({
       return;
     }
     this.loadLatestRequest();
-    this.loadCatalog();
+    this.loadServices();
     this.refreshUnread();
+  },
+
+  /** 快捷入口与常用服务都从目录数据派生（与大厅同一数据源） */
+  async loadServices() {
+    try {
+      const [pinned, hot] = await Promise.all([directory.pinnedServices(), directory.hotServices()]);
+      this.setData({ quickServices: pinned, hotItems: hot });
+    } catch (error) {
+      // 目录加载失败不打断首页
+    }
   },
 
   async loadLatestRequest() {
@@ -59,31 +58,6 @@ Page({
     }
   },
 
-  async loadCatalog() {
-    try {
-      const catalog = await this.ensureCatalog();
-      const items = [];
-      catalog.forEach((category) => {
-        (category.items || []).forEach((item) => items.push(item));
-      });
-      const hot = HOT_ITEM_CODES.map((code) => items.find((item) => item.itemCode === code))
-        .filter(Boolean)
-        .slice(0, 4);
-      this.setData({ hotItems: hot });
-    } catch (error) {
-      // 静默
-    }
-  },
-
-  async ensureCatalog() {
-    if (app.globalData.catalog && app.globalData.catalog.length) {
-      return app.globalData.catalog;
-    }
-    const catalog = await api.getCatalog();
-    app.globalData.catalog = catalog;
-    return catalog;
-  },
-
   refreshUnread() {
     api.unreadCount()
       .then((count) => {
@@ -92,42 +66,26 @@ Page({
       .catch(() => {});
   },
 
-  /** 快捷入口：按服务编码定位服务项并直达申请表单 */
-  async goQuickService(event) {
+  /** 快捷入口：直达申请表单，登录与参数守卫在目标页 */
+  goQuickService(event) {
     if (!app.ensureLogin()) {
       return;
     }
     const service = this.data.quickServices[Number(event.currentTarget.dataset.index)];
-    if (!service) {
-      return;
-    }
-    try {
-      const catalog = await this.ensureCatalog();
-      let itemId = null;
-      catalog.forEach((category) => {
-        (category.items || []).forEach((item) => {
-          if (item.itemCode === service.code) {
-            itemId = item.itemId;
-          }
-        });
-      });
-      if (itemId) {
-        wx.navigateTo({ url: `/pages/service/apply?itemId=${itemId}` });
-      } else {
-        wx.switchTab({ url: '/pages/service/index' });
-      }
-    } catch (error) {
-      console.error('快捷入口跳转失败', error);
-      wx.switchTab({ url: '/pages/service/index' });
+    if (service) {
+      directory.toItemApply(service.itemId);
     }
   },
 
   goMoreServices() {
-    wx.switchTab({ url: '/pages/service/index' });
+    directory.toHall();
   },
 
-  goAssistant() {
-    wx.switchTab({ url: '/pages/assistant/index' });
+  goServiceDetail(event) {
+    const item = this.data.hotItems[Number(event.currentTarget.dataset.index)];
+    if (item) {
+      directory.toItemDetail(item.itemId);
+    }
   },
 
   goRequestList() {
@@ -141,13 +99,6 @@ Page({
   goRequestDetail() {
     if (this.data.latestRequest) {
       wx.navigateTo({ url: `/pages/request/detail?id=${this.data.latestRequest.requestId}` });
-    }
-  },
-
-  goServiceDetail(event) {
-    const item = this.data.hotItems[Number(event.currentTarget.dataset.index)];
-    if (item && item.itemId) {
-      wx.navigateTo({ url: `/pages/service/detail?id=${item.itemId}` });
     }
   }
 });

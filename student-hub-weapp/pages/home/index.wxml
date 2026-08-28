@@ -8,17 +8,17 @@
     <image class="hero-banner" src="/assets/banner/home-banner.jpg" mode="aspectFill" />
   </view>
 
-  <!-- 快捷入口：两行，最后一格为更多 -->
+  <!-- 快捷入口：两行，最后一格为更多（数据与大厅同源） -->
   <view class="quick card">
     <view
       wx:for="{{quickServices}}"
-      wx:key="code"
+      wx:key="itemId"
       class="quick-item"
       bindtap="goQuickService"
       data-index="{{index}}"
     >
-      <view class="quick-icon"><image src="/assets/category/{{item.icon}}.png" mode="aspectFit" /></view>
-      <text>{{item.label}}</text>
+      <view class="quick-icon"><image src="/assets/category/{{item.icon || 'cat-affair'}}.png" mode="aspectFit" /></view>
+      <text>{{item.itemName}}</text>
     </view>
     <view class="quick-item" bindtap="goMoreServices">
       <view class="quick-icon quick-icon-more">

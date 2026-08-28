@@ -1,4 +1,4 @@
-const api = require('../../utils/api');
+const directory = require('../../utils/directory');
 const app = getApp();
 
 const SORT_OPTIONS = ['默认排序', '办结最快', '名称排序'];
@@ -24,15 +24,8 @@ Page({
 
   async loadCatalog() {
     try {
-      let catalog = app.globalData.catalog;
-      if (!catalog || !catalog.length) {
-        catalog = await api.getCatalog();
-        app.globalData.catalog = catalog;
-      }
-      const allItems = [];
-      catalog.forEach((category) => {
-        (category.items || []).forEach((item) => allItems.push(item));
-      });
+      const catalog = await directory.ensureCatalog();
+      const allItems = directory.flatten(catalog);
       this.setData({ categories: catalog, allItems, loaded: true });
       this.rebuild();
     } catch (error) {
