@@ -49,7 +49,6 @@
       <text class="menu-value">{{identityText}}</text>
       <text class="menu-arrow">›</text>
     </view>
-    <view class="menu-tip">身份用于后续按学生、教师提供差异化服务</view>
   </view>
 
   <!-- 服务人员工作台入口 -->
