@@ -48,13 +48,14 @@ function request(options) {
         header
       ),
       success(res) {
-        if (res.statusCode === 401) {
+        const body = res.data;
+        // 平台会话失效：仅识别平台自身的未认证码，业务型 401（如教务认证失败）按业务错误提示
+        if (res.statusCode === 401 && (!body || !body.code || body.code === 'AUTH_401')) {
           clearSession();
           wx.navigateTo({ url: '/pages/login/index' });
           reject(new Error('请先登录'));
           return;
         }
-        const body = res.data;
         if (res.statusCode >= 200 && res.statusCode < 300 && body && body.success) {
           resolve(body.data);
           return;
