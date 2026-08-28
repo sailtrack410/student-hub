@@ -105,7 +105,18 @@ public class KingosoftJwClient {
                 log.info("SSO tickets 认证未通过, status={}", ticketResponse.statusCode());
                 throw new BusinessException(ErrorCode.JW_AUTH_FAILED);
             }
-            String ticket = parseJsonField(ticketResponse.body(), "ticket");
+            // 失败响应：{"data":{"code":"CODEFALSE",...}}；成功响应：{"data":{"tgt":"...","ticket":"..."}}
+            // （部分环境为顶层字段，两种位置都解析）
+            String body = ticketResponse.body();
+            String failCode = parseJsonField(body, "code", "data");
+            if (failCode != null && !failCode.isBlank()) {
+                log.info("SSO tickets 拒绝, code={}", failCode);
+                throw new BusinessException(ErrorCode.JW_AUTH_FAILED);
+            }
+            String ticket = parseJsonField(body, "ticket");
+            if (ticket == null || ticket.isBlank()) {
+                ticket = parseJsonField(body, "ticket", "data");
+            }
             if (ticket == null || ticket.isBlank()) {
                 log.info("SSO tickets 响应缺少 ticket");
                 throw new BusinessException(ErrorCode.JW_AUTH_FAILED);
@@ -237,16 +248,62 @@ public class KingosoftJwClient {
         return matcher.find() ? matcher.group(1) : null;
     }
 
-    private String encryptPassword(String password) {
-        try {
-            Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
-            cipher.init(Cipher.ENCRYPT_MODE, rsaPublicKey);
-            byte[] encrypted = cipher.doFinal(password.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(encrypted);
-        } catch (Exception exception) {
-            log.error("密码加密失败", exception);
-            throw new BusinessException(ErrorCode.INTERNAL_ERROR);
+    /** 在 body 顶层或指定父对象（一级嵌套）内解析字符串字段 */
+    private String parseJsonField(String body, String field, String parentKey) {
+        if (body == null) {
+            return null;
         }
+        Matcher matcher = Pattern.compile("\"" + parentKey + "\"\\s*:\\s*\\{[^{}]*\"" + field
+                + "\"\\s*:\\s*\"([^\"]+)\"").matcher(body);
+        return matcher.find() ? matcher.group(1) : null;
+    }
+
+    /**
+     * 复刻学校登录页前端（经典 rsa.js：BigInt/Barrett）的加密算法：
+     * 口令按 ASCII 取码、零填充到 chunkSize（2×模数高位数字序号，1024 位模数下为 126 字节），
+     * 按 16 位小端数字构造大整数，做无填充裸 RSA（value^e mod n），
+     * 结果以每数字 4 个 hex 字符输出（跳过前导零数字），多块之间以空格连接。
+     */
+    private String encryptPassword(String password) {
+        byte[] plain = password.getBytes(StandardCharsets.US_ASCII);
+        BigInteger modulus = new BigInteger(1, hexToBytes(properties.getRsaModulus()));
+        BigInteger exponent = new BigInteger(1, hexToBytes(properties.getRsaExponent()));
+        int chunkSize = 2 * ((modulus.bitLength() - 1) / 16);
+
+        StringBuilder result = new StringBuilder();
+        for (int offset = 0; offset < plain.length || offset == 0; offset += chunkSize) {
+            int len = Math.min(chunkSize, plain.length - offset);
+            byte[] block = new byte[chunkSize];
+            System.arraycopy(plain, offset, block, 0, len);
+            // 小端字节序 → 大整数
+            byte[] littleEndianBigNumber = new byte[chunkSize];
+            for (int i = 0; i < chunkSize; i++) {
+                littleEndianBigNumber[i] = block[chunkSize - 1 - i];
+            }
+            BigInteger value = new BigInteger(1, littleEndianBigNumber);
+            String hex = toFrontendHex(value.modPow(exponent, modulus));
+            result.append(hex);
+            if (offset + chunkSize >= plain.length) {
+                break;
+            }
+            result.append(' ');
+        }
+        return result.toString();
+    }
+
+    /** 前端 biToHex：从最高非零数字开始，每个 16 位数字固定输出 4 个 hex 字符 */
+    private String toFrontendHex(BigInteger value) {
+        String hex = value.toString(16);
+        int digits = (value.bitLength() - 1) / 16 + 1;
+        int width = digits * 4;
+        if (hex.length() > width) {
+            // 去掉高位多余的零（BigInteger 不产生，防御性保留）
+            hex = hex.substring(hex.length() - width);
+        }
+        while (hex.length() < width) {
+            hex = "0" + hex;
+        }
+        return hex;
     }
 
     private PublicKey buildPublicKey(String modulusHex, String exponentHex) {
