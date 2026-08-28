@@ -170,6 +170,17 @@ WECHAT_APP_SECRET=你的小程序AppSecret
 - 真机调试时把 `utils/config.js` 的 `baseUrl` 改为电脑局域网 IP，并在开发者工具勾选“不校验合法域名”
 - 使用 `worker` 开发账号登录可在“我的 → 我的工单”体验服务人员处理流程
 
+## 文件上传与存储
+
+申请材料、现场照片等文件通过 `POST /api/app/files` 上传（登录后调用），仅支持 jpg/png/webp、默认 ≤5MB；服务端校验扩展名、MIME 与文件头魔数，按短时 HMAC 签名 URL 读取（`GET /api/common/files/view/{id}`，默认 30 分钟有效）。
+
+存储后端可切换：
+
+- `FILE_STORAGE=local`（默认）：写入 `FILE_STORAGE_DIR` 本地目录；
+- `FILE_STORAGE=minio`：写入 MinIO 桶（`MINIO_ENDPOINT`/`MINIO_BUCKET`/`MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`，凭据放未跟踪的 `.env`）。
+
+请假申请的"请假材料"、宿舍/教室报修的"现场照片"为选填图片字段，由服务项表单 schema 驱动。
+
 ## UI 素材管线
 
 Logo、吉祥物、TabBar 图标、分类图标、空状态插画等由 `gpt-image-2` 生成：
