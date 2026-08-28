@@ -37,6 +37,12 @@ public class InMemorySessionStore implements SessionStore {
     }
 
     @Override
+    public void replace(String rawToken, AuthenticatedUser user) {
+        sessions.computeIfPresent(SecureTokenSupport.hash(rawToken),
+                (tokenHash, storedSession) -> new StoredSession(user, storedSession.expiresAt()));
+    }
+
+    @Override
     public void delete(String rawToken) {
         sessions.remove(SecureTokenSupport.hash(rawToken));
     }

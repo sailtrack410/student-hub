@@ -30,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -40,6 +41,9 @@ public class IdentityAuthServiceImpl implements IdentityAuthService {
             "$2y$10$0A8Ea5.Rg.GmW7FXGTGlWONwJqaVE0IfNTma/k2t96C4rtY871dNy";
 
     private static final String DEFAULT_REQUESTER_ROLE_CODE = "REQUESTER";
+
+    /** 允许用户自行申报的身份标识；ADMIN/LOGISTICS 等由管理员分配，防止越权自赋 */
+    private static final Set<String> SELF_DECLARABLE_IDENTITY_TYPES = Set.of("STUDENT", "TEACHER");
 
     private final UserMapper userMapper;
     private final IdentityAccessMapper identityAccessMapper;
@@ -107,12 +111,64 @@ public class IdentityAuthServiceImpl implements IdentityAuthService {
         return CurrentUserResponse.from(currentUserProvider.requireCurrentUser());
     }
 
-    private LoginResponse createSession(UserEntity user, boolean newUser) {
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public CurrentUserResponse updateProfile(String rawToken, AuthenticatedUser current, String displayName) {
+        String normalized = displayName == null ? "" : displayName.trim();
+        if (normalized.isEmpty() || normalized.length() > 32) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "昵称长度需为 1-32 个字符");
+        }
+        UserEntity user = requireEnabledUser(current.userId());
+        UserEntity update = new UserEntity();
+        update.setId(user.getId());
+        update.setDisplayName(normalized);
+        update.setVersion(user.getVersion());
+        userMapper.updateById(update);
+
+        AuthenticatedUser refreshed = buildAuthenticatedUser(reload(user.getId()));
+        sessionStore.replace(rawToken, refreshed);
+        log.info("用户昵称已更新, userId={}", user.getId());
+        return CurrentUserResponse.from(refreshed);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public CurrentUserResponse updateIdentityType(String rawToken, AuthenticatedUser current, String identityType) {
+        String normalized = identityType == null ? "" : identityType.trim();
+        if (!SELF_DECLARABLE_IDENTITY_TYPES.contains(normalized)) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "身份仅支持设置为学生或教师");
+        }
+        UserEntity user = requireEnabledUser(current.userId());
+        UserEntity update = new UserEntity();
+        update.setId(user.getId());
+        update.setIdentityType(normalized);
+        update.setVersion(user.getVersion());
+        userMapper.updateById(update);
+
+        AuthenticatedUser refreshed = buildAuthenticatedUser(reload(user.getId()));
+        sessionStore.replace(rawToken, refreshed);
+        log.info("用户身份已更新, userId={}, identityType={}", user.getId(), normalized);
+        return CurrentUserResponse.from(refreshed);
+    }
+
+    private UserEntity requireEnabledUser(Long userId) {
+        UserEntity user = userMapper.selectById(userId);
+        if (user == null || !"ENABLED".equals(user.getStatus())) {
+            throw new BusinessException(ErrorCode.ACCOUNT_DISABLED);
+        }
+        return user;
+    }
+
+    private UserEntity reload(Long userId) {
+        return userMapper.selectById(userId);
+    }
+
+    private AuthenticatedUser buildAuthenticatedUser(UserEntity user) {
         List<RoleScope> roleScopes = identityAccessMapper.findRoleScopes(user.getId()).stream()
                 .map(this::toRoleScope)
                 .toList();
         List<String> permissionCodes = identityAccessMapper.findPermissionCodes(user.getId());
-        AuthenticatedUser authenticatedUser = new AuthenticatedUser(
+        return new AuthenticatedUser(
                 user.getId(),
                 user.getCampusId(),
                 user.getDefaultOrganizationId(),
@@ -122,6 +178,10 @@ public class IdentityAuthServiceImpl implements IdentityAuthService {
                 user.getAuthorizationStatus(),
                 roleScopes,
                 permissionCodes);
+    }
+
+    private LoginResponse createSession(UserEntity user, boolean newUser) {
+        AuthenticatedUser authenticatedUser = buildAuthenticatedUser(user);
         SessionToken token = sessionStore.create(authenticatedUser, securityProperties.getSessionTtl());
 
         UserEntity loginUpdate = new UserEntity();

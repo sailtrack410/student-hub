@@ -51,6 +51,21 @@ public class RedisSessionStore implements SessionStore {
     }
 
     @Override
+    public void replace(String rawToken, AuthenticatedUser user) {
+        String sessionKey = key(rawToken);
+        Long remainingSeconds = redisTemplate.getExpire(sessionKey);
+        if (remainingSeconds == null || remainingSeconds <= 0) {
+            return;
+        }
+        try {
+            redisTemplate.opsForValue().set(sessionKey, objectMapper.writeValueAsString(user),
+                    Duration.ofSeconds(remainingSeconds));
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Cannot serialize authenticated session", exception);
+        }
+    }
+
+    @Override
     public void delete(String rawToken) {
         redisTemplate.delete(key(rawToken));
     }
