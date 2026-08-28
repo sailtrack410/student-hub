@@ -17,6 +17,12 @@
   font-weight: 600;
   font-size: 30rpx;
   border: none;
+  /* 覆盖 button 默认行高与内边距，flex 垂直居中保证文字上下对齐 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0 40rpx;
 }
 
 .btn-primary::after {
@@ -36,6 +42,11 @@
   font-weight: 600;
   font-size: 30rpx;
   border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0 40rpx;
 }
 
 .btn-ghost::after {

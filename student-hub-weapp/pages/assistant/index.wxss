@@ -159,7 +159,10 @@
   border-radius: 999rpx;
   padding: 0 36rpx;
   height: 72rpx;
-  line-height: 72rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .send-btn::after {
