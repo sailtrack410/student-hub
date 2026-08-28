@@ -34,6 +34,16 @@ public class GlobalExceptionHandler {
                 .body(Result.failed(ErrorCode.FORBIDDEN.getCode(), ErrorCode.FORBIDDEN.getMessage()));
     }
 
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Result<Void>> handleTypeMismatch(
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException exception,
+            HttpServletRequest request) {
+        log.warn("路径参数类型不合法, method={}, path={}, name={}",
+                request.getMethod(), request.getRequestURI(), exception.getName());
+        return ResponseEntity.badRequest()
+                .body(Result.failed(ErrorCode.INVALID_PARAMETER.getCode(), "请求参数不合法"));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Result<Void>> handleValidation(MethodArgumentNotValidException exception) {
         String message = exception.getBindingResult().getFieldErrors().stream()
