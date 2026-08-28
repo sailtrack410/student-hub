@@ -108,6 +108,11 @@
   padding: 28rpx;
 }
 
+.item-card-hover {
+  opacity: 0.75;
+  transform: scale(0.99);
+}
+
 .item-icon {
   width: 84rpx;
   height: 84rpx;

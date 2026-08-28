@@ -76,14 +76,5 @@ Page({
   onSortChange(event) {
     this.setData({ sortIndex: Number(event.detail.value) });
     this.rebuild();
-  },
-
-  goDetail(event) {
-    const itemId = event.currentTarget.dataset.id;
-    if (!itemId || itemId === 'undefined') {
-      wx.showToast({ title: '服务信息加载异常，请重新进入', icon: 'none' });
-      return;
-    }
-    wx.navigateTo({ url: `/pages/service/detail?id=${itemId}` });
   }
 });
