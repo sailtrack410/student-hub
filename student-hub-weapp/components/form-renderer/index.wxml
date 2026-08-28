@@ -79,7 +79,7 @@
         <view
           wx:if="{{item.urls.length < (item.maxCount || 3)}}"
           class="image-add {{item.uploading ? 'image-add-busy' : ''}}"
-          data-field="{{index}}"
+          data-index="{{index}}"
           bindtap="onAddImage"
         >
           <view class="plus-v"></view>
