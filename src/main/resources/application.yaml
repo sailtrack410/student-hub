@@ -39,6 +39,10 @@ studenthub:
     connect-timeout-seconds: ${AI_CONNECT_TIMEOUT_SECONDS:5}
     read-timeout-seconds: ${AI_READ_TIMEOUT_SECONDS:60}
     max-input-characters: ${AI_MAX_INPUT_CHARACTERS:12000}
+  ai-chat:
+    hourly-message-limit: ${AI_CHAT_HOURLY_MESSAGE_LIMIT:20}
+    history-window: ${AI_CHAT_HISTORY_WINDOW:10}
+    max-message-characters: ${AI_CHAT_MAX_MESSAGE_CHARACTERS:2000}
   wechat:
     mode: ${WECHAT_MODE:real}
     app-id: ${WECHAT_APP_ID:}

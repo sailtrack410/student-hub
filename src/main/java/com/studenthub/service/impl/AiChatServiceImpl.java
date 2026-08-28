@@ -22,14 +22,23 @@ public class AiChatServiceImpl implements AiChatService {
 
     @Override
     public AiChatResponse chat(String userMessage) {
-        if (userMessage == null || userMessage.isBlank()) {
+        return chat(List.of(new AiMessage("user", userMessage)));
+    }
+
+    @Override
+    public AiChatResponse chat(List<AiMessage> messages) {
+        if (messages == null || messages.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER, "用户消息不能为空");
         }
-        if (userMessage.length() > aiProperties.getMaxInputCharacters()) {
-            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "用户消息长度超过限制");
+        AiMessage last = messages.get(messages.size() - 1);
+        if (!"user".equals(last.role()) || last.content() == null || last.content().isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "用户消息不能为空");
         }
-        return aiProvider.chat(new AiChatRequest(
-                aiProperties.getModel(),
-                List.of(new AiMessage("user", userMessage))));
+        for (AiMessage message : messages) {
+            if (message.content() != null && message.content().length() > aiProperties.getMaxInputCharacters()) {
+                throw new BusinessException(ErrorCode.INVALID_PARAMETER, "用户消息长度超过限制");
+            }
+        }
+        return aiProvider.chat(new AiChatRequest(aiProperties.getModel(), messages));
     }
 }
