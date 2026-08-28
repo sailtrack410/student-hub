@@ -25,6 +25,15 @@ public class GlobalExceptionHandler {
                 .body(Result.failed(exception.getCode(), exception.getMessage()));
     }
 
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<Result<Void>> handleAccessDenied(
+            org.springframework.security.access.AccessDeniedException exception,
+            HttpServletRequest request) {
+        log.warn("权限不足, method={}, path={}", request.getMethod(), request.getRequestURI());
+        return ResponseEntity.status(ErrorCode.FORBIDDEN.getHttpStatus())
+                .body(Result.failed(ErrorCode.FORBIDDEN.getCode(), ErrorCode.FORBIDDEN.getMessage()));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Result<Void>> handleValidation(MethodArgumentNotValidException exception) {
         String message = exception.getBindingResult().getFieldErrors().stream()
