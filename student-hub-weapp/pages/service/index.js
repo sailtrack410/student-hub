@@ -79,10 +79,11 @@ Page({
   },
 
   goDetail(event) {
-    const group = this.data.groups[Number(event.currentTarget.dataset.group)];
-    const item = group && group.items[Number(event.currentTarget.dataset.index)];
-    if (item && item.itemId) {
-      wx.navigateTo({ url: `/pages/service/detail?id=${item.itemId}` });
+    const itemId = event.currentTarget.dataset.id;
+    if (!itemId || itemId === 'undefined') {
+      wx.showToast({ title: '服务信息加载异常，请重新进入', icon: 'none' });
+      return;
     }
+    wx.navigateTo({ url: `/pages/service/detail?id=${itemId}` });
   }
 });

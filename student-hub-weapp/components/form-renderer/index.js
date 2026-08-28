@@ -125,6 +125,24 @@ Component({
           } finally {
             this.setData({ [`fields[${index}].uploading`]: false });
           }
+        },
+        fail: (error) => {
+          // 用户取消不提示；权限被拒等情况给出可操作的指引
+          const errorMessage = error && error.errMsg ? error.errMsg : '';
+          if (errorMessage.indexOf('cancel') >= 0) {
+            return;
+          }
+          console.error('选择图片失败', error);
+          wx.showModal({
+            title: '无法选择图片',
+            content: '请在设置中允许小程序使用相机和相册后重试',
+            confirmText: '去设置',
+            success: (res) => {
+              if (res.confirm) {
+                wx.openSetting();
+              }
+            }
+          });
         }
       });
     },

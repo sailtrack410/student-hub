@@ -1,4 +1,5 @@
 const api = require('../../utils/api');
+const app = getApp();
 
 Page({
   data: {
@@ -23,6 +24,9 @@ Page({
   },
 
   onShow() {
+    if (!app.ensureLogin()) {
+      return;
+    }
     if (!this.itemId || this.data.submitted) {
       return;
     }
