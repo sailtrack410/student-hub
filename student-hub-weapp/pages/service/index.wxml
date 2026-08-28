@@ -1,0 +1,53 @@
+<view class="hall">
+  <view class="search">
+    <image class="search-icon" src="/assets/tab/tab-service.png" mode="aspectFit" />
+    <input class="search-input" placeholder="搜索办事服务" placeholder-class="ph"
+           value="{{keyword}}" bindinput="onSearchInput" confirm-type="search" />
+  </view>
+
+  <!-- 分类横向滚动 -->
+  <scroll-view wx:if="{{!keyword}}" scroll-x class="cats" enhanced show-scrollbar="{{false}}">
+    <view
+      class="cat-chip {{activeCategoryId === 0 ? 'cat-chip-active' : ''}}"
+      bindtap="pickCategory"
+      data-id="{{0}}"
+    >全部</view>
+    <view
+      wx:for="{{categories}}"
+      wx:key="categoryId"
+      class="cat-chip {{activeCategoryId === item.categoryId ? 'cat-chip-active' : ''}}"
+      bindtap="pickCategory"
+      data-id="{{item.categoryId}}"
+    >
+      <image wx:if="{{item.icon}}" class="cat-chip-icon" src="/assets/category/{{item.icon}}.png" mode="aspectFit" />
+      <text>{{item.categoryName}}</text>
+    </view>
+  </scroll-view>
+
+  <!-- 服务项列表 -->
+  <view class="items">
+    <view
+      wx:for="{{visibleItems}}"
+      wx:key="itemId"
+      class="item-card card"
+      bindtap="goDetail"
+      data-item-id="{{item.itemId}}"
+    >
+      <image class="item-icon" src="/assets/category/{{item.icon || 'cat-affair'}}.png" mode="aspectFit" />
+      <view class="item-body">
+        <view class="item-name">{{item.itemName}}</view>
+        <view class="item-summary">{{item.summary}}</view>
+      </view>
+      <view wx:if="{{item.slaHours}}" class="item-sla">{{item.slaHours}}h</view>
+    </view>
+
+    <empty-state
+      wx:if="{{!visibleItems.length}}"
+      image="/assets/empty/empty-search.jpg"
+      title="{{keyword ? '没有找到相关服务' : '服务准备中'}}"
+      subtitle="{{keyword ? '换个关键词试试' : '更多服务陆续上线'}}"
+    />
+  </view>
+
+  <view class="safe-bottom"></view>
+</view>

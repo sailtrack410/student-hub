@@ -1,0 +1,34 @@
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 6rpx 20rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.tag-blue {
+  color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.tag-amber {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.tag-green {
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.tag-red {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.tag-gray {
+  color: var(--text-2);
+  background: #EEF2F7;
+}

@@ -1,0 +1,41 @@
+<view class="eval">
+  <view class="card">
+    <image class="mascot" src="/assets/mascot/mascot-celebrate.jpg" mode="aspectFit" />
+    <view class="title">这次服务体验如何？</view>
+
+    <view class="stars">
+      <text
+        wx:for="{{[1,2,3,4,5]}}"
+        wx:key="*this"
+        class="star {{item <= rating ? 'star-on' : ''}}"
+        bindtap="pickRating"
+        data-value="{{item}}"
+      >★</text>
+    </view>
+    <view class="rating-text">{{ratingTexts[rating - 1] || '点星星打个分吧'}}</view>
+
+    <view class="tags">
+      <view
+        wx:for="{{tagOptions}}"
+        wx:key="*this"
+        class="tag-chip {{selectedTags.indexOf(item) >= 0 ? 'tag-chip-on' : ''}}"
+        bindtap="toggleTag"
+        data-tag="{{item}}"
+      >{{item}}</view>
+    </view>
+
+    <textarea
+      class="comment"
+      placeholder="说说你的感受，帮助服务变得更好～"
+      placeholder-class="ph"
+      maxlength="512"
+      value="{{comment}}"
+      bindinput="onCommentInput"
+    />
+  </view>
+
+  <button class="btn-primary submit" loading="{{loading}}" disabled="{{loading || !rating}}" bindtap="handleSubmit">
+    提交评价
+  </button>
+  <view class="safe-bottom"></view>
+</view>

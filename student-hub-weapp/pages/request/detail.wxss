@@ -1,0 +1,121 @@
+.detail {
+  padding: 24rpx 30rpx;
+}
+
+.status-hero {
+  border-radius: var(--radius-lg);
+  padding: 36rpx 34rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #fff;
+}
+
+.status-hero-SUBMITTED { background: var(--grad-card-blue); }
+.status-hero-PROCESSING { background: linear-gradient(135deg, #D97706 0%, #F59E0B 100%); }
+.status-hero-COMPLETED { background: linear-gradient(135deg, #16A34A 0%, #22C55E 100%); }
+.status-hero-REJECTED { background: linear-gradient(135deg, #DC2626 0%, #EF4444 100%); }
+.status-hero-CANCELLED { background: linear-gradient(135deg, #64748B 0%, #94A3B8 100%); }
+
+.hero-status {
+  font-size: 40rpx;
+  font-weight: 700;
+}
+
+.hero-title {
+  margin-top: 12rpx;
+  font-size: 28rpx;
+  opacity: 0.95;
+  max-width: 420rpx;
+}
+
+.hero-no {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  opacity: 0.75;
+}
+
+.hero-img {
+  width: 150rpx;
+  height: 150rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.section {
+  margin-top: 24rpx;
+}
+
+.section-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  margin-bottom: 18rpx;
+}
+
+.section-title.danger {
+  color: var(--danger);
+}
+
+.kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 24rpx;
+  padding: 14rpx 0;
+  font-size: 26rpx;
+  border-bottom: 1rpx solid var(--bg-page);
+}
+
+.kv:last-child {
+  border-bottom: none;
+}
+
+.kv-key {
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+
+.kv-value {
+  color: var(--text-1);
+  text-align: right;
+  word-break: break-all;
+}
+
+.reason {
+  font-size: 26rpx;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-radius: var(--radius-sm);
+  padding: 20rpx 24rpx;
+}
+
+.stars {
+  font-size: 44rpx;
+  letter-spacing: 8rpx;
+}
+
+.star {
+  color: #E2E8F0;
+}
+
+.star-on {
+  color: #F59E0B;
+}
+
+.eval-comment {
+  margin-top: 14rpx;
+  font-size: 26rpx;
+  color: var(--text-2);
+}
+
+.actions {
+  margin-top: 30rpx;
+  display: flex;
+  gap: 24rpx;
+  padding-bottom: 40rpx;
+}
+
+.action-btn {
+  flex: 1;
+  height: 92rpx;
+  line-height: 92rpx;
+}

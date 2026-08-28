@@ -1,0 +1,29 @@
+<view class="detail">
+  <view class="head card">
+    <image class="head-icon" src="/assets/category/{{item.icon || 'cat-affair'}}.png" mode="aspectFit" />
+    <view class="head-body">
+      <view class="head-name">{{item.itemName}}</view>
+      <view class="head-summary">{{item.summary}}</view>
+      <view wx:if="{{item.slaHours}}" class="head-sla">⏱ 承诺 {{item.slaHours}} 小时内办结</view>
+    </view>
+  </view>
+
+  <view class="card section">
+    <view class="section-title">办理说明</view>
+    <view class="guide-text">{{item.description || '暂无办理说明'}}</view>
+  </view>
+
+  <view class="card section">
+    <view class="section-title">需要填写的信息</view>
+    <view class="field-list">
+      <view wx:for="{{fields}}" wx:key="key" class="field-row">
+        <text class="field-name">{{item.label}}</text>
+        <text class="field-type">{{item.typeText}}{{item.required ? ' · 必填' : ''}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="footer safe-bottom">
+    <button class="btn-primary apply-btn" bindtap="goApply">立即办理</button>
+  </view>
+</view>

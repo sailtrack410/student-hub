@@ -1,0 +1,44 @@
+<view class="chat">
+  <scroll-view class="messages" scroll-y scroll-into-view="{{scrollInto}}" enhanced show-scrollbar="{{false}}">
+    <!-- 欢迎卡 -->
+    <view class="welcome" wx:if="{{messages.length === 0}}">
+      <image class="welcome-mascot" src="/assets/mascot/mascot-main.jpg" mode="aspectFit" />
+      <view class="welcome-title">你好，我是校园小助手</view>
+      <view class="welcome-sub">办事流程、政策疑问，都可以问我～</view>
+      <view class="suggests">
+        <view class="suggest" wx:for="{{suggestions}}" wx:key="*this" bindtap="pickSuggest" data-text="{{item}}">{{item}}</view>
+      </view>
+    </view>
+
+    <!-- 消息流 -->
+    <view wx:for="{{messages}}" wx:key="key" id="msg-{{index}}" class="msg-row {{item.role === 'USER' ? 'msg-row-user' : ''}}">
+      <image wx:if="{{item.role !== 'USER'}}" class="avatar" src="/assets/mascot/mascot-avatar.jpg" mode="aspectFill" />
+      <view class="bubble {{item.role === 'USER' ? 'bubble-user' : ''}} {{item.degraded ? 'bubble-degraded' : ''}}">{{item.content}}</view>
+    </view>
+
+    <!-- 思考中 -->
+    <view wx:if="{{thinking}}" class="msg-row">
+      <image class="avatar" src="/assets/mascot/mascot-thinking.jpg" mode="aspectFill" />
+      <view class="bubble bubble-thinking">
+        <view class="dot"></view>
+        <view class="dot dot-2"></view>
+        <view class="dot dot-3"></view>
+      </view>
+    </view>
+    <view class="msg-padding"></view>
+  </scroll-view>
+
+  <!-- 输入区 -->
+  <view class="input-bar safe-bottom">
+    <input
+      class="input"
+      value="{{draft}}"
+      placeholder="输入你的问题…"
+      placeholder-class="ph"
+      confirm-type="send"
+      bindinput="onDraftInput"
+      bindconfirm="onSend"
+    />
+    <button class="send-btn" disabled="{{thinking}}" bindtap="onSend">发送</button>
+  </view>
+</view>

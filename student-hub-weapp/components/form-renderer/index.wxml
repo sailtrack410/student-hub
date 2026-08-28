@@ -1,0 +1,68 @@
+<view class="form">
+  <view wx:for="{{fields}}" wx:key="key" class="field">
+    <view class="field-label">
+      <text wx:if="{{item.required}}" class="required">*</text>
+      <text>{{item.label}}</text>
+    </view>
+
+    <input
+      wx:if="{{item.type === 'input'}}"
+      class="field-input"
+      value="{{item.display}}"
+      placeholder="{{item.placeholder || '请输入'}}"
+      data-key="{{item.key}}"
+      bindinput="onInput"
+      placeholder-class="ph"
+    />
+
+    <input
+      wx:elif="{{item.type === 'number'}}"
+      class="field-input"
+      type="number"
+      value="{{item.display}}"
+      placeholder="{{item.placeholder || '请输入数字'}}"
+      data-key="{{item.key}}"
+      bindinput="onInput"
+      placeholder-class="ph"
+    />
+
+    <textarea
+      wx:elif="{{item.type === 'textarea'}}"
+      class="field-textarea"
+      value="{{item.display}}"
+      placeholder="{{item.placeholder || '请输入'}}"
+      maxlength="{{item.max || 500}}"
+      data-key="{{item.key}}"
+      bindinput="onInput"
+      auto-height
+      placeholder-class="ph"
+    />
+
+    <picker
+      wx:elif="{{item.type === 'select'}}"
+      mode="selector"
+      range="{{item.options}}"
+      data-key="{{item.key}}"
+      bindchange="onPick"
+    >
+      <view class="field-picker {{item.display ? '' : 'field-picker-empty'}}">
+        <text>{{item.display || '请选择'}}</text>
+        <text class="arrow">▸</text>
+      </view>
+    </picker>
+
+    <picker
+      wx:elif="{{item.type === 'date'}}"
+      mode="date"
+      data-key="{{item.key}}"
+      bindchange="onPick"
+    >
+      <view class="field-picker {{item.display ? '' : 'field-picker-empty'}}">
+        <text>{{item.display || '请选择日期'}}</text>
+        <text class="arrow">▸</text>
+      </view>
+    </picker>
+
+    <view wx:elif="{{item.type === 'image'}}" class="field-disabled">拍照上传即将上线</view>
+  </view>
+</view>

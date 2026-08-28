@@ -1,0 +1,67 @@
+.noti {
+  padding: 24rpx 30rpx;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.toolbar-title {
+  font-size: 24rpx;
+  color: var(--text-2);
+}
+
+.toolbar-action {
+  font-size: 24rpx;
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.item-unread {
+  border: 2rpx solid var(--brand-soft);
+}
+
+.item-head {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+
+.item-dot {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  background: #CBD5E1;
+  flex-shrink: 0;
+}
+
+.item-dot-on {
+  background: var(--danger);
+}
+
+.item-title {
+  flex: 1;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.item-time {
+  font-size: 22rpx;
+  color: var(--text-3);
+}
+
+.item-content {
+  margin-top: 10rpx;
+  font-size: 25rpx;
+  color: var(--text-2);
+  line-height: 1.6;
+}

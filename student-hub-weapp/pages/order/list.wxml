@@ -1,0 +1,45 @@
+<view class="orders">
+  <scroll-view scroll-x class="filter" enhanced show-scrollbar="{{false}}">
+    <view
+      wx:for="{{filters}}"
+      wx:key="key"
+      class="filter-chip {{activeStatus === item.key ? 'filter-chip-active' : ''}}"
+      bindtap="pickFilter"
+      data-key="{{item.key}}"
+    >{{item.label}}</view>
+  </scroll-view>
+
+  <view wx:if="{{records.length}}" class="list">
+    <view wx:for="{{records}}" wx:key="orderId" class="card item">
+      <view class="item-head">
+        <text class="item-title">{{item.title}}</text>
+        <status-tag text="{{item.statusText}}" theme="{{item.statusTheme}}" />
+      </view>
+      <view class="item-no">{{item.orderNo}}</view>
+      <view class="item-actions">
+        <button
+          wx:if="{{item.status === 'ASSIGNED'}}"
+          class="btn-primary action-btn"
+          size="mini"
+          bindtap="onStart"
+          data-id="{{item.orderId}}"
+        >开始处理</button>
+        <button
+          wx:if="{{item.status === 'PROCESSING'}}"
+          class="btn-primary action-btn"
+          size="mini"
+          bindtap="onComplete"
+          data-id="{{item.orderId}}"
+        >办结</button>
+      </view>
+    </view>
+  </view>
+
+  <empty-state
+    wx:if="{{loaded && !records.length}}"
+    image="/assets/empty/empty-requests.jpg"
+    title="暂无工单"
+    subtitle="被指派的工单会出现在这里"
+  />
+  <view class="safe-bottom"></view>
+</view>

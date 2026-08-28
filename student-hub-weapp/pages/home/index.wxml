@@ -1,0 +1,82 @@
+<view class="home">
+  <!-- 顶部渐变横幅 -->
+  <view class="hero">
+    <view class="hero-greet">
+      <view class="hero-title">Hi，{{userName}}</view>
+      <view class="hero-sub">今天有什么可以帮到你？</view>
+    </view>
+    <image class="hero-banner" src="/assets/banner/home-banner.jpg" mode="aspectFill" />
+  </view>
+
+  <!-- 快捷入口 -->
+  <view class="quick card">
+    <view class="quick-item" bindtap="goRepair">
+      <view class="quick-icon quick-icon-blue"><image src="/assets/category/cat-repair.png" mode="aspectFit" /></view>
+      <text>一键报修</text>
+    </view>
+    <view class="quick-item" bindtap="goLeave">
+      <view class="quick-icon quick-icon-teal"><image src="/assets/category/cat-leave.png" mode="aspectFit" /></view>
+      <text>请假申请</text>
+    </view>
+    <view class="quick-item" bindtap="goCertificate">
+      <view class="quick-icon quick-icon-gold"><image src="/assets/category/cat-certificate.png" mode="aspectFit" /></view>
+      <text>证明开具</text>
+    </view>
+    <view class="quick-item" bindtap="goAssistant">
+      <view class="quick-icon quick-icon-violet"><image src="/assets/mascot/mascot-avatar.jpg" mode="aspectFill" /></view>
+      <text>AI 助手</text>
+    </view>
+  </view>
+
+  <!-- 我的申请进展 -->
+  <view class="section">
+    <view class="section-head">
+      <text class="section-title">我的申请</text>
+      <text class="section-more" bindtap="goRequestList">全部 ›</text>
+    </view>
+    <view wx:if="{{latestRequest}}" class="card progress-card" bindtap="goRequestDetail">
+      <image class="progress-icon" src="/assets/category/{{latestRequest.itemIcon || 'cat-affair'}}.png" mode="aspectFit" />
+      <view class="progress-body">
+        <view class="progress-title">{{latestRequest.title}}</view>
+        <view class="progress-time">{{latestRequest.submittedAtText}}</view>
+      </view>
+      <status-tag text="{{latestRequest.statusText}}" theme="{{latestRequest.statusTheme}}" />
+    </view>
+    <view wx:elif="{{loggedIn}}" class="card">
+      <empty-state image="/assets/empty/empty-requests.jpg" title="还没有申请记录" subtitle="从下方热门服务开始体验吧" />
+    </view>
+    <view wx:else class="card login-guide" bindtap="goLogin">
+      <image class="guide-mascot" src="/assets/mascot/mascot-main.jpg" mode="aspectFit" />
+      <view class="guide-text">
+        <view class="guide-title">登录后查看申请进度</view>
+        <view class="guide-sub">报修、请假、证明办理一站搞定</view>
+      </view>
+      <view class="guide-btn">去登录</view>
+    </view>
+  </view>
+
+  <!-- 常用服务 -->
+  <view class="section">
+    <view class="section-head">
+      <text class="section-title">常用服务</text>
+      <text class="section-more" bindtap="goService">更多 ›</text>
+    </view>
+    <view class="services">
+      <view
+        wx:for="{{hotItems}}"
+        wx:key="itemId"
+        class="service-chip"
+        bindtap="goServiceDetail"
+        data-item-id="{{item.itemId}}"
+      >
+        <image class="service-chip-icon" src="/assets/category/{{item.icon || 'cat-affair'}}.png" mode="aspectFit" />
+        <view class="service-chip-body">
+          <text class="service-chip-name">{{item.itemName}}</text>
+          <text wx:if="{{item.slaHours}}" class="service-chip-sla">{{item.slaHours}}h 内办结</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="safe-bottom"></view>
+</view>

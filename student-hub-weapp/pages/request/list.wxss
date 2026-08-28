@@ -1,0 +1,75 @@
+.list {
+  padding: 24rpx 30rpx;
+}
+
+.filter {
+  white-space: nowrap;
+}
+
+.filter-chip {
+  display: inline-block;
+  padding: 14rpx 30rpx;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+  color: var(--text-2);
+  background: var(--bg-card);
+  margin-right: 16rpx;
+  border: 2rpx solid var(--border);
+}
+
+.filter-chip-active {
+  background: var(--grad-brand);
+  color: #fff;
+  font-weight: 600;
+  border-color: transparent;
+}
+
+.records {
+  margin-top: 26rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.record-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.record-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.record-meta {
+  margin-top: 12rpx;
+  display: flex;
+  justify-content: space-between;
+  font-size: 24rpx;
+  color: var(--text-2);
+}
+
+.record-no {
+  color: var(--text-3);
+  font-size: 22rpx;
+}
+
+.record-time {
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: var(--text-3);
+}
+
+.list-end {
+  margin-top: 30rpx;
+  text-align: center;
+  font-size: 22rpx;
+  color: var(--text-3);
+}

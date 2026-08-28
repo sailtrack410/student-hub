@@ -1,0 +1,44 @@
+/* Student Hub 设计令牌：与 outputs 配色卡 v3 一致 */
+page {
+  /* 品牌色 */
+  --brand: #2563EB;
+  --brand-deep: #1D4ED8;
+  --brand-soft: #EAF0FE;
+  --accent: #14B8A6;
+  --accent-deep: #0F766E;
+  --accent-soft: #E3F7F4;
+
+  /* 语义色 */
+  --success: #16A34A;
+  --success-soft: #E8F7EE;
+  --warning: #D97706;
+  --warning-soft: #FCF3E3;
+  --danger: #DC2626;
+  --danger-soft: #FDEBEB;
+
+  /* 文字 */
+  --text-1: #0F172A;
+  --text-2: #64748B;
+  --text-3: #94A3B8;
+
+  /* 背景 */
+  --bg-page: #F5F7FB;
+  --bg-card: #FFFFFF;
+  --border: #E2E8F0;
+
+  /* 渐变 */
+  --grad-brand: linear-gradient(135deg, #2563EB 0%, #14B8A6 100%);
+  --grad-brand-light: linear-gradient(135deg, #EAF0FE 0%, #E3F7F4 100%);
+  --grad-card-blue: linear-gradient(135deg, #2563EB 0%, #3B82F6 55%, #38BDF8 100%);
+
+  /* 圆角与阴影 */
+  --radius-lg: 28rpx;
+  --radius-md: 20rpx;
+  --radius-sm: 12rpx;
+  --shadow-card: 0 6rpx 24rpx rgba(15, 23, 42, 0.06);
+
+  font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+  color: var(--text-1);
+  background-color: var(--bg-page);
+  font-size: 28rpx;
+}

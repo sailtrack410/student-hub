@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "提交申请",
+  "usingComponents": {
+    "form-renderer": "/components/form-renderer/index"
+  }
+}

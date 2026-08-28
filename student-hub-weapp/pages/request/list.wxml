@@ -1,0 +1,42 @@
+<view class="list">
+  <!-- 状态筛选 -->
+  <scroll-view scroll-x class="filter" enhanced show-scrollbar="{{false}}">
+    <view
+      wx:for="{{filters}}"
+      wx:key="key"
+      class="filter-chip {{activeStatus === item.key ? 'filter-chip-active' : ''}}"
+      bindtap="pickFilter"
+      data-key="{{item.key}}"
+    >{{item.label}}</view>
+  </scroll-view>
+
+  <view class="records" wx:if="{{records.length}}">
+    <view
+      wx:for="{{records}}"
+      wx:key="requestId"
+      class="record card"
+      bindtap="goDetail"
+      data-id="{{item.requestId}}"
+    >
+      <view class="record-head">
+        <text class="record-title">{{item.title}}</text>
+        <status-tag text="{{item.statusText}}" theme="{{item.statusTheme}}" />
+      </view>
+      <view class="record-meta">
+        <text>{{item.itemName}}</text>
+        <text class="record-no">{{item.requestNo}}</text>
+      </view>
+      <view class="record-time">{{item.submittedAtText}}</view>
+    </view>
+  </view>
+
+  <empty-state
+    wx:if="{{loaded && !records.length}}"
+    image="/assets/empty/empty-requests.jpg"
+    title="这里空空如也"
+    subtitle="去服务大厅发起你的第一个申请吧"
+  />
+
+  <view wx:if="{{!hasMore && records.length}}" class="list-end">— 到底啦 —</view>
+  <view class="safe-bottom"></view>
+</view>

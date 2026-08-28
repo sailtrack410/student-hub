@@ -1,0 +1,71 @@
+<view class="profile">
+  <!-- 头部 -->
+  <view class="header">
+    <image class="header-bg" src="/assets/banner/profile-header.jpg" mode="aspectFill" />
+    <view class="user">
+      <view class="avatar-wrap">
+        <image class="avatar" src="{{user ? '/assets/mascot/mascot-avatar.jpg' : '/assets/tab/tab-profile.png'}}" mode="{{user ? 'aspectFill' : 'aspectFit'}}" />
+        <image wx:if="{{user}}" class="avatar-frame" src="/assets/frame/avatar-frame-glow.png" mode="aspectFit" />
+      </view>
+      <view class="user-body">
+        <view class="user-name">{{user ? user.displayName : '未登录'}}</view>
+        <view class="user-meta" wx:if="{{user}}">{{roleText}} · {{authText}}</view>
+        <view class="user-meta" wx:else>登录后享受完整服务</view>
+      </view>
+      <view wx:if="{{!user}}" class="login-btn" bindtap="goLogin">登录</view>
+    </view>
+  </view>
+
+  <!-- 统计 -->
+  <view class="stats card" wx:if="{{user}}">
+    <view class="stat" bindtap="goRequests">
+      <text class="stat-num">{{processingCount}}</text>
+      <text class="stat-label">进行中</text>
+    </view>
+    <view class="stat-divider"></view>
+    <view class="stat" bindtap="goRequests">
+      <text class="stat-num">{{completedCount}}</text>
+      <text class="stat-label">已办结</text>
+    </view>
+    <view class="stat-divider"></view>
+    <view class="stat" bindtap="goNotifications">
+      <text class="stat-num">{{unreadCount}}</text>
+      <text class="stat-label">未读消息</text>
+    </view>
+  </view>
+
+  <!-- 服务人员工作台入口 -->
+  <view class="card section" wx:if="{{isWorker}}">
+    <view class="menu" bindtap="goMyOrders">
+      <image class="menu-icon" src="/assets/category/cat-repair.png" mode="aspectFit" />
+      <text class="menu-text">我的工单</text>
+      <text class="menu-arrow">›</text>
+    </view>
+  </view>
+
+  <!-- 菜单 -->
+  <view class="card section">
+    <view class="menu" bindtap="goRequests">
+      <image class="menu-icon" src="/assets/category/cat-affair.png" mode="aspectFit" />
+      <text class="menu-text">我的申请</text>
+      <text class="menu-arrow">›</text>
+    </view>
+    <view class="menu" bindtap="goNotifications">
+      <image class="menu-icon" src="/assets/category/cat-consult.png" mode="aspectFit" />
+      <text class="menu-text">我的消息</text>
+      <view wx:if="{{unreadCount > 0}}" class="badge">{{unreadCount > 99 ? '99+' : unreadCount}}</view>
+      <text class="menu-arrow">›</text>
+    </view>
+  </view>
+
+  <view class="card section" wx:if="{{user}}">
+    <view class="menu" bindtap="onLogout">
+      <image class="menu-icon" src="/assets/empty/error-network.jpg" mode="aspectFit" />
+      <text class="menu-text">退出登录</text>
+      <text class="menu-arrow">›</text>
+    </view>
+  </view>
+
+  <view class="version">Student Hub · 校园小助手为你服务</view>
+  <view class="safe-bottom"></view>
+</view>

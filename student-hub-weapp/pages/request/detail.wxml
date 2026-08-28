@@ -1,0 +1,63 @@
+<view class="detail" wx:if="{{detail}}">
+  <!-- 状态头卡 -->
+  <view class="status-hero status-hero-{{detail.statusTheme}}">
+    <view class="hero-left">
+      <view class="hero-status">{{detail.statusText}}</view>
+      <view class="hero-title">{{detail.title}}</view>
+      <view class="hero-no">{{detail.requestNo}}</view>
+    </view>
+    <image class="hero-img" src="/assets/mascot/mascot-celebrate.jpg" mode="aspectFit" />
+  </view>
+
+  <!-- 表单内容 -->
+  <view class="card section">
+    <view class="section-title">申请内容</view>
+    <view class="kv" wx:for="{{formPairs}}" wx:key="key">
+      <text class="kv-key">{{item.label}}</text>
+      <text class="kv-value">{{item.valueText}}</text>
+    </view>
+  </view>
+
+  <!-- 工单信息 -->
+  <view class="card section" wx:if="{{detail.workOrder}}">
+    <view class="section-title">处理信息</view>
+    <view class="kv">
+      <text class="kv-key">工单号</text>
+      <text class="kv-value">{{detail.workOrder.orderNo}}</text>
+    </view>
+    <view class="kv" wx:if="{{detail.workOrder.assigneeName}}">
+      <text class="kv-key">服务人员</text>
+      <text class="kv-value">{{detail.workOrder.assigneeName}}</text>
+    </view>
+    <view class="kv" wx:if="{{detail.workOrder.completeRemark}}">
+      <text class="kv-key">结果说明</text>
+      <text class="kv-value">{{detail.workOrder.completeRemark}}</text>
+    </view>
+  </view>
+
+  <view class="card section" wx:if="{{detail.rejectReason}}">
+    <view class="section-title danger">未受理原因</view>
+    <view class="reason">{{detail.rejectReason}}</view>
+  </view>
+
+  <!-- 评价 -->
+  <view class="card section" wx:if="{{detail.evaluation}}">
+    <view class="section-title">我的评价</view>
+    <view class="stars">
+      <text wx:for="{{[1,2,3,4,5]}}" wx:key="*this" class="star {{item <= detail.evaluation.rating ? 'star-on' : ''}}">★</text>
+    </view>
+    <view class="eval-comment" wx:if="{{detail.evaluation.comment}}">{{detail.evaluation.comment}}</view>
+  </view>
+
+  <!-- 时间线 -->
+  <view class="card section">
+    <view class="section-title">办理进度</view>
+    <timeline logs="{{detail.timeline}}" />
+  </view>
+
+  <!-- 操作 -->
+  <view class="actions safe-bottom" wx:if="{{detail.status === 'SUBMITTED' || detail.status === 'PROCESSING' || detail.status === 'COMPLETED'}}">
+    <button wx:if="{{detail.status !== 'COMPLETED'}}" class="btn-ghost action-btn" bindtap="onCancel">撤销申请</button>
+    <button wx:if="{{detail.status === 'COMPLETED' && !detail.evaluation}}" class="btn-primary action-btn" bindtap="goEvaluate">评价服务</button>
+  </view>
+</view>

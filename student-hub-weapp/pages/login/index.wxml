@@ -1,0 +1,32 @@
+<view class="login">
+  <image class="hero" src="/assets/banner/login-hero.jpg" mode="aspectFill" />
+  <view class="body">
+    <view class="brand">
+      <image class="brand-logo" src="/assets/brand/logo-mark.png" mode="aspectFit" />
+      <view class="brand-text">
+        <text class="brand-name">Student Hub</text>
+        <text class="brand-slogan">你的校园服务小管家</text>
+      </view>
+    </view>
+
+    <view class="features">
+      <view class="feature">
+        <text class="feature-emoji">🛠️</text>
+        <text>一键报修</text>
+      </view>
+      <view class="feature">
+        <text class="feature-emoji">📄</text>
+        <text>证明办理</text>
+      </view>
+      <view class="feature">
+        <text class="feature-emoji">🤖</text>
+        <text>AI 智能答疑</text>
+      </view>
+    </view>
+
+    <button class="btn-primary login-btn" loading="{{loading}}" disabled="{{loading}}" bindtap="handleLogin">
+      微信一键登录
+    </button>
+    <view class="agreement">首次登录将自动创建学生账号</view>
+  </view>
+</view>

@@ -1,10 +1,58 @@
 {
   "pages": [
-    "pages/index/index"
+    "pages/home/index",
+    "pages/service/index",
+    "pages/assistant/index",
+    "pages/profile/index",
+    "pages/login/index",
+    "pages/service/detail",
+    "pages/service/apply",
+    "pages/request/list",
+    "pages/request/detail",
+    "pages/evaluation/index",
+    "pages/notification/list",
+    "pages/order/list"
   ],
   "window": {
     "navigationBarTitleText": "Student Hub",
-    "navigationBarBackgroundColor": "#4F46E5",
-    "navigationBarTextStyle": "white"
-  }
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#F5F7FB",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#94A3B8",
+    "selectedColor": "#2563EB",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/home/index",
+        "text": "首页",
+        "iconPath": "assets/tab/tab-home.png",
+        "selectedIconPath": "assets/tab/tab-home-active.png"
+      },
+      {
+        "pagePath": "pages/service/index",
+        "text": "服务",
+        "iconPath": "assets/tab/tab-service.png",
+        "selectedIconPath": "assets/tab/tab-service-active.png"
+      },
+      {
+        "pagePath": "pages/assistant/index",
+        "text": "AI助手",
+        "iconPath": "assets/tab/tab-assistant.png",
+        "selectedIconPath": "assets/tab/tab-assistant-active.png"
+      },
+      {
+        "pagePath": "pages/profile/index",
+        "text": "我的",
+        "iconPath": "assets/tab/tab-profile.png",
+        "selectedIconPath": "assets/tab/tab-profile-active.png"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
 }

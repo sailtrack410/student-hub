@@ -1,0 +1,6 @@
+<view class="empty">
+  <image class="empty-img" src="{{image}}" mode="aspectFit" />
+  <view class="empty-title">{{title}}</view>
+  <view wx:if="{{subtitle}}" class="empty-subtitle">{{subtitle}}</view>
+  <slot name="action"></slot>
+</view>
