@@ -27,12 +27,6 @@
   color: var(--text-3);
 }
 
-/* 分类 */
-.cats {
-  margin-top: 26rpx;
-  white-space: nowrap;
-}
-
 /* 结果与排序 */
 .toolbar {
   margin-top: 26rpx;
@@ -63,37 +57,63 @@
   font-size: 20rpx;
 }
 
-.cat-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 10rpx;
-  background: var(--bg-card);
-  border-radius: 999rpx;
-  padding: 14rpx 28rpx;
-  font-size: 26rpx;
-  color: var(--text-2);
-  margin-right: 16rpx;
-  border: 2rpx solid var(--border);
-}
-
-.cat-chip-icon {
-  width: 40rpx;
-  height: 40rpx;
-}
-
-.cat-chip-active {
-  background: var(--grad-brand);
-  color: #fff;
-  border-color: transparent;
-  font-weight: 600;
-}
-
-/* 列表 */
-.items {
+/* 分类分组 */
+.groups {
   margin-top: 26rpx;
   display: flex;
   flex-direction: column;
-  gap: 20rpx;
+  gap: 36rpx;
+}
+
+.group-head {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  padding: 0 6rpx 18rpx;
+}
+
+.group-icon {
+  width: 60rpx;
+  height: 60rpx;
+  flex-shrink: 0;
+}
+
+.group-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.group-name {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: var(--text-1);
+  display: block;
+}
+
+.group-desc {
+  margin-top: 4rpx;
+  font-size: 22rpx;
+  color: var(--text-3);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.group-count {
+  flex-shrink: 0;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 22rpx;
+  font-weight: 600;
+  border-radius: 999rpx;
+  padding: 6rpx 18rpx;
+}
+
+.group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
 }
 
 .item-card {

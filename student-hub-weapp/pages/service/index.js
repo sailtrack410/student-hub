@@ -7,11 +7,11 @@ Page({
   data: {
     categories: [],
     allItems: [],
-    visibleItems: [],
-    activeCategoryId: 0,
+    groups: [],
     keyword: '',
     sortOptions: SORT_OPTIONS,
     sortIndex: 0,
+    totalCount: 0,
     loaded: false
   },
 
@@ -34,42 +34,48 @@ Page({
         (category.items || []).forEach((item) => allItems.push(item));
       });
       this.setData({ categories: catalog, allItems, loaded: true });
-      this.applyFilter();
+      this.rebuild();
     } catch (error) {
       this.setData({ loaded: true });
     }
   },
 
-  applyFilter() {
-    const { allItems, activeCategoryId, keyword, sortIndex } = this.data;
-    let items = allItems.filter((item) => {
-      const matchCategory = !activeCategoryId || Number(item.categoryId) === Number(activeCategoryId);
+  /** 按关键词过滤后按分类分组，组内按所选方式排序 */
+  rebuild() {
+    const { allItems, categories, keyword, sortIndex } = this.data;
+    const matched = allItems.filter((item) => {
       const text = `${item.itemName}${item.summary || ''}`;
-      const matchKeyword = !keyword || text.indexOf(keyword) >= 0;
-      return matchCategory && matchKeyword;
+      return !keyword || text.indexOf(keyword) >= 0;
     });
-    if (sortIndex === 1) {
-      items = items.slice().sort((a, b) => (a.slaHours || 9999) - (b.slaHours || 9999));
-    } else if (sortIndex === 2) {
-      items = items.slice().sort((a, b) => a.itemName.localeCompare(b.itemName, 'zh'));
-    }
-    this.setData({ visibleItems: items });
-  },
-
-  pickCategory(event) {
-    const id = Number(event.currentTarget.dataset.id) || 0;
-    this.setData({ activeCategoryId: id });
-    this.applyFilter();
+    const sortItem = (items) => {
+      if (sortIndex === 1) {
+        return items.slice().sort((a, b) => (a.slaHours || 9999) - (b.slaHours || 9999));
+      }
+      if (sortIndex === 2) {
+        return items.slice().sort((a, b) => a.itemName.localeCompare(b.itemName, 'zh'));
+      }
+      return items;
+    };
+    const groups = categories
+      .map((category) => ({
+        categoryId: category.categoryId,
+        categoryName: category.categoryName,
+        icon: category.icon,
+        description: category.description,
+        items: sortItem(matched.filter((item) => Number(item.categoryId) === Number(category.categoryId)))
+      }))
+      .filter((group) => group.items.length > 0);
+    this.setData({ groups, totalCount: matched.length });
   },
 
   onSearchInput(event) {
     this.setData({ keyword: event.detail.value.trim() });
-    this.applyFilter();
+    this.rebuild();
   },
 
   onSortChange(event) {
     this.setData({ sortIndex: Number(event.detail.value) });
-    this.applyFilter();
+    this.rebuild();
   },
 
   goDetail(event) {

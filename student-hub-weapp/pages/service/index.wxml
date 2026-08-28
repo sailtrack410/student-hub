@@ -5,28 +5,9 @@
            value="{{keyword}}" bindinput="onSearchInput" confirm-type="search" />
   </view>
 
-  <!-- 分类横向滚动 -->
-  <scroll-view wx:if="{{!keyword}}" scroll-x class="cats" enhanced show-scrollbar="{{false}}">
-    <view
-      class="cat-chip {{activeCategoryId === 0 ? 'cat-chip-active' : ''}}"
-      bindtap="pickCategory"
-      data-id="{{0}}"
-    >全部</view>
-    <view
-      wx:for="{{categories}}"
-      wx:key="categoryId"
-      class="cat-chip {{activeCategoryId === item.categoryId ? 'cat-chip-active' : ''}}"
-      bindtap="pickCategory"
-      data-id="{{item.categoryId}}"
-    >
-      <image wx:if="{{item.icon}}" class="cat-chip-icon" src="/assets/category/{{item.icon}}.png" mode="aspectFit" />
-      <text>{{item.categoryName}}</text>
-    </view>
-  </scroll-view>
-
   <!-- 结果与排序 -->
   <view class="toolbar">
-    <text class="toolbar-count">共 {{visibleItems.length}} 项服务</text>
+    <text class="toolbar-count">共 {{totalCount}} 项服务</text>
     <picker mode="selector" range="{{sortOptions}}" value="{{sortIndex}}" bindchange="onSortChange">
       <view class="sort-chip">
         <text>{{sortOptions[sortIndex]}}</text>
@@ -35,28 +16,41 @@
     </picker>
   </view>
 
-  <!-- 服务项列表 -->
-  <view class="items">
-    <view
-      wx:for="{{visibleItems}}"
-      wx:key="itemId"
-      class="item-card card"
-      bindtap="goDetail"
-      data-item-id="{{item.itemId}}"
-    >
-      <image class="item-icon" src="/assets/category/{{item.icon || 'cat-affair'}}.png" mode="aspectFit" />
-      <view class="item-body">
-        <view class="item-name">{{item.itemName}}</view>
-        <view class="item-summary">{{item.summary}}</view>
+  <!-- 分类分组列表 -->
+  <view class="groups">
+    <view wx:for="{{groups}}" wx:key="categoryId" wx:for-item="group" class="group">
+      <view class="group-head">
+        <image class="group-icon" src="/assets/category/{{group.icon || 'cat-affair'}}.png" mode="aspectFit" />
+        <view class="group-body">
+          <text class="group-name">{{group.categoryName}}</text>
+          <text class="group-desc">{{group.description}}</text>
+        </view>
+        <text class="group-count">{{group.items.length}} 项</text>
       </view>
-      <view wx:if="{{item.slaHours}}" class="item-sla">{{item.slaHours}}h</view>
+      <view class="group-items">
+        <view
+          wx:for="{{group.items}}"
+          wx:key="itemId"
+          wx:for-item="item"
+          class="item-card card"
+          bindtap="goDetail"
+          data-item-id="{{item.itemId}}"
+        >
+          <image class="item-icon" src="/assets/category/{{item.icon || 'cat-affair'}}.png" mode="aspectFit" />
+          <view class="item-body">
+            <view class="item-name">{{item.itemName}}</view>
+            <view class="item-summary">{{item.summary}}</view>
+          </view>
+          <view wx:if="{{item.slaHours}}" class="item-sla">{{item.slaHours}}h</view>
+        </view>
+      </view>
     </view>
 
     <empty-state
-      wx:if="{{loaded && !visibleItems.length}}"
+      wx:if="{{loaded && !groups.length}}"
       image="/assets/empty/empty-search.jpg"
-      title="{{keyword ? '没有找到相关服务' : '服务准备中'}}"
-      subtitle="{{keyword ? '换个关键词试试' : '更多服务陆续上线'}}"
+      title="没有找到相关服务"
+      subtitle="换个关键词试试"
     />
   </view>
 
