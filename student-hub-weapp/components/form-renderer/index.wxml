@@ -63,6 +63,30 @@
       </view>
     </picker>
 
-    <view wx:elif="{{item.type === 'image'}}" class="field-disabled">拍照上传即将上线</view>
+    <view wx:elif="{{item.type === 'image'}}" class="image-field">
+      <view class="image-grid">
+        <view wx:for="{{item.urls}}" wx:key="*this" wx:for-item="url" wx:for-index="imgIndex" class="image-cell">
+          <image
+            class="image-thumb"
+            src="{{url}}"
+            mode="aspectFill"
+            data-field="{{index}}"
+            data-img="{{imgIndex}}"
+            bindtap="onPreviewImage"
+          />
+          <view class="image-remove" data-field="{{index}}" data-img="{{imgIndex}}" catchtap="onRemoveImage">×</view>
+        </view>
+        <view
+          wx:if="{{item.urls.length < (item.maxCount || 3)}}"
+          class="image-add {{item.uploading ? 'image-add-busy' : ''}}"
+          data-field="{{index}}"
+          bindtap="onAddImage"
+        >
+          <view class="plus-v"></view>
+          <view class="plus-h"></view>
+        </view>
+      </view>
+      <view class="image-hint">{{item.placeholder || '拍照或从相册选择'}}</view>
+    </view>
   </view>
 </view>

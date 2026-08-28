@@ -1,4 +1,5 @@
 const api = require('../../utils/api');
+const config = require('../../utils/config');
 const format = require('../../utils/format');
 
 // 表单字段 key → 展示名
@@ -12,6 +13,7 @@ const FIELD_LABELS = {
   startDate: '开始日期',
   endDate: '结束日期',
   reason: '请假事由',
+  materials: '请假材料',
   activityName: '活动名称',
   venue: '申请场地',
   useDate: '使用日期',
@@ -43,9 +45,21 @@ Page({
       if (raw.formData && typeof raw.formData === 'object') {
         Object.keys(raw.formData).forEach((key) => {
           const value = raw.formData[key];
+          // 图片字段：后端已替换为带签名的访问路径
+          if (Array.isArray(value) && value.length && typeof value[0] === 'string'
+              && value[0].indexOf('/api/') === 0) {
+            formPairs.push({
+              key,
+              label: FIELD_LABELS[key] || key,
+              images: value.map((path) => config.baseUrl + path),
+              valueText: ''
+            });
+            return;
+          }
           formPairs.push({
             key,
             label: FIELD_LABELS[key] || key,
+            images: [],
             valueText: Array.isArray(value) ? value.join('、') : String(value)
           });
         });
@@ -57,6 +71,14 @@ Page({
       this.setData({ detail, formPairs });
     } catch (error) {
       // 请求层已提示
+    }
+  },
+
+  previewFormImage(event) {
+    const key = event.currentTarget.dataset.key;
+    const pair = this.data.formPairs.find((item) => item.key === key);
+    if (pair && pair.images.length) {
+      wx.previewImage({ urls: pair.images });
     }
   },
 

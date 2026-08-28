@@ -48,6 +48,7 @@ public class SecurityConfig {
                                 "/api/common/auth/login",
                                 "/api/common/auth/wechat-login",
                                 "/api/common/auth/dev-wechat-login",
+                                "/api/common/files/view/**",
                                 "/actuator/health",
                                 "/api",
                                 "/v3/api-docs/**",

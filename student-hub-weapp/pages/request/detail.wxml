@@ -12,10 +12,27 @@
   <!-- 表单内容 -->
   <view class="card section">
     <view class="section-title">申请内容</view>
-    <view class="kv" wx:for="{{formPairs}}" wx:key="key">
-      <text class="kv-key">{{item.label}}</text>
-      <text class="kv-value">{{item.valueText}}</text>
-    </view>
+    <block wx:for="{{formPairs}}" wx:key="key">
+      <view wx:if="{{!item.images.length}}" class="kv">
+        <text class="kv-key">{{item.label}}</text>
+        <text class="kv-value">{{item.valueText}}</text>
+      </view>
+      <view wx:else class="kv kv-images">
+        <text class="kv-key">{{item.label}}</text>
+        <view class="kv-thumbs">
+          <image
+            wx:for="{{item.images}}"
+            wx:key="*this"
+            wx:for-item="img"
+            class="kv-thumb"
+            src="{{img}}"
+            mode="aspectFill"
+            data-key="{{item.key}}"
+            bindtap="previewFormImage"
+          />
+        </view>
+      </view>
+    </block>
   </view>
 
   <!-- 工单信息 -->

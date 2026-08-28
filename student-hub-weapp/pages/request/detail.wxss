@@ -80,6 +80,24 @@
   word-break: break-all;
 }
 
+.kv-images {
+  align-items: flex-start;
+}
+
+.kv-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  justify-content: flex-end;
+}
+
+.kv-thumb {
+  width: 132rpx;
+  height: 132rpx;
+  border-radius: var(--radius-sm);
+  background: var(--bg-page);
+}
+
 .reason {
   font-size: 26rpx;
   color: var(--danger);

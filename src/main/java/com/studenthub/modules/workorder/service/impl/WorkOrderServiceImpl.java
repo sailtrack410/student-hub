@@ -48,6 +48,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
     private final ServiceRequestMapper serviceRequestMapper;
     private final UserMapper userMapper;
     private final IdentityAccessMapper identityAccessMapper;
+    private final com.studenthub.modules.servicecatalog.mapper.ServiceItemMapper serviceItemMapper;
+    private final com.studenthub.modules.file.service.FileStorageService fileStorageService;
     private final RequestLogRecorder requestLogRecorder;
     private final NotificationService notificationService;
     private final DispatcherScopeResolver dispatcherScopeResolver;
@@ -282,16 +284,36 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         ServiceRequestEntity request = serviceRequestMapper.selectById(order.getRequestId());
         String requestNo = request == null ? null : request.getRequestNo();
         String requesterName = null;
-        JsonNode formData = null;
+        JsonNode formDataNode = null;
         if (request != null) {
             UserEntity requester = userMapper.selectById(request.getRequesterId());
             requesterName = requester == null ? null : requester.getDisplayName();
-            formData = parseFormData(request.getFormData());
+            JsonNode formData = parseFormData(request.getFormData());
+            formData = enrichImageUrls(order, formData);
+            formDataNode = formData;
         }
         return new WorkOrderDetailResponse(order.getId(), order.getOrderNo(), order.getRequestId(), requestNo,
                 order.getTitle(), order.getStatus(), order.getPriority(), order.getAssigneeName(),
-                requesterName, formData, order.getCreatedAt(), order.getAssignedAt(), order.getStartedAt(),
+                requesterName, formDataNode, order.getCreatedAt(), order.getAssignedAt(), order.getStartedAt(),
                 order.getCompletedAt(), order.getCompleteRemark());
+    }
+
+    /** 图片字段值替换为短时签名访问路径 */
+    private JsonNode enrichImageUrls(WorkOrderEntity order, JsonNode formData) {
+        if (formData == null) {
+            return null;
+        }
+        try {
+            var item = serviceItemMapper.selectById(order.getItemId());
+            if (item == null || item.getFormSchema() == null) {
+                return formData;
+            }
+            return fileStorageService.replaceImageValuesWithSignedUrls(
+                    formData, objectMapper.readTree(item.getFormSchema()));
+        } catch (Exception exception) {
+            log.warn("工单表单图片链接签名化失败, orderId={}", order.getId());
+            return formData;
+        }
     }
 
     private JsonNode parseFormData(String formData) {

@@ -58,6 +58,7 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
     private final ServiceCatalogService serviceCatalogService;
     private final WorkOrderService workOrderService;
     private final NotificationService notificationService;
+    private final com.studenthub.modules.file.service.FileStorageService fileStorageService;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -177,8 +178,23 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
                                 .orderByAsc(ServiceRequestLogEntity::getCreatedAt))
                 .stream().map(RequestLogResponse::from).toList();
 
+        JsonNode formData = enrichImageUrls(entity.getId(), parseFormData(entity.getFormData()), item);
         return ServiceRequestDetailResponse.from(entity, itemIcon, slaHours,
-                parseFormData(entity.getFormData()), workOrder, evaluationResponse, timeline);
+                formData, workOrder, evaluationResponse, timeline);
+    }
+
+    /** 图片字段值替换为短时签名访问路径，供小程序直接展示 */
+    private JsonNode enrichImageUrls(Long requestId, JsonNode formData, ServiceItemEntity item) {
+        if (formData == null || item == null || item.getFormSchema() == null) {
+            return formData;
+        }
+        try {
+            return fileStorageService.replaceImageValuesWithSignedUrls(
+                    formData, objectMapper.readTree(item.getFormSchema()));
+        } catch (Exception exception) {
+            log.warn("申请表单图片链接签名化失败, requestId={}", requestId);
+            return formData;
+        }
     }
 
     private JsonNode parseFormData(String formData) {

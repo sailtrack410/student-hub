@@ -75,18 +75,34 @@ function request(options) {
   });
 }
 
-function uploadFile(filePath, formData) {
+function uploadImage(filePath) {
   return new Promise((resolve, reject) => {
     wx.uploadFile({
-      url: `${config.baseUrl}/api/common/files/upload`,
+      url: `${config.baseUrl}/api/app/files`,
       filePath,
       name: 'file',
-      formData,
       header: { Authorization: `Bearer ${getToken()}` },
-      success: resolve,
-      fail: reject
+      success(res) {
+        let body = {};
+        try {
+          body = JSON.parse(res.data);
+        } catch (error) {
+          body = {};
+        }
+        if (res.statusCode === 200 && body.success) {
+          resolve(body.data);
+          return;
+        }
+        const message = (body && body.message) || '上传失败';
+        wx.showToast({ title: message, icon: 'none' });
+        reject({ message });
+      },
+      fail() {
+        wx.showToast({ title: '上传失败，请稍后再试', icon: 'none' });
+        reject(new Error('upload failed'));
+      }
     });
   });
 }
 
-module.exports = { request, uploadFile, getToken, getUser, saveSession, clearSession, ensureLogin };
+module.exports = { request, uploadImage, getToken, getUser, saveSession, clearSession, ensureLogin };
