@@ -23,14 +23,15 @@ Page({
   async loadItem() {
     try {
       const item = await api.getServiceItem(this.itemId);
-      this.setData({ item, schema: item.formSchema || [], formData: {} });
+      this.setData({ item, schema: item.formSchema || [] });
     } catch (error) {
       // 请求层已提示
     }
   },
 
   onFormChange(event) {
-    this.setData({ formData: event.detail.value });
+    this.formData = event.detail.value;
+    this.setData({ formData: this.formData });
   },
 
   async handleSubmit() {
@@ -38,8 +39,9 @@ Page({
       return;
     }
     // 必填项前置校验，给出更友好的提示
+    const formData = this.formData || {};
     for (const field of this.data.schema) {
-      const fieldValue = this.data.formData[field.key];
+      const fieldValue = formData[field.key];
       const empty = fieldValue === undefined || fieldValue === null || fieldValue === '';
       if (field.required && empty) {
         wx.showToast({ title: `请填写「${field.label}」`, icon: 'none' });
@@ -50,7 +52,7 @@ Page({
     try {
       // 幂等键防止双击/弱网重试造成重复申请
       const idempotencyKey = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-      const detail = await api.submitRequest({ itemId: Number(this.itemId), formData: this.data.formData }, idempotencyKey);
+      const detail = await api.submitRequest({ itemId: Number(this.itemId), formData }, idempotencyKey);
       this.setData({ submitted: detail });
       wx.showToast({ title: '提交成功', icon: 'success' });
     } catch (error) {
@@ -65,7 +67,8 @@ Page({
   },
 
   again() {
-    this.setData({ submitted: null, formData: {} });
+    this.formData = {};
+    this.setData({ submitted: null, formData: {}, schema: [] });
     this.loadItem();
   }
 });

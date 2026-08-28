@@ -24,6 +24,17 @@
     </view>
   </scroll-view>
 
+  <!-- 结果与排序 -->
+  <view class="toolbar">
+    <text class="toolbar-count">共 {{visibleItems.length}} 项服务</text>
+    <picker mode="selector" range="{{sortOptions}}" value="{{sortIndex}}" bindchange="onSortChange">
+      <view class="sort-chip">
+        <text>{{sortOptions[sortIndex]}}</text>
+        <text class="sort-arrow">▾</text>
+      </view>
+    </picker>
+  </view>
+
   <!-- 服务项列表 -->
   <view class="items">
     <view
@@ -42,7 +53,7 @@
     </view>
 
     <empty-state
-      wx:if="{{!visibleItems.length}}"
+      wx:if="{{loaded && !visibleItems.length}}"
       image="/assets/empty/empty-search.jpg"
       title="{{keyword ? '没有找到相关服务' : '服务准备中'}}"
       subtitle="{{keyword ? '换个关键词试试' : '更多服务陆续上线'}}"

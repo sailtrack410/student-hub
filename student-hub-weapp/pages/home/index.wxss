@@ -7,9 +7,10 @@
   margin: 20rpx -30rpx 0;
   background: var(--grad-card-blue);
   border-radius: 0 0 44rpx 44rpx;
-  padding: 44rpx 40rpx 0;
+  padding: 44rpx 40rpx 56rpx;
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   overflow: hidden;
 }
 
@@ -31,26 +32,28 @@
 
 .hero-banner {
   width: 280rpx;
-  height: 200rpx;
-  border-radius: 24rpx 24rpx 0 0;
-  transform: translateY(24rpx);
+  height: 180rpx;
+  border-radius: 24rpx;
+  margin-top: 26rpx;
 }
 
-/* 快捷入口 */
+/* 快捷入口：4 列两行 */
 .quick {
   margin-top: -30rpx;
   position: relative;
-  display: flex;
-  justify-content: space-around;
-  padding: 34rpx 10rpx;
   z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  padding: 34rpx 10rpx 10rpx;
 }
 
 .quick-item {
+  width: 25%;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 12rpx;
+  margin-bottom: 26rpx;
   font-size: 24rpx;
   color: var(--text-1);
   font-weight: 500;
@@ -63,6 +66,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  background: var(--brand-soft);
+  overflow: hidden;
 }
 
 .quick-icon image {
@@ -70,15 +75,20 @@
   height: 64rpx;
 }
 
-.quick-icon-blue { background: var(--brand-soft); }
-.quick-icon-teal { background: var(--accent-soft); }
-.quick-icon-gold { background: var(--warning-soft); }
-.quick-icon-violet { background: #F1EBFE; }
+.quick-icon-more {
+  background: var(--grad-brand-light);
+}
 
-.quick-icon-violet image {
-  width: 92rpx;
-  height: 92rpx;
-  border-radius: 28rpx;
+.more-dots {
+  display: flex;
+  gap: 8rpx;
+}
+
+.more-dot {
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: 50%;
+  background: var(--brand);
 }
 
 /* 区块 */

@@ -1,13 +1,18 @@
 const api = require('../../utils/api');
 const app = getApp();
 
+const SORT_OPTIONS = ['默认排序', '办结最快', '名称排序'];
+
 Page({
   data: {
     categories: [],
     allItems: [],
     visibleItems: [],
     activeCategoryId: 0,
-    keyword: ''
+    keyword: '',
+    sortOptions: SORT_OPTIONS,
+    sortIndex: 0,
+    loaded: false
   },
 
   onShow() {
@@ -20,7 +25,7 @@ Page({
   async loadCatalog() {
     try {
       let catalog = app.globalData.catalog;
-      if (!catalog) {
+      if (!catalog || !catalog.length) {
         catalog = await api.getCatalog();
         app.globalData.catalog = catalog;
       }
@@ -28,29 +33,27 @@ Page({
       catalog.forEach((category) => {
         (category.items || []).forEach((item) => allItems.push(item));
       });
-      this.setData({
-        categories: catalog,
-        allItems,
-        visibleItems: this.filterItems(allItems, this.data.activeCategoryId, this.data.keyword)
-      });
+      this.setData({ categories: catalog, allItems, loaded: true });
+      this.applyFilter();
     } catch (error) {
-      // 请求层已提示
+      this.setData({ loaded: true });
     }
   },
 
-  filterItems(items, categoryId, keyword) {
-    return items.filter((item) => {
-      const matchCategory = !categoryId || item.categoryId === categoryId;
+  applyFilter() {
+    const { allItems, activeCategoryId, keyword, sortIndex } = this.data;
+    let items = allItems.filter((item) => {
+      const matchCategory = !activeCategoryId || Number(item.categoryId) === Number(activeCategoryId);
       const text = `${item.itemName}${item.summary || ''}`;
       const matchKeyword = !keyword || text.indexOf(keyword) >= 0;
       return matchCategory && matchKeyword;
     });
-  },
-
-  applyFilter() {
-    this.setData({
-      visibleItems: this.filterItems(this.data.allItems, this.data.activeCategoryId, this.data.keyword)
-    });
+    if (sortIndex === 1) {
+      items = items.slice().sort((a, b) => (a.slaHours || 9999) - (b.slaHours || 9999));
+    } else if (sortIndex === 2) {
+      items = items.slice().sort((a, b) => a.itemName.localeCompare(b.itemName, 'zh'));
+    }
+    this.setData({ visibleItems: items });
   },
 
   pickCategory(event) {
@@ -61,6 +64,11 @@ Page({
 
   onSearchInput(event) {
     this.setData({ keyword: event.detail.value.trim() });
+    this.applyFilter();
+  },
+
+  onSortChange(event) {
+    this.setData({ sortIndex: Number(event.detail.value) });
     this.applyFilter();
   },
 

@@ -8,23 +8,27 @@
     <image class="hero-banner" src="/assets/banner/home-banner.jpg" mode="aspectFill" />
   </view>
 
-  <!-- 快捷入口 -->
+  <!-- 快捷入口：两行，最后一格为更多 -->
   <view class="quick card">
-    <view class="quick-item" bindtap="goRepair">
-      <view class="quick-icon quick-icon-blue"><image src="/assets/category/cat-repair.png" mode="aspectFit" /></view>
-      <text>一键报修</text>
+    <view
+      wx:for="{{quickServices}}"
+      wx:key="code"
+      class="quick-item"
+      bindtap="goQuickService"
+      data-code="{{item.code}}"
+    >
+      <view class="quick-icon"><image src="/assets/category/{{item.icon}}.png" mode="aspectFit" /></view>
+      <text>{{item.label}}</text>
     </view>
-    <view class="quick-item" bindtap="goLeave">
-      <view class="quick-icon quick-icon-teal"><image src="/assets/category/cat-leave.png" mode="aspectFit" /></view>
-      <text>请假申请</text>
-    </view>
-    <view class="quick-item" bindtap="goCertificate">
-      <view class="quick-icon quick-icon-gold"><image src="/assets/category/cat-certificate.png" mode="aspectFit" /></view>
-      <text>证明开具</text>
-    </view>
-    <view class="quick-item" bindtap="goAssistant">
-      <view class="quick-icon quick-icon-violet"><image src="/assets/mascot/mascot-avatar.jpg" mode="aspectFill" /></view>
-      <text>AI 助手</text>
+    <view class="quick-item" bindtap="goMoreServices">
+      <view class="quick-icon quick-icon-more">
+        <view class="more-dots">
+          <view class="more-dot"></view>
+          <view class="more-dot"></view>
+          <view class="more-dot"></view>
+        </view>
+      </view>
+      <text>更多</text>
     </view>
   </view>
 
@@ -43,7 +47,7 @@
       <status-tag text="{{latestRequest.statusText}}" theme="{{latestRequest.statusTheme}}" />
     </view>
     <view wx:elif="{{loggedIn}}" class="card">
-      <empty-state image="/assets/empty/empty-requests.jpg" title="还没有申请记录" subtitle="从下方热门服务开始体验吧" />
+      <empty-state image="/assets/empty/empty-requests.jpg" title="还没有申请记录" subtitle="从上方快捷服务开始体验吧" />
     </view>
     <view wx:else class="card login-guide" bindtap="goLogin">
       <image class="guide-mascot" src="/assets/mascot/mascot-main.jpg" mode="aspectFit" />
@@ -59,7 +63,7 @@
   <view class="section">
     <view class="section-head">
       <text class="section-title">常用服务</text>
-      <text class="section-more" bindtap="goService">更多 ›</text>
+      <text class="section-more" bindtap="goMoreServices">更多 ›</text>
     </view>
     <view class="services">
       <view

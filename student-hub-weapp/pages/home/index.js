@@ -2,14 +2,25 @@ const api = require('../../utils/api');
 const format = require('../../utils/format');
 const app = getApp();
 
-const HOT_ITEM_CODES = ['REPAIR-DORM', 'AFFAIR-LEAVE', 'CERT-ENROLL', 'AFFAIR-VENUE', 'GUIDE-CONSULT', 'REPAIR-PUBLIC'];
+const HOT_ITEM_CODES = ['REPAIR-DORM', 'AFFAIR-LEAVE', 'CERT-ENROLL', 'AFFAIR-VENUE'];
+
+// 快捷入口：4 列两行，六个常用服务，最后一格为「更多」
+const QUICK_SERVICES = [
+  { code: 'REPAIR-DORM', label: '一键报修', icon: 'cat-repair' },
+  { code: 'AFFAIR-LEAVE', label: '请假申请', icon: 'cat-leave' },
+  { code: 'CERT-ENROLL', label: '证明开具', icon: 'cat-certificate' },
+  { code: 'AFFAIR-VENUE', label: '场地申请', icon: 'cat-activity' },
+  { code: 'GUIDE-CONSULT', label: '校园咨询', icon: 'cat-consult' },
+  { code: 'REPAIR-PUBLIC', label: '教室报修', icon: 'cat-repair' }
+];
 
 Page({
   data: {
     loggedIn: false,
     userName: '同学',
     latestRequest: null,
-    hotItems: []
+    hotItems: [],
+    quickServices: QUICK_SERVICES
   },
 
   onShow() {
@@ -19,7 +30,7 @@ Page({
       userName: loggedIn && app.globalData.user ? app.globalData.user.displayName : '同学'
     });
     if (!loggedIn) {
-      this.setData({ latestRequest: null, hotItems: this.data.hotItems });
+      this.setData({ latestRequest: null });
       return;
     }
     this.loadLatestRequest();
@@ -44,17 +55,13 @@ Page({
         })
       });
     } catch (error) {
-      // 静默失败，首页不阻塞
+      // 首页进展卡加载失败不阻塞
     }
   },
 
   async loadCatalog() {
     try {
-      let catalog = app.globalData.catalog;
-      if (!catalog) {
-        catalog = await api.getCatalog();
-        app.globalData.catalog = catalog;
-      }
+      const catalog = await this.ensureCatalog();
       const items = [];
       catalog.forEach((category) => {
         (category.items || []).forEach((item) => items.push(item));
@@ -64,8 +71,17 @@ Page({
         .slice(0, 4);
       this.setData({ hotItems: hot });
     } catch (error) {
-      // 静默失败
+      // 静默
     }
+  },
+
+  async ensureCatalog() {
+    if (app.globalData.catalog && app.globalData.catalog.length) {
+      return app.globalData.catalog;
+    }
+    const catalog = await api.getCatalog();
+    app.globalData.catalog = catalog;
+    return catalog;
   },
 
   refreshUnread() {
@@ -76,40 +92,18 @@ Page({
       .catch(() => {});
   },
 
-  goRepair() { this.jumpWithItem('REPAIR-DORM'); },
-  goLeave() { this.jumpWithItem('AFFAIR-LEAVE'); },
-  goCertificate() { this.jumpWithItem('CERT-ENROLL'); },
-  goAssistant() { wx.switchTab({ url: '/pages/assistant/index' }); },
-  goRequestList() { wx.navigateTo({ url: '/pages/request/list' }); },
-  goService() { wx.switchTab({ url: '/pages/service/index' }); },
-  goLogin() { wx.navigateTo({ url: '/pages/login/index' }); },
-
-  goRequestDetail() {
-    if (this.data.latestRequest) {
-      wx.navigateTo({ url: `/pages/request/detail?id=${this.data.latestRequest.requestId}` });
-    }
-  },
-
-  goServiceDetail(event) {
-    wx.navigateTo({ url: `/pages/service/detail?id=${event.currentTarget.dataset.itemId}` });
-  },
-
-  /** 快捷入口直接落到对应服务项；未登录先去登录 */
-  jumpWithItem(itemCode) {
+  /** 快捷入口：按服务编码定位服务项并直达申请表单 */
+  async goQuickService(event) {
     if (!app.ensureLogin()) {
       return;
     }
-    const load = app.globalData.catalog
-      ? Promise.resolve(app.globalData.catalog)
-      : api.getCatalog().then((catalog) => {
-          app.globalData.catalog = catalog;
-          return catalog;
-        });
-    load.then((catalog) => {
+    const code = event.currentTarget.dataset.code;
+    try {
+      const catalog = await this.ensureCatalog();
       let itemId = null;
       catalog.forEach((category) => {
         (category.items || []).forEach((item) => {
-          if (item.itemCode === itemCode) {
+          if (item.itemCode === code) {
             itemId = item.itemId;
           }
         });
@@ -119,6 +113,35 @@ Page({
       } else {
         wx.switchTab({ url: '/pages/service/index' });
       }
-    }).catch(() => {});
+    } catch (error) {
+      console.error('快捷入口跳转失败', error);
+      wx.switchTab({ url: '/pages/service/index' });
+    }
+  },
+
+  goMoreServices() {
+    wx.switchTab({ url: '/pages/service/index' });
+  },
+
+  goAssistant() {
+    wx.switchTab({ url: '/pages/assistant/index' });
+  },
+
+  goRequestList() {
+    wx.navigateTo({ url: '/pages/request/list' });
+  },
+
+  goLogin() {
+    wx.navigateTo({ url: '/pages/login/index' });
+  },
+
+  goRequestDetail() {
+    if (this.data.latestRequest) {
+      wx.navigateTo({ url: `/pages/request/detail?id=${this.data.latestRequest.requestId}` });
+    }
+  },
+
+  goServiceDetail(event) {
+    wx.navigateTo({ url: `/pages/service/detail?id=${event.currentTarget.dataset.itemId}` });
   }
 });

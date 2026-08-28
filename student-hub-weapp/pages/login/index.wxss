@@ -5,14 +5,38 @@
   flex-direction: column;
 }
 
+/* 顶部主视觉 */
 .hero {
-  width: 100%;
-  height: 640rpx;
+  position: relative;
+  height: 46vh;
+  overflow: hidden;
 }
 
-.body {
+.hero-img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.hero-shade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 120rpx;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.9) 100%);
+}
+
+/* 内容面板 */
+.sheet {
   flex: 1;
-  padding: 40rpx 60rpx 80rpx;
+  margin-top: -36rpx;
+  position: relative;
+  background: var(--bg-card);
+  border-radius: 44rpx 44rpx 0 0;
+  padding: 44rpx 56rpx 0;
   display: flex;
   flex-direction: column;
 }
@@ -20,59 +44,114 @@
 .brand {
   display: flex;
   align-items: center;
-  gap: 24rpx;
+  gap: 26rpx;
+  justify-content: center;
 }
 
 .brand-logo {
-  width: 96rpx;
-  height: 96rpx;
+  width: 100rpx;
+  height: 100rpx;
 }
 
 .brand-name {
-  font-size: 40rpx;
+  font-size: 42rpx;
   font-weight: 700;
   color: var(--text-1);
   display: block;
+  letter-spacing: 1rpx;
 }
 
 .brand-slogan {
-  font-size: 26rpx;
+  margin-top: 8rpx;
+  font-size: 25rpx;
   color: var(--text-2);
+  display: block;
 }
 
+/* 功能亮点 */
 .features {
-  margin-top: 60rpx;
+  margin-top: 56rpx;
   display: flex;
   justify-content: space-between;
-  gap: 20rpx;
+  gap: 24rpx;
 }
 
 .feature {
   flex: 1;
-  background: var(--grad-brand-light);
+  background: var(--bg-page);
   border-radius: var(--radius-md);
-  padding: 26rpx 10rpx;
+  padding: 30rpx 10rpx 26rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10rpx;
-  font-size: 24rpx;
-  color: var(--text-1);
-  font-weight: 500;
+  gap: 14rpx;
 }
 
-.feature-emoji {
-  font-size: 44rpx;
+.feature-icon {
+  width: 84rpx;
+  height: 84rpx;
+  border-radius: 24rpx;
+  background: var(--brand-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.feature-icon image {
+  width: 58rpx;
+  height: 58rpx;
+}
+
+.feature-icon-teal {
+  background: var(--accent-soft);
+}
+
+.feature-icon-mascot image {
+  width: 84rpx;
+  height: 84rpx;
+}
+
+.feature-label {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+/* 服务承诺 */
+.promise {
+  margin-top: 44rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18rpx;
+}
+
+.promise-item {
+  font-size: 23rpx;
+  color: var(--text-2);
+}
+
+.promise-dot {
+  width: 6rpx;
+  height: 6rpx;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+
+/* 底部按钮区 */
+.cta {
+  margin-top: auto;
+  padding: 40rpx 0 60rpx;
 }
 
 .login-btn {
-  margin-top: auto;
   height: 96rpx;
   line-height: 96rpx;
 }
 
 .agreement {
-  margin-top: 22rpx;
+  margin-top: 20rpx;
   text-align: center;
   font-size: 22rpx;
   color: var(--text-3);

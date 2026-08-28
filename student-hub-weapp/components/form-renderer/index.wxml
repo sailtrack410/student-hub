@@ -10,7 +10,7 @@
       class="field-input"
       value="{{item.display}}"
       placeholder="{{item.placeholder || '请输入'}}"
-      data-key="{{item.key}}"
+      data-index="{{index}}"
       bindinput="onInput"
       placeholder-class="ph"
     />
@@ -21,7 +21,7 @@
       type="number"
       value="{{item.display}}"
       placeholder="{{item.placeholder || '请输入数字'}}"
-      data-key="{{item.key}}"
+      data-index="{{index}}"
       bindinput="onInput"
       placeholder-class="ph"
     />
@@ -32,7 +32,7 @@
       value="{{item.display}}"
       placeholder="{{item.placeholder || '请输入'}}"
       maxlength="{{item.max || 500}}"
-      data-key="{{item.key}}"
+      data-index="{{index}}"
       bindinput="onInput"
       auto-height
       placeholder-class="ph"
@@ -42,24 +42,24 @@
       wx:elif="{{item.type === 'select'}}"
       mode="selector"
       range="{{item.options}}"
-      data-key="{{item.key}}"
+      data-index="{{index}}"
       bindchange="onPick"
     >
       <view class="field-picker {{item.display ? '' : 'field-picker-empty'}}">
         <text>{{item.display || '请选择'}}</text>
-        <text class="arrow">▸</text>
+        <text class="arrow">›</text>
       </view>
     </picker>
 
     <picker
       wx:elif="{{item.type === 'date'}}"
       mode="date"
-      data-key="{{item.key}}"
+      data-index="{{index}}"
       bindchange="onPick"
     >
       <view class="field-picker {{item.display ? '' : 'field-picker-empty'}}">
         <text>{{item.display || '请选择日期'}}</text>
-        <text class="arrow">▸</text>
+        <text class="arrow">›</text>
       </view>
     </picker>
 

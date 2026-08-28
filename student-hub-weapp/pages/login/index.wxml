@@ -1,6 +1,10 @@
 <view class="login">
-  <image class="hero" src="/assets/banner/login-hero.jpg" mode="aspectFill" />
-  <view class="body">
+  <view class="hero">
+    <image class="hero-img" src="/assets/banner/login-hero.jpg" mode="aspectFill" />
+    <view class="hero-shade"></view>
+  </view>
+
+  <view class="sheet">
     <view class="brand">
       <image class="brand-logo" src="/assets/brand/logo-mark.png" mode="aspectFit" />
       <view class="brand-text">
@@ -11,22 +15,32 @@
 
     <view class="features">
       <view class="feature">
-        <text class="feature-emoji">🛠️</text>
-        <text>一键报修</text>
+        <view class="feature-icon"><image src="/assets/category/cat-repair.png" mode="aspectFit" /></view>
+        <text class="feature-label">一键报修</text>
       </view>
       <view class="feature">
-        <text class="feature-emoji">📄</text>
-        <text>证明办理</text>
+        <view class="feature-icon feature-icon-teal"><image src="/assets/category/cat-certificate.png" mode="aspectFit" /></view>
+        <text class="feature-label">证明办理</text>
       </view>
       <view class="feature">
-        <text class="feature-emoji">🤖</text>
-        <text>AI 智能答疑</text>
+        <view class="feature-icon feature-icon-mascot"><image src="/assets/mascot/mascot-avatar.jpg" mode="aspectFill" /></view>
+        <text class="feature-label">AI 智能答疑</text>
       </view>
     </view>
 
-    <button class="btn-primary login-btn" loading="{{loading}}" disabled="{{loading}}" bindtap="handleLogin">
-      微信一键登录
-    </button>
-    <view class="agreement">首次登录将自动创建学生账号</view>
+    <view class="promise">
+      <text class="promise-item">进度实时可查</text>
+      <view class="promise-dot"></view>
+      <text class="promise-item">办理全程留痕</text>
+      <view class="promise-dot"></view>
+      <text class="promise-item">消息及时提醒</text>
+    </view>
+
+    <view class="cta">
+      <button class="btn-primary login-btn" loading="{{loading}}" disabled="{{loading}}" bindtap="handleLogin">
+        微信一键登录
+      </button>
+      <view class="agreement">首次登录将自动创建学生账号</view>
+    </view>
   </view>
 </view>

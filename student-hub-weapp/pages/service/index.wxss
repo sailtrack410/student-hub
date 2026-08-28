@@ -33,6 +33,36 @@
   white-space: nowrap;
 }
 
+/* 结果与排序 */
+.toolbar {
+  margin-top: 26rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.toolbar-count {
+  font-size: 24rpx;
+  color: var(--text-2);
+}
+
+.sort-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8rpx;
+  background: var(--bg-card);
+  border-radius: 999rpx;
+  padding: 12rpx 26rpx;
+  font-size: 24rpx;
+  color: var(--text-1);
+  border: 2rpx solid var(--border);
+}
+
+.sort-arrow {
+  color: var(--text-3);
+  font-size: 20rpx;
+}
+
 .cat-chip {
   display: inline-flex;
   align-items: center;

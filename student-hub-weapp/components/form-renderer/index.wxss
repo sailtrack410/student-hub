@@ -1,3 +1,9 @@
+/* 组件宿主置为块级，避免内联布局导致子元素事件异常 */
+:host {
+  display: block;
+  width: 100%;
+}
+
 .form {
   display: flex;
   flex-direction: column;

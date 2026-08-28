@@ -4,7 +4,7 @@
     <view class="head-body">
       <view class="head-name">{{item.itemName}}</view>
       <view class="head-summary">{{item.summary}}</view>
-      <view wx:if="{{item.slaHours}}" class="head-sla">⏱ 承诺 {{item.slaHours}} 小时内办结</view>
+      <view wx:if="{{item.slaHours}}" class="head-sla">承诺 {{item.slaHours}} 小时内办结</view>
     </view>
   </view>
 
