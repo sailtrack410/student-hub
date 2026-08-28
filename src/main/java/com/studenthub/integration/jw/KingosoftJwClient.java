@@ -109,9 +109,12 @@ public class KingosoftJwClient {
             // （部分环境为顶层字段，两种位置都解析）
             String body = ticketResponse.body();
             String failCode = parseJsonField(body, "code", "data");
+            if (failCode == null) {
+                failCode = parseJsonField(body, "code");
+            }
             if (failCode != null && !failCode.isBlank()) {
                 log.info("SSO tickets 拒绝, code={}", failCode);
-                throw new BusinessException(ErrorCode.JW_AUTH_FAILED);
+                throw new BusinessException(ErrorCode.JW_AUTH_FAILED, describeReject(failCode));
             }
             String ticket = parseJsonField(body, "ticket");
             if (ticket == null || ticket.isBlank()) {
@@ -321,6 +324,16 @@ public class KingosoftJwClient {
                 .filter(cookie -> cookie.getDomain() != null && cookie.getDomain().contains("jwgl"))
                 .map(cookie -> cookie.getName() + "=" + cookie.getValue())
                 .collect(Collectors.joining("; "));
+    }
+
+    /** 按 SSO 拒绝码给出可操作的提示（不含敏感信息） */
+    private String describeReject(String code) {
+        return switch (code) {
+            case "CODEFALSE" -> "验证码错误或已过期，请刷新后重新输入";
+            case "NOUSER" -> "账号不存在，请使用学校统一身份账号（学号/工号）登录";
+            case "PASSFALSE", "PASSWORDFALSE" -> "密码错误，请确认统一身份平台密码";
+            default -> "账号、密码或验证码错误";
+        };
     }
 
     private String parseJsonField(String body, String field) {
