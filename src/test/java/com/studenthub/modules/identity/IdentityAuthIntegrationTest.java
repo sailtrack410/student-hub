@@ -67,6 +67,29 @@ class IdentityAuthIntegrationTest {
     }
 
     @Test
+    void devWechatLoginReturnsSameFixedUser() throws Exception {
+        String first = mockMvc.perform(post("/api/common/auth/dev-wechat-login"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String second = mockMvc.perform(post("/api/common/auth/dev-wechat-login"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        JsonNode firstResponse = objectMapper.readTree(first);
+        JsonNode secondResponse = objectMapper.readTree(second);
+        org.junit.jupiter.api.Assertions.assertEquals(
+                firstResponse.path("data").path("user").path("userId").asText(),
+                secondResponse.path("data").path("user").path("userId").asText());
+        org.junit.jupiter.api.Assertions.assertFalse(secondResponse.path("data").path("isNewUser").asBoolean());
+        org.junit.jupiter.api.Assertions.assertEquals("调试同学",
+                secondResponse.path("data").path("user").path("displayName").asText());
+    }
+
+    @Test
     void invalidPasswordDoesNotRevealAccountDetails() throws Exception {
         mockMvc.perform(post("/api/common/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)

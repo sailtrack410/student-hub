@@ -29,4 +29,11 @@ public class PasswordLoginController {
     public Result<LoginResponse> login(@RequestBody @Valid PasswordLoginRequest request) {
         return Result.success(identityAuthService.login(request.username(), request.password()));
     }
+
+    @PostMapping("/dev-wechat-login")
+    @Operation(summary = "开发环境固定账号登录", description = "模拟微信登录的固定调试账号，首次登录自动建号，"
+            + "之后复用同一用户，便于本地联调；生产环境关闭。", operationId = "devWechatLogin")
+    public Result<LoginResponse> devWechatLogin() {
+        return Result.success(identityAuthService.devWechatLogin());
+    }
 }

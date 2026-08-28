@@ -10,6 +10,11 @@ public interface IdentityAuthService {
 
     LoginResponse wechatLogin(String code);
 
+    /**
+     * 开发测试专用：使用固定 openid 登录，首次自动建号，之后复用同一账号，便于本地联调。
+     */
+    LoginResponse devWechatLogin();
+
     void logout(String rawToken);
 
     CurrentUserResponse currentUser();

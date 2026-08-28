@@ -45,6 +45,9 @@ public class IdentityAuthServiceImpl implements IdentityAuthService {
     /** 允许用户自行申报的身份标识；ADMIN/LOGISTICS 等由管理员分配，防止越权自赋 */
     private static final Set<String> SELF_DECLARABLE_IDENTITY_TYPES = Set.of("STUDENT", "TEACHER");
 
+    /** 开发测试固定账号的 openid，仅 devWechatLogin 使用 */
+    private static final String DEV_FIXED_OPEN_ID = "dev-fixed-openid-0001";
+
     private final UserMapper userMapper;
     private final IdentityAccessMapper identityAccessMapper;
     private final RoleMapper roleMapper;
@@ -79,23 +82,33 @@ public class IdentityAuthServiceImpl implements IdentityAuthService {
     @Transactional(rollbackFor = Exception.class)
     public LoginResponse wechatLogin(String code) {
         WechatIdentity identity = wechatIdentityProvider.exchange(code);
-        UserEntity user = userMapper.findByWechatOpenId(identity.openId());
+        return loginOrCreateByOpenId(identity.openId(), "微信用户");
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public LoginResponse devWechatLogin() {
+        return loginOrCreateByOpenId(DEV_FIXED_OPEN_ID, "调试同学");
+    }
+
+    private LoginResponse loginOrCreateByOpenId(String openId, String defaultDisplayName) {
+        UserEntity user = userMapper.findByWechatOpenId(openId);
         boolean newUser = user == null;
         if (newUser) {
             user = new UserEntity();
             user.setCampusId(wechatIdentityProvider.defaultCampusId());
-            user.setUsername("wx_" + identity.openId().substring(0, Math.min(24, identity.openId().length())));
-            user.setDisplayName("微信用户");
+            user.setUsername("wx_" + openId.substring(0, Math.min(24, openId.length())));
+            user.setDisplayName(defaultDisplayName);
             user.setStatus("ENABLED");
-            user.setWechatOpenId(identity.openId());
+            user.setWechatOpenId(openId);
             user.setIdentityType("STUDENT");
             user.setAuthorizationStatus("BASIC");
             userMapper.insert(user);
             bindDefaultRequesterRole(user.getId());
-            log.info("首次微信登录自动创建用户, userId={}", user.getId());
+            log.info("首次登录自动创建用户, userId={}", user.getId());
         }
         if (!"ENABLED".equals(user.getStatus())) {
-            log.warn("已停用账号尝试微信登录, userId={}", user.getId());
+            log.warn("已停用账号尝试登录, userId={}", user.getId());
             throw new BusinessException(ErrorCode.ACCOUNT_DISABLED);
         }
         return createSession(user, newUser);
