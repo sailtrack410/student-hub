@@ -108,7 +108,13 @@ Page({
       this.loadStatus();
       this.refreshCaptcha();
     } catch (error) {
-      // 请求层已提示；验证码一次性，失败后刷新
+      // 验证码一次性，失败后刷新；把具体失败原因提示出来
+      const message = error && error.message ? error.message : '认证失败，请稍后再试';
+      wx.showModal({
+        title: '认证未通过',
+        content: message,
+        showCancel: false
+      });
       this.refreshCaptcha();
     } finally {
       this.setData({ authing: false });
