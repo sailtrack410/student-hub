@@ -56,14 +56,13 @@
 .user-name {
   font-size: 38rpx;
   font-weight: 700;
-  color: #fff;
-  text-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.25);
+  color: var(--text-1);
 }
 
 .user-meta {
   margin-top: 8rpx;
   font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--text-2);
 }
 
 .login-btn {

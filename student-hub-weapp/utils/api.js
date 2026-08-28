@@ -3,6 +3,7 @@ const { request } = require('./request');
 module.exports = {
   // 认证
   wechatLogin: (code) => request({ url: '/api/common/auth/wechat-login', method: 'POST', data: { code }, silent: true }),
+  devWechatLogin: () => request({ url: '/api/common/auth/dev-wechat-login', method: 'POST', silent: true }),
   logout: () => request({ url: '/api/common/auth/logout', method: 'POST', silent: true }),
   getCurrentUser: () => request({ url: '/api/common/auth/me' }),
 

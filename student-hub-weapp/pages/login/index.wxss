@@ -147,7 +147,11 @@
 
 .login-btn {
   height: 96rpx;
-  line-height: 96rpx;
+}
+
+.dev-login-btn {
+  margin-top: 20rpx;
+  height: 84rpx;
 }
 
 .agreement {

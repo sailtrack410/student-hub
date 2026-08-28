@@ -40,6 +40,15 @@
       <button class="btn-primary login-btn" loading="{{loading}}" disabled="{{loading}}" bindtap="handleLogin">
         微信一键登录
       </button>
+      <button
+        wx:if="{{isDevEnv}}"
+        class="btn-ghost dev-login-btn"
+        loading="{{loading}}"
+        disabled="{{loading}}"
+        bindtap="handleDevLogin"
+      >
+        开发调试登录（固定账号）
+      </button>
       <view class="agreement">首次登录将自动创建学生账号</view>
     </view>
   </view>
