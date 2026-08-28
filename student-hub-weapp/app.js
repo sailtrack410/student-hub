@@ -1,4 +1,4 @@
-const { getToken, getUser, saveSession, clearSession } = require('./utils/request');
+const { getToken, getUser, saveSession, clearSession, ensureLogin } = require('./utils/request');
 
 App({
   globalData: {
@@ -16,6 +16,11 @@ App({
 
   isLoggedIn() {
     return Boolean(getToken());
+  },
+
+  /** 未登录时跳转登录页并返回 false，已登录返回 true */
+  ensureLogin() {
+    return ensureLogin();
   },
 
   setSession(token, user) {
