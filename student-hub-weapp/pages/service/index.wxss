@@ -78,26 +78,11 @@
   flex-shrink: 0;
 }
 
-.group-body {
-  flex: 1;
-  min-width: 0;
-}
-
 .group-name {
+  flex: 1;
   font-size: 32rpx;
   font-weight: 700;
   color: var(--text-1);
-  display: block;
-}
-
-.group-desc {
-  margin-top: 4rpx;
-  font-size: 22rpx;
-  color: var(--text-3);
-  display: block;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .group-count {

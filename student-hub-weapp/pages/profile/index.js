@@ -1,4 +1,5 @@
 const api = require('../../utils/api');
+const { getToken, saveSession } = require('../../utils/request');
 const app = getApp();
 
 const ROLE_TEXT = {
@@ -13,11 +14,25 @@ const AUTH_TEXT = {
   AUTHORIZED: '已认证'
 };
 
+const IDENTITY_TEXT = {
+  STUDENT: '学生',
+  TEACHER: '教师',
+  ADMIN: '管理员',
+  LOGISTICS: '后勤职工'
+};
+
+// 允许自行申报的身份；其余身份由平台分配
+const SELF_IDENTITIES = [
+  { type: 'STUDENT', label: '学生' },
+  { type: 'TEACHER', label: '教师' }
+];
+
 Page({
   data: {
     user: null,
     roleText: '',
     authText: '',
+    identityText: '',
     isWorker: false,
     processingCount: 0,
     completedCount: 0,
@@ -27,16 +42,81 @@ Page({
   onShow() {
     const user = app.isLoggedIn() ? app.globalData.user : null;
     if (user) {
-      this.setData({
-        user,
-        roleText: this.resolveRoleText(user.roles),
-        authText: AUTH_TEXT[user.authorizationStatus] || user.authorizationStatus,
-        isWorker: (user.roles || []).indexOf('WORKER') >= 0
-      });
+      this.applyUser(user);
       this.loadStats();
     } else {
       this.setData({ user: null, processingCount: 0, completedCount: 0, unreadCount: app.globalData.unreadCount || 0 });
     }
+  },
+
+  applyUser(user) {
+    this.setData({
+      user,
+      roleText: this.resolveRoleText(user.roles),
+      authText: AUTH_TEXT[user.authorizationStatus] || user.authorizationStatus,
+      identityText: IDENTITY_TEXT[user.identityType] || user.identityType || '未设置',
+      isWorker: (user.roles || []).indexOf('WORKER') >= 0
+    });
+  },
+
+  /** 更新后写回本地会话，保证重启后仍生效 */
+  persistUser(user) {
+    saveSession(getToken(), user);
+    app.globalData.user = user;
+    this.applyUser(user);
+  },
+
+  editDisplayName() {
+    if (!this.data.user) {
+      return;
+    }
+    wx.showModal({
+      title: '修改昵称',
+      editable: true,
+      placeholderText: '请输入新昵称',
+      content: this.data.user.displayName || '',
+      success: async (res) => {
+        if (!res.confirm) return;
+        const displayName = (res.content || '').trim();
+        if (!displayName) {
+          wx.showToast({ title: '昵称不能为空', icon: 'none' });
+          return;
+        }
+        try {
+          const user = await api.updateProfile(displayName);
+          this.persistUser(user);
+          wx.showToast({ title: '已保存', icon: 'success' });
+        } catch (error) {
+          // 请求层已提示
+        }
+      }
+    });
+  },
+
+  chooseIdentity() {
+    if (!this.data.user) {
+      return;
+    }
+    if (SELF_IDENTITIES.every((item) => item.type !== this.data.user.identityType)) {
+      wx.showToast({ title: '当前身份由平台统一管理', icon: 'none' });
+      return;
+    }
+    wx.showActionSheet({
+      itemList: SELF_IDENTITIES.map((item) => item.label),
+      success: async (res) => {
+        const target = SELF_IDENTITIES[res.tapIndex];
+        if (!target || target.type === this.data.user.identityType) {
+          return;
+        }
+        try {
+          const user = await api.updateIdentity(target.type);
+          this.persistUser(user);
+          wx.showToast({ title: `身份已设为${target.label}`, icon: 'success' });
+        } catch (error) {
+          // 请求层已提示
+        }
+      }
+    });
   },
 
   resolveRoleText(roles) {

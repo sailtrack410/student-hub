@@ -34,6 +34,24 @@
     </view>
   </view>
 
+  <!-- 个人中心 -->
+  <view class="card section" wx:if="{{user}}">
+    <view class="section-title">个人中心</view>
+    <view class="menu" bindtap="editDisplayName">
+      <image class="menu-icon" src="/assets/mascot/mascot-avatar.jpg" mode="aspectFill" />
+      <text class="menu-text">昵称</text>
+      <text class="menu-value">{{user.displayName}}</text>
+      <text class="menu-arrow">›</text>
+    </view>
+    <view class="menu" bindtap="chooseIdentity">
+      <image class="menu-icon" src="/assets/category/cat-guide.png" mode="aspectFit" />
+      <text class="menu-text">我的身份</text>
+      <text class="menu-value">{{identityText}}</text>
+      <text class="menu-arrow">›</text>
+    </view>
+    <view class="menu-tip">身份用于后续按学生、教师提供差异化服务</view>
+  </view>
+
   <!-- 服务人员工作台入口 -->
   <view class="card section" wx:if="{{isWorker}}">
     <view class="menu" bindtap="goMyOrders">

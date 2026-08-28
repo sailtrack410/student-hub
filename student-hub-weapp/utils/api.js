@@ -6,6 +6,11 @@ module.exports = {
   logout: () => request({ url: '/api/common/auth/logout', method: 'POST', silent: true }),
   getCurrentUser: () => request({ url: '/api/common/auth/me' }),
 
+  // 个人中心
+  updateProfile: (displayName) => request({ url: '/api/app/profile', method: 'POST', data: { displayName } }),
+  updateIdentity: (identityType) =>
+    request({ url: '/api/app/profile/identity', method: 'POST', data: { identityType } }),
+
   // 服务目录
   getCatalog: () => request({ url: '/api/app/services' }),
   getServiceItem: (itemId) => request({ url: `/api/app/services/${itemId}` }),

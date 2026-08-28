@@ -21,10 +21,7 @@
     <view wx:for="{{groups}}" wx:key="categoryId" wx:for-item="group" class="group">
       <view class="group-head">
         <image class="group-icon" src="/assets/category/{{group.icon || 'cat-affair'}}.png" mode="aspectFit" />
-        <view class="group-body">
-          <text class="group-name">{{group.categoryName}}</text>
-          <text class="group-desc">{{group.description}}</text>
-        </view>
+        <text class="group-name">{{group.categoryName}}</text>
         <text class="group-count">{{group.items.length}} 项</text>
       </view>
       <view class="group-items">
