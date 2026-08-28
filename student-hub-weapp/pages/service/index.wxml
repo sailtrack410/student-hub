@@ -18,7 +18,7 @@
 
   <!-- 分类分组列表 -->
   <view class="groups">
-    <view wx:for="{{groups}}" wx:key="categoryId" wx:for-item="group" class="group">
+    <view wx:for="{{groups}}" wx:key="categoryId" wx:for-item="group" wx:for-index="gIndex" class="group">
       <view class="group-head">
         <image class="group-icon" src="/assets/category/{{group.icon || 'cat-affair'}}.png" mode="aspectFit" />
         <text class="group-name">{{group.categoryName}}</text>
@@ -31,7 +31,8 @@
           wx:for-item="item"
           class="item-card card"
           bindtap="goDetail"
-          data-item-id="{{item.itemId}}"
+          data-group="{{gIndex}}"
+          data-index="{{index}}"
         >
           <image class="item-icon" src="/assets/category/{{item.icon || 'cat-affair'}}.png" mode="aspectFit" />
           <view class="item-body">

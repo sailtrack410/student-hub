@@ -15,7 +15,7 @@
       wx:key="code"
       class="quick-item"
       bindtap="goQuickService"
-      data-code="{{item.code}}"
+      data-index="{{index}}"
     >
       <view class="quick-icon"><image src="/assets/category/{{item.icon}}.png" mode="aspectFit" /></view>
       <text>{{item.label}}</text>
@@ -71,7 +71,7 @@
         wx:key="itemId"
         class="service-chip"
         bindtap="goServiceDetail"
-        data-item-id="{{item.itemId}}"
+        data-index="{{index}}"
       >
         <image class="service-chip-icon" src="/assets/category/{{item.icon || 'cat-affair'}}.png" mode="aspectFit" />
         <view class="service-chip-body">

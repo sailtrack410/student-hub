@@ -79,6 +79,10 @@ Page({
   },
 
   goDetail(event) {
-    wx.navigateTo({ url: `/pages/service/detail?id=${event.currentTarget.dataset.itemId}` });
+    const group = this.data.groups[Number(event.currentTarget.dataset.group)];
+    const item = group && group.items[Number(event.currentTarget.dataset.index)];
+    if (item && item.itemId) {
+      wx.navigateTo({ url: `/pages/service/detail?id=${item.itemId}` });
+    }
   }
 });

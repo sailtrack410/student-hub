@@ -10,11 +10,20 @@ Page({
   },
 
   onLoad(options) {
-    this.itemId = options.id;
+    const itemId = Number(options.itemId);
+    if (!options.itemId || Number.isNaN(itemId) || itemId <= 0) {
+      wx.showToast({ title: '服务参数缺失，请从服务列表重新进入', icon: 'none' });
+      setTimeout(() => {
+        wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/service/index' }) });
+      }, 900);
+      this.itemId = null;
+      return;
+    }
+    this.itemId = itemId;
   },
 
   onShow() {
-    if (this.data.submitted) {
+    if (!this.itemId || this.data.submitted) {
       return;
     }
     this.loadItem();
@@ -35,7 +44,7 @@ Page({
   },
 
   async handleSubmit() {
-    if (this.data.loading) {
+    if (!this.itemId || this.data.loading) {
       return;
     }
     // 必填项前置校验，给出更友好的提示

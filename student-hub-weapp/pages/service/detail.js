@@ -16,10 +16,22 @@ Page({
   },
 
   onLoad(options) {
-    this.itemId = options.id;
+    const itemId = Number(options.id);
+    if (!options.id || Number.isNaN(itemId) || itemId <= 0) {
+      wx.showToast({ title: '服务参数缺失，请从服务列表重新进入', icon: 'none' });
+      setTimeout(() => {
+        wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/service/index' }) });
+      }, 900);
+      this.itemId = null;
+      return;
+    }
+    this.itemId = itemId;
   },
 
   onShow() {
+    if (!this.itemId) {
+      return;
+    }
     this.loadItem();
   },
 

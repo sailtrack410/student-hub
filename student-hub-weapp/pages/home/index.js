@@ -97,13 +97,16 @@ Page({
     if (!app.ensureLogin()) {
       return;
     }
-    const code = event.currentTarget.dataset.code;
+    const service = this.data.quickServices[Number(event.currentTarget.dataset.index)];
+    if (!service) {
+      return;
+    }
     try {
       const catalog = await this.ensureCatalog();
       let itemId = null;
       catalog.forEach((category) => {
         (category.items || []).forEach((item) => {
-          if (item.itemCode === code) {
+          if (item.itemCode === service.code) {
             itemId = item.itemId;
           }
         });
@@ -142,6 +145,9 @@ Page({
   },
 
   goServiceDetail(event) {
-    wx.navigateTo({ url: `/pages/service/detail?id=${event.currentTarget.dataset.itemId}` });
+    const item = this.data.hotItems[Number(event.currentTarget.dataset.index)];
+    if (item && item.itemId) {
+      wx.navigateTo({ url: `/pages/service/detail?id=${item.itemId}` });
+    }
   }
 });
