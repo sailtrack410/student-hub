@@ -181,6 +181,15 @@ WECHAT_APP_SECRET=你的小程序AppSecret
 
 请假申请的"请假材料"、宿舍/教室报修的"现场照片"为选填图片字段，由服务项表单 schema 驱动。
 
+## 教务系统认证
+
+个人中心支持绑定青果（Kingosoft）教务系统（经 SSO 统一身份认证）：
+
+- `GET /api/app/jw/captcha` 算术题验证码；`POST /api/app/jw/auth` 认证（RSA 加密密码，账号/密码/验证码错误统一提示）
+- 认证成功后按教务身份自动切换平台身份（学生/教师），同一教务账号仅可绑定一个平台用户
+- 教务会话 Cookie 经 AES-GCM 加密托管（`JW_ENCRYPT_KEY`），与平台会话分开失效，默认 48 小时上限（`JW_SESSION_TTL_HOURS`）
+- 三态展示：未认证 / 已认证 / 已失效（失效后点击重新认证）；`GET /api/app/jw/profile` 实时拉取教务个人信息
+
 ## UI 素材管线
 
 Logo、吉祥物、TabBar 图标、分类图标、空状态插画等由 `gpt-image-2` 生成：
