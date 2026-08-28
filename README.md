@@ -5,14 +5,17 @@
 ## 当前基础能力
 
 - Spring Boot 3 + Java 17 + Maven
-- 统一 `Result<T>` 响应和全局异常处理
+- 统一 `Result<T>` 响应、全局异常处理和 `PageResult` 分页结构
 - Spring Security、多角色权限、组织数据范围和不透明服务端会话
 - Flyway 数据库迁移与开发环境种子数据
 - MySQL、Redis 配置及本地 Docker Compose 依赖
 - Knife4j 接口调试：`/doc.html`；Swagger UI：`/api`
 - 健康检查：`GET /api/common/system/health`
+- 服务目录、服务申请、工单、评价、通知、AI 会话六大业务模块与申请-派单-办结-评价闭环
+- 雪花 ID 全局序列化为字符串，避免小程序端精度丢失
 - 外部模型 API 的 `AiProvider` 抽象和 OpenAI-compatible 适配器
 - AI 默认关闭；配置 `AI_ENABLED=true` 后才允许调用外部模型
+- 微信小程序学生端正式版（`student-hub-weapp/`），UI 素材由 gpt-image-2 管线生成
 
 ## 本地启动
 
@@ -24,6 +27,8 @@ docker compose up -d mysql redis
 set -a; source .env; set +a
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 ```
+
+开发环境的数据库连接与微信凭证通过 `.env` 注入，不要把真实值提交到 Git。
 
 也可以直接启动全部容器：
 
@@ -140,6 +145,42 @@ WECHAT_APP_SECRET=你的小程序AppSecret
 |---|---|---|
 | `WECHAT_CONNECT_TIMEOUT_SECONDS` | `5` | 连接微信接口的建立超时 |
 | `WECHAT_READ_TIMEOUT_SECONDS` | `10` | 等待微信接口响应的读取超时 |
+
+## 接口清单
+
+统一前缀与角色约束见 Knife4j 文档，主要接口：
+
+| 分组 | 接口 |
+|---|---|
+| 认证 | `POST /api/common/auth/login`（仅 dev/test）、`POST /api/common/auth/wechat-login`、`GET /api/common/auth/me`、`POST /api/common/auth/logout` |
+| 服务目录 | `GET /api/app/services`、`GET /api/app/services/{itemId}`；管理端 `POST /api/admin/catalog/*` |
+| 服务申请 | `POST /api/app/service-requests`（支持 `Idempotency-Key` 幂等）、`GET /api/app/service-requests`、`GET /api/app/service-requests/{id}`、`POST /api/app/service-requests/{id}/cancel` |
+| 工单（服务人员） | `GET /api/app/work-orders/assigned`、`GET /api/app/work-orders/{id}`、`POST /api/app/work-orders/{id}/start`、`POST /api/app/work-orders/{id}/complete` |
+| 工单（调度端） | `GET /api/admin/work-orders`、`GET /api/admin/work-orders/{id}`、`POST /api/admin/work-orders/{id}/assign`、`POST /api/admin/work-orders/{id}/reject` |
+| 评价 | `POST /api/app/service-requests/{id}/evaluation` |
+| 通知 | `GET /api/app/notifications`、`GET /api/app/notifications/unread-count`、`POST /api/app/notifications/{id}/read`、`POST /api/app/notifications/read-all` |
+| AI 助手 | `POST /api/app/ai/conversations`、`GET /api/app/ai/conversations`、`GET /api/app/ai/conversations/{id}/messages`、`POST /api/app/ai/conversations/{id}/messages` |
+
+## 微信小程序
+
+学生端正式版位于 `student-hub-weapp/`，用微信开发者工具导入该目录即可运行。
+
+- 四个 Tab：首页、服务大厅、AI 助手、我的；另有登录、服务详情、申请表单、申请列表/详情、评价、消息、服务人员工单等页面
+- 统一请求层 `utils/request.js`：自动携带 Token、解包 `Result<T>`、401 自动跳转登录
+- 动态申请表单由服务项 `formSchema` 驱动（`components/form-renderer`）
+- 真机调试时把 `utils/config.js` 的 `baseUrl` 改为电脑局域网 IP，并在开发者工具勾选“不校验合法域名”
+- 使用 `worker` 开发账号登录可在“我的 → 我的工单”体验服务人员处理流程
+
+## UI 素材管线
+
+Logo、吉祥物、TabBar 图标、分类图标、空状态插画等由 `gpt-image-2` 生成：
+
+```bash
+node tools/generate-assets.mjs            # 生成缺失素材（清单见 tools/assets/manifest.mjs）
+node tools/assets/reprocess.mjs --force   # 按展示尺寸重新压缩已有素材
+```
+
+生图接口凭证从 `/Users/sailtrack/Desktop/.env` 或环境变量 `IMAGE_API_URL`/`IMAGE_API_KEY` 读取。素材统一扁平插画风（主色 #2563EB、强调色 #14B8A6），压缩后总体积控制在小程序主包限制内。
 
 ## 接口调试
 

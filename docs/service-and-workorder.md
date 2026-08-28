@@ -1,0 +1,74 @@
+# 服务申请与工单闭环
+
+## 全流程
+
+```text
+学生提交申请 → 自动创建待派工单 → 调度员派单/驳回 → 服务人员开始 → 办结
+     │                                                            │
+     └── 随时可撤销（未办结前）                        学生评价 ←────┘
+```
+
+每个动作写入 `service_request_log`，申请详情页时间线按时间正序展示。
+
+## 申请状态机（RequestTransitions）
+
+| 动作 | 允许的来源状态 | 目标状态 |
+|---|---|---|
+| SUBMIT | 无 | `SUBMITTED` |
+| DISPATCH（派单） | `SUBMITTED` | `PROCESSING` |
+| START（开始处理） | `PROCESSING` | `PROCESSING`（仅记录） |
+| COMPLETE（办结） | `PROCESSING` | `COMPLETED` |
+| REJECT（驳回） | `SUBMITTED` / `PROCESSING` | `REJECTED` |
+| CANCEL（撤销） | `SUBMITTED` / `PROCESSING` | `CANCELLED` |
+| EVALUATE（评价） | `COMPLETED` | `COMPLETED`（仅记录，一次） |
+
+## 工单状态机（WorkOrderTransitions）
+
+| 动作 | 允许的来源状态 | 目标状态 |
+|---|---|---|
+| ASSIGN（派单/改派） | `PENDING_DISPATCH` / `ASSIGNED` | `ASSIGNED` |
+| START | `ASSIGNED` | `PROCESSING` |
+| COMPLETE | `PROCESSING` | `COMPLETED` |
+| REJECT（调度驳回） | `PENDING_DISPATCH` / `ASSIGNED` | `REJECTED` |
+| CANCEL（随申请撤销） | `PENDING_DISPATCH` / `ASSIGNED` / `PROCESSING` | `CANCELLED` |
+
+规则：
+
+- 派单对象必须持有启用状态的 `WORKER` 角色并处于启用账号。
+- 每张申请对应唯一工单（`uk_work_order_request`）；申请提交后在同一事务内创建待派工单。
+- 首次派单将申请从 `SUBMITTED` 推进到 `PROCESSING`，改派不重复推进。
+
+## 权限与数据范围
+
+| 动作 | 功能权限 | 数据范围 |
+|---|---|---|
+| 提交/查看/撤销本人申请 | `service-request:create` / `service-request:view:self` | 仅本人（资源归属校验） |
+| 调度队列、派单、驳回 | `work-order:dispatch` | 角色绑定组织的 `ORGANIZATION_AND_CHILDREN` 子树，`ALL` 放开 |
+| 查看/处理被指派工单 | `work-order:view:assigned` / `work-order:process` | 仅被指派人 |
+| 提交评价 | `evaluation:create` | 仅申请本人，仅 `COMPLETED`，一次 |
+| AI 会话 | `ai:chat` | 仅本人会话 |
+
+## 幂等与单号
+
+- 提交申请支持 `Idempotency-Key` 请求头，`(requester_id, idempotency_key)` 唯一约束兜底；重复提交返回首次创建的申请。
+- 单号规则：`SR-yyyyMMdd-{id}` / `WO-yyyyMMdd-{id}`，`id` 为雪花 ID，天然唯一。
+- 全局 Long 序列化为字符串（`JacksonConfig`），雪花 ID 在小程序端无精度丢失。
+
+## 通知触发点
+
+| 事件 | 通知对象 |
+|---|---|
+| 提交成功 | 申请人 |
+| 派单 | 被指派服务人员；首次派单同时通知申请人 |
+| 开始处理 | 申请人 |
+| 办结 | 申请人（引导评价） |
+| 驳回 | 申请人 |
+| 撤销 | 被指派服务人员（如已派单） |
+| 评价 | 被评价的服务人员 |
+
+## AI 助手约定
+
+- 系统提示词由后端版本化（`CampusAssistantPrompts.PROMPT_VERSION`），客户端不可覆盖。
+- 每用户每小时消息数限流（默认 20，`AI_CHAT_HOURLY_MESSAGE_LIMIT`），超限返回 `AI_429_01`。
+- AI 未配置或调用失败时返回降级回复并落库 `FAILED` 状态消息，不中断会话。
+- 消息落库记录模型、提示词版本、token 用量与耗时，用于审计。
