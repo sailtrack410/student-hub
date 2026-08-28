@@ -79,7 +79,7 @@ class JwAuthServiceImplTest {
 
         request = new JwAuthRequest("2023590397", "secret-password", "captcha-uid", "11");
         loginResult = new KingosoftJwClient.JwLoginResult(
-                "JSESSIONID=abc", "2023590397", "王同学", "STUDENT", "202500002077");
+                "JSESSIONID=abc", "https://jwgl.mycc.edu.cn/frame/homes.action?v=1", "2023590397", "王同学", "STUDENT", "202500002077");
         when(jwClient.login(eq("2023590397"), any(), eq("captcha-uid"), eq("11"))).thenReturn(loginResult);
 
         AuthenticatedUser refreshed = new AuthenticatedUser(USER_ID, 1L, 10L, "requester",
@@ -104,14 +104,17 @@ class JwAuthServiceImplTest {
         assertEquals("AUTHENTICATED", captor.getValue().getAuthStatus());
         assertNotNull(captor.getValue().getSessionExpiresAt());
 
-        verify(jwSessionStore).save(eq(USER_ID), eq("JSESSIONID=abc"), any());
+        ArgumentCaptor<com.studenthub.modules.jwauth.security.JwSessionStore.JwSession> sessionCaptor =
+                ArgumentCaptor.forClass(com.studenthub.modules.jwauth.security.JwSessionStore.JwSession.class);
+        verify(jwSessionStore).save(eq(USER_ID), sessionCaptor.capture(), any());
+        assertEquals("JSESSIONID=abc", sessionCaptor.getValue().cookieHeader());
         verify(sessionStore, never()).replace(eq(RAW_TOKEN), any());
     }
 
     @Test
     void authSwitchesIdentityToTeacherWhenDetected() {
         KingosoftJwClient.JwLoginResult teacherLogin = new KingosoftJwClient.JwLoginResult(
-                "JSESSIONID=teacher", "T0001", "李老师", "TEACHER", null);
+                "JSESSIONID=teacher", "https://jwgl.mycc.edu.cn/frame/homes.action?v=2", "T0001", "李老师", "TEACHER", null);
         when(jwClient.login(eq("T0001"), any(), eq("captcha-uid"), eq("11"))).thenReturn(teacherLogin);
         when(jwBindingMapper.findBySsoAccount("T0001")).thenReturn(null);
 
@@ -164,7 +167,7 @@ class JwAuthServiceImplTest {
         binding.setLastAuthAt(LocalDateTime.now());
         binding.setSessionExpiresAt(LocalDateTime.now().plusHours(10));
         when(jwBindingMapper.findByUserId(USER_ID)).thenReturn(binding);
-        when(jwSessionStore.find(USER_ID)).thenReturn(Optional.of("JSESSIONID=abc"));
+        when(jwSessionStore.find(USER_ID)).thenReturn(Optional.of(new com.studenthub.modules.jwauth.security.JwSessionStore.JwSession("JSESSIONID=abc", "https://jwgl.mycc.edu.cn/frame/homes.action?v=1")));
         assertEquals(JwStatusResponse.AUTHENTICATED, jwAuthService.status(USER_ID).status());
 
         when(jwSessionStore.find(USER_ID)).thenReturn(Optional.empty());

@@ -1,5 +1,7 @@
 package com.studenthub.modules.jwauth.security;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.studenthub.modules.jwauth.security.JwSessionStore.JwSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -20,16 +22,28 @@ public class RedisJwSessionStore implements JwSessionStore {
 
     private final StringRedisTemplate redisTemplate;
     private final JwSessionCipher cipher;
+    private final ObjectMapper objectMapper;
 
     @Override
-    public void save(Long userId, String cookieHeader, Duration ttl) {
-        redisTemplate.opsForValue().set(KEY_PREFIX + userId, cipher.encrypt(cookieHeader), ttl);
+    public void save(Long userId, JwSession session, Duration ttl) {
+        try {
+            redisTemplate.opsForValue().set(KEY_PREFIX + userId, cipher.encrypt(objectMapper.writeValueAsString(session)), ttl);
+        } catch (Exception exception) {
+            throw new IllegalStateException("教务会话存储失败", exception);
+        }
     }
 
     @Override
-    public Optional<String> find(Long userId) {
+    public Optional<JwSession> find(Long userId) {
         String value = redisTemplate.opsForValue().get(KEY_PREFIX + userId);
-        return value == null ? Optional.empty() : Optional.of(cipher.decrypt(value));
+        if (value == null) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(objectMapper.readValue(cipher.decrypt(value), JwSession.class));
+        } catch (Exception exception) {
+            throw new IllegalStateException("教务会话反序列化失败", exception);
+        }
     }
 
     @Override

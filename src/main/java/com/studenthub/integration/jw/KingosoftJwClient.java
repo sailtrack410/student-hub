@@ -123,11 +123,12 @@ public class KingosoftJwClient {
             }
 
             // 2. ticket 换教务会话（跟随 302 链，CookieManager 自动收集 JSESSIONID）
-            HttpResponse<String> casResponse = client.send(
+            // 落地页即带访问令牌参数的 homes.action?v=...，其中直接含有身份信息
+            HttpResponse<byte[]> casResponse = client.send(
                     HttpRequest.newBuilder(URI.create(properties.getJwBaseUrl() + "/caslogin?ticket=" + urlEncode(ticket)))
                             .timeout(Duration.ofSeconds(properties.getReadTimeoutSeconds()))
                             .GET().build(),
-                    HttpResponse.BodyHandlers.ofString());
+                    HttpResponse.BodyHandlers.ofByteArray());
             URI finalUri = casResponse.uri();
             if (!finalUri.getHost().contains("jwgl")) {
                 log.info("CAS 登录未落到教务域名, final={}", finalUri.getHost());
@@ -140,9 +141,9 @@ public class KingosoftJwClient {
                 throw new BusinessException(ErrorCode.JW_AUTH_FAILED);
             }
 
-            // 3. 访问主页确认会话有效并解析身份（姓名/学号/身份类别）
-            JwProfile profile = fetchProfileInternal(client, cookieHeader);
-            return new JwLoginResult(cookieHeader, profile.ssoAccount(), profile.jwName(),
+            // 3. 从落地页解析身份（含子框架与编码兜底）
+            JwProfile profile = extractProfile(casResponse.body(), casResponse.headers(), client, cookieHeader);
+            return new JwLoginResult(cookieHeader, finalUri.toString(), profile.ssoAccount(), profile.jwName(),
                     profile.identityKind(), profile.jwStudentNo());
         } catch (BusinessException exception) {
             throw exception;
@@ -152,11 +153,20 @@ public class KingosoftJwClient {
         }
     }
 
-    /** 用教务会话 Cookie 拉取个人信息 */
-    public JwProfile fetchProfile(String cookieHeader) {
+    /** 用托管会话 Cookie 访问登录落地页，拉取个人信息 */
+    public JwProfile fetchProfile(String cookieHeader, String homeUrl) {
         try {
             HttpClient client = buildClient(new CookieManager());
-            return fetchProfileInternal(client, cookieHeader);
+            HttpResponse<byte[]> response = client.send(
+                    HttpRequest.newBuilder(URI.create(homeUrl))
+                            .timeout(Duration.ofSeconds(properties.getReadTimeoutSeconds()))
+                            .header("Cookie", cookieHeader)
+                            .GET().build(),
+                    HttpResponse.BodyHandlers.ofByteArray());
+            if (response.statusCode() != 200) {
+                throw new BusinessException(ErrorCode.JW_SESSION_EXPIRED);
+            }
+            return extractProfile(response.body(), response.headers(), client, cookieHeader);
         } catch (BusinessException exception) {
             throw exception;
         } catch (Exception exception) {
@@ -165,36 +175,27 @@ public class KingosoftJwClient {
         }
     }
 
-    private JwProfile fetchProfileInternal(HttpClient client, String cookieHeader) throws Exception {
-        HttpResponse<byte[]> homeResponse = client.send(
-                HttpRequest.newBuilder(URI.create(properties.getJwBaseUrl() + "/frame/homes.action"))
-                        .timeout(Duration.ofSeconds(properties.getReadTimeoutSeconds()))
-                        .header("Cookie", cookieHeader)
-                        .GET().build(),
-                HttpResponse.BodyHandlers.ofByteArray());
-        if (homeResponse.statusCode() != 200) {
-            log.info("教务主页返回非 200, status={}", homeResponse.statusCode());
-            throw new BusinessException(ErrorCode.JW_SESSION_EXPIRED);
-        }
-        // 青果页面存在 GBK/UTF-8 两种编码，逐个尝试身份匹配
-        List<String> homeVariants = decodeVariants(homeResponse.body(), homeResponse.headers());
-        for (String html : homeVariants) {
+    /**
+     * 解析教务页面中的身份信息：失效提示页直接判定失效；主页未命中时遍历子框架；
+     * UTF-8/GBK 双编码变体逐一尝试。
+     */
+    private JwProfile extractProfile(byte[] body, HttpHeaders headers, HttpClient client, String cookieHeader) {
+        List<String> variants = decodeVariants(body, headers);
+        for (String html : variants) {
             if (html.contains("凭证已失效")) {
-                log.info("教务主页返回会话失效提示页");
+                log.info("教务页面返回会话失效提示页");
                 throw new BusinessException(ErrorCode.JW_SESSION_EXPIRED);
             }
+        }
+        for (String html : variants) {
             Matcher matcher = HOME_IDENTITY.matcher(html);
             if (matcher.find()) {
-                String ssoAccount = matcher.group(1);
-                String jwName = matcher.group(2);
-                String identityKind = detectIdentityKind(html, ssoAccount);
-                String studentNo = fetchInternalStudentNo(client, cookieHeader, identityKind);
-                return new JwProfile(ssoAccount, jwName, identityKind, studentNo);
+                return buildProfile(matcher, html, client, cookieHeader);
             }
         }
 
-        // 主页可能是框架集：身份在子框架页里，逐个抓取匹配
-        List<String> frameUrls = extractFrameUrls(homeVariants.get(0));
+        // 主页可能是框架集：身份在子框架页里
+        List<String> frameUrls = extractFrameUrls(variants.get(0));
         log.info("教务主页未直接命中身份，尝试子框架 {} 个", frameUrls.size());
         for (String frameUrl : frameUrls) {
             try {
@@ -210,23 +211,26 @@ public class KingosoftJwClient {
                 for (String html : decodeVariants(frameResponse.body(), frameResponse.headers())) {
                     Matcher matcher = HOME_IDENTITY.matcher(html);
                     if (matcher.find()) {
-                        String ssoAccount = matcher.group(1);
-                        String jwName = matcher.group(2);
-                        String identityKind = detectIdentityKind(html, ssoAccount);
-                        String studentNo = fetchInternalStudentNo(client, cookieHeader, identityKind);
-                        return new JwProfile(ssoAccount, jwName, identityKind, studentNo);
+                        return buildProfile(matcher, html, client, cookieHeader);
                     }
                 }
             } catch (Exception exception) {
                 log.warn("抓取教务子框架失败, url={}", frameUrl);
             }
         }
-        log.info("教务主页及子框架均未解析到身份信息, homeLength={}, frames={}",
-                homeVariants.get(0).length(), frameUrls.size());
+        log.info("教务页面及子框架均未解析到身份信息, homeLength={}, frames={}", variants.get(0).length(), frameUrls.size());
         throw new BusinessException(ErrorCode.JW_SESSION_EXPIRED);
     }
 
-    /** 提取主页里的 frame/iframe 地址 */
+    private JwProfile buildProfile(Matcher matcher, String html, HttpClient client, String cookieHeader) {
+        String ssoAccount = matcher.group(1);
+        String jwName = matcher.group(2);
+        String identityKind = detectIdentityKind(html, ssoAccount);
+        String studentNo = fetchInternalStudentNo(client, cookieHeader, identityKind);
+        return new JwProfile(ssoAccount, jwName, identityKind, studentNo);
+    }
+
+    /** 提取页面里的 frame/iframe 地址 */
     private List<String> extractFrameUrls(String html) {
         List<String> urls = new java.util.ArrayList<>();
         Matcher matcher = Pattern.compile("(?:frame|iframe)[^>]*?src=\"([^\"]+)\"").matcher(html);
@@ -431,7 +435,7 @@ public class KingosoftJwClient {
                 .build();
     }
 
-    public record JwLoginResult(String cookieHeader, String ssoAccount, String jwName,
+    public record JwLoginResult(String cookieHeader, String homeUrl, String ssoAccount, String jwName,
                                 String identityKind, String jwStudentNo) {
     }
 

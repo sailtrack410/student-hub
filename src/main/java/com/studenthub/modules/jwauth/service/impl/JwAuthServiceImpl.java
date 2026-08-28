@@ -17,6 +17,8 @@ import com.studenthub.modules.jwauth.controller.dto.JwStatusResponse;
 import com.studenthub.modules.jwauth.entity.JwBindingEntity;
 import com.studenthub.modules.jwauth.mapper.JwBindingMapper;
 import com.studenthub.modules.jwauth.security.JwSessionStore;
+import com.studenthub.modules.jwauth.security.JwSessionStore.JwSession;
+
 import com.studenthub.modules.jwauth.service.JwAuthService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -120,7 +122,8 @@ public class JwAuthServiceImpl implements JwAuthService {
             jwBindingMapper.updateById(binding);
         }
 
-        jwSessionStore.save(userId, loginResult.cookieHeader(), ttl);
+        jwSessionStore.save(userId,
+                new JwSessionStore.JwSession(loginResult.cookieHeader(), loginResult.homeUrl()), ttl);
         log.info("教务认证成功, userId={}, identityKind={}, identityChanged={}",
                 userId, loginResult.identityKind(), identityChanged);
 
@@ -146,13 +149,14 @@ public class JwAuthServiceImpl implements JwAuthService {
         if (binding == null || !"AUTHENTICATED".equals(binding.getAuthStatus())) {
             throw new BusinessException(ErrorCode.JW_SESSION_EXPIRED);
         }
-        Optional<String> cookie = jwSessionStore.find(userId);
-        if (cookie.isEmpty()) {
+        Optional<JwSessionStore.JwSession> session = jwSessionStore.find(userId);
+        if (session.isEmpty()) {
             markExpired(binding);
             throw new BusinessException(ErrorCode.JW_SESSION_EXPIRED);
         }
         try {
-            KingosoftJwClient.JwProfile profile = jwClient.fetchProfile(cookie.get());
+            KingosoftJwClient.JwProfile profile = jwClient.fetchProfile(session.get().cookieHeader(),
+                    session.get().homeUrl());
             return new JwProfileResponse(profile.ssoAccount(), profile.jwName(),
                     profile.jwStudentNo(), profile.identityKind());
         } catch (BusinessException exception) {
