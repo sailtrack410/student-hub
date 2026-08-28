@@ -30,7 +30,7 @@
           wx:key="itemId"
           wx:for-item="item"
           class="item-card card"
-          url="/pages/service/detail?id={{item.itemId}}"
+          url="/pages/service/apply?itemId={{item.itemId}}"
           hover-class="item-card-hover"
         >
           <image class="item-icon" src="/assets/category/{{item.icon || 'cat-affair'}}.png" mode="aspectFit" />

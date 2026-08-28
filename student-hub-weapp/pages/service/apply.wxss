@@ -8,6 +8,11 @@
   gap: 22rpx;
 }
 
+.head-body {
+  flex: 1;
+  min-width: 0;
+}
+
 .head-icon {
   width: 90rpx;
   height: 90rpx;
@@ -16,6 +21,15 @@
 .head-name {
   font-size: 32rpx;
   font-weight: 700;
+}
+
+.head-guide {
+  flex-shrink: 0;
+  font-size: 24rpx;
+  color: var(--brand);
+  background: var(--brand-soft);
+  border-radius: 999rpx;
+  padding: 10rpx 20rpx;
 }
 
 .head-sla {

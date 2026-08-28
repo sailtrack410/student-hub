@@ -42,6 +42,13 @@ Page({
     }
   },
 
+  /** 查看该服务的办事指南 */
+  goGuide() {
+    if (this.itemId) {
+      wx.navigateTo({ url: `/pages/service/detail?id=${this.itemId}` });
+    }
+  },
+
   onFormChange(event) {
     this.formData = event.detail.value;
     this.setData({ formData: this.formData });
