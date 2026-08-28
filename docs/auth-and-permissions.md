@@ -44,6 +44,14 @@ sys_user
 
 业务查询不得只因为用户拥有某角色就返回全表数据。
 
+## 身份标识与权限隔离
+
+`sys_user.identity_type` 是身份标识（STUDENT 学生 / TEACHER 教师 / ADMIN 管理员 / LOGISTICS 后勤职工），用于按身份提供差异化功能与信息视图。
+
+- 学生、教师可在小程序"个人中心"自行申报身份（`POST /api/app/profile/identity`）；ADMIN、LOGISTICS 由平台分配，接口拒绝自行设置。
+- 身份标识不等于功能权限：接口与数据访问仍由角色（`sys_user_role`）、权限码和数据范围控制；身份只做前端功能隔离与业务分组。
+- 身份或昵称修改会原地刷新服务端会话（`SessionStore.replace`，保留剩余有效期），`/me` 立即生效，无需重新登录。
+
 ## 教务系统会话
 
 教务系统账号密码仅用于当次登录：
