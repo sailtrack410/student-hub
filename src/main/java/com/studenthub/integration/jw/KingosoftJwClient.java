@@ -173,22 +173,101 @@ public class KingosoftJwClient {
                         .GET().build(),
                 HttpResponse.BodyHandlers.ofByteArray());
         if (homeResponse.statusCode() != 200) {
+            log.info("教务主页返回非 200, status={}", homeResponse.statusCode());
             throw new BusinessException(ErrorCode.JW_SESSION_EXPIRED);
         }
-        String html = decode(homeResponse.body(), homeResponse.headers());
-
-        Matcher matcher = HOME_IDENTITY.matcher(html);
-        if (!matcher.find()) {
-            // 会话失效时主页通常跳回登录页，识别不到身份
-            log.info("教务主页未解析到身份信息，判定会话失效");
-            throw new BusinessException(ErrorCode.JW_SESSION_EXPIRED);
+        // 青果页面存在 GBK/UTF-8 两种编码，逐个尝试身份匹配
+        List<String> homeVariants = decodeVariants(homeResponse.body(), homeResponse.headers());
+        for (String html : homeVariants) {
+            if (html.contains("凭证已失效")) {
+                log.info("教务主页返回会话失效提示页");
+                throw new BusinessException(ErrorCode.JW_SESSION_EXPIRED);
+            }
+            Matcher matcher = HOME_IDENTITY.matcher(html);
+            if (matcher.find()) {
+                String ssoAccount = matcher.group(1);
+                String jwName = matcher.group(2);
+                String identityKind = detectIdentityKind(html, ssoAccount);
+                String studentNo = fetchInternalStudentNo(client, cookieHeader, identityKind);
+                return new JwProfile(ssoAccount, jwName, identityKind, studentNo);
+            }
         }
-        String ssoAccount = matcher.group(1);
-        String jwName = matcher.group(2);
 
-        String identityKind = detectIdentityKind(html, ssoAccount);
-        String studentNo = fetchInternalStudentNo(client, cookieHeader, identityKind);
-        return new JwProfile(ssoAccount, jwName, identityKind, studentNo);
+        // 主页可能是框架集：身份在子框架页里，逐个抓取匹配
+        List<String> frameUrls = extractFrameUrls(homeVariants.get(0));
+        log.info("教务主页未直接命中身份，尝试子框架 {} 个", frameUrls.size());
+        for (String frameUrl : frameUrls) {
+            try {
+                HttpResponse<byte[]> frameResponse = client.send(
+                        HttpRequest.newBuilder(URI.create(absoluteUrl(frameUrl)))
+                                .timeout(Duration.ofSeconds(properties.getReadTimeoutSeconds()))
+                                .header("Cookie", cookieHeader)
+                                .GET().build(),
+                        HttpResponse.BodyHandlers.ofByteArray());
+                if (frameResponse.statusCode() != 200) {
+                    continue;
+                }
+                for (String html : decodeVariants(frameResponse.body(), frameResponse.headers())) {
+                    Matcher matcher = HOME_IDENTITY.matcher(html);
+                    if (matcher.find()) {
+                        String ssoAccount = matcher.group(1);
+                        String jwName = matcher.group(2);
+                        String identityKind = detectIdentityKind(html, ssoAccount);
+                        String studentNo = fetchInternalStudentNo(client, cookieHeader, identityKind);
+                        return new JwProfile(ssoAccount, jwName, identityKind, studentNo);
+                    }
+                }
+            } catch (Exception exception) {
+                log.warn("抓取教务子框架失败, url={}", frameUrl);
+            }
+        }
+        log.info("教务主页及子框架均未解析到身份信息, homeLength={}, frames={}",
+                homeVariants.get(0).length(), frameUrls.size());
+        throw new BusinessException(ErrorCode.JW_SESSION_EXPIRED);
+    }
+
+    /** 提取主页里的 frame/iframe 地址 */
+    private List<String> extractFrameUrls(String html) {
+        List<String> urls = new java.util.ArrayList<>();
+        Matcher matcher = Pattern.compile("(?:frame|iframe)[^>]*?src=\"([^\"]+)\"").matcher(html);
+        while (matcher.find()) {
+            String src = matcher.group(1);
+            if (src.startsWith("http") || src.endsWith(".jsp") || src.endsWith(".action")) {
+                urls.add(src);
+            }
+        }
+        return urls;
+    }
+
+    private String absoluteUrl(String src) {
+        if (src.startsWith("http")) {
+            return src;
+        }
+        return properties.getJwBaseUrl() + (src.startsWith("/") ? src : "/" + src);
+    }
+
+    /** 按响应头编码解码；无头时同时给出 UTF-8 与 GBK 两个变体 */
+    private List<String> decodeVariants(byte[] body, HttpHeaders headers) {
+        List<String> variants = new java.util.ArrayList<>();
+        String headerCharset = headers.firstValue("Content-Type")
+                .filter(value -> value.toLowerCase().contains("charset"))
+                .map(value -> value.replaceAll("(?i).*charset=([^;]+).*", "$1").trim())
+                .orElse(null);
+        if (headerCharset != null) {
+            variants.add(decode(body, headers));
+            return variants;
+        }
+        try {
+            variants.add(new String(body, StandardCharsets.UTF_8));
+        } catch (Exception ignored) {
+            // 忽略
+        }
+        try {
+            variants.add(new String(body, "GBK"));
+        } catch (Exception ignored) {
+            // 忽略
+        }
+        return variants;
     }
 
     /** 学生账号访问课表页可取得教务内部学号；教师账号拿不到则留空 */
