@@ -19,6 +19,7 @@ import com.studenthub.modules.identity.security.AuthenticatedUser;
 import com.studenthub.modules.identity.security.CurrentUserProvider;
 import com.studenthub.modules.identity.security.RoleScope;
 import com.studenthub.modules.identity.security.SecurityProperties;
+import com.studenthub.modules.identity.security.AuthenticatedUserFactory;
 import com.studenthub.modules.identity.security.SessionStore;
 import com.studenthub.modules.identity.security.SessionToken;
 import com.studenthub.modules.identity.service.IdentityAuthService;
@@ -57,6 +58,7 @@ public class IdentityAuthServiceImpl implements IdentityAuthService {
     private final SecurityProperties securityProperties;
     private final CurrentUserProvider currentUserProvider;
     private final WechatIdentityProvider wechatIdentityProvider;
+    private final AuthenticatedUserFactory authenticatedUserFactory;
 
     @Override
     public LoginResponse login(String username, String password) {
@@ -138,7 +140,7 @@ public class IdentityAuthServiceImpl implements IdentityAuthService {
         update.setVersion(user.getVersion());
         userMapper.updateById(update);
 
-        AuthenticatedUser refreshed = buildAuthenticatedUser(reload(user.getId()));
+        AuthenticatedUser refreshed = authenticatedUserFactory.build(reload(user.getId()));
         sessionStore.replace(rawToken, refreshed);
         log.info("用户昵称已更新, userId={}", user.getId());
         return CurrentUserResponse.from(refreshed);
@@ -158,7 +160,7 @@ public class IdentityAuthServiceImpl implements IdentityAuthService {
         update.setVersion(user.getVersion());
         userMapper.updateById(update);
 
-        AuthenticatedUser refreshed = buildAuthenticatedUser(reload(user.getId()));
+        AuthenticatedUser refreshed = authenticatedUserFactory.build(reload(user.getId()));
         sessionStore.replace(rawToken, refreshed);
         log.info("用户身份已更新, userId={}, identityType={}", user.getId(), normalized);
         return CurrentUserResponse.from(refreshed);
@@ -176,25 +178,9 @@ public class IdentityAuthServiceImpl implements IdentityAuthService {
         return userMapper.selectById(userId);
     }
 
-    private AuthenticatedUser buildAuthenticatedUser(UserEntity user) {
-        List<RoleScope> roleScopes = identityAccessMapper.findRoleScopes(user.getId()).stream()
-                .map(this::toRoleScope)
-                .toList();
-        List<String> permissionCodes = identityAccessMapper.findPermissionCodes(user.getId());
-        return new AuthenticatedUser(
-                user.getId(),
-                user.getCampusId(),
-                user.getDefaultOrganizationId(),
-                user.getUsername(),
-                user.getDisplayName(),
-                user.getIdentityType(),
-                user.getAuthorizationStatus(),
-                roleScopes,
-                permissionCodes);
-    }
 
     private LoginResponse createSession(UserEntity user, boolean newUser) {
-        AuthenticatedUser authenticatedUser = buildAuthenticatedUser(user);
+        AuthenticatedUser authenticatedUser = authenticatedUserFactory.build(user);
         SessionToken token = sessionStore.create(authenticatedUser, securityProperties.getSessionTtl());
 
         UserEntity loginUpdate = new UserEntity();
@@ -208,9 +194,6 @@ public class IdentityAuthServiceImpl implements IdentityAuthService {
                 CurrentUserResponse.from(authenticatedUser));
     }
 
-    private RoleScope toRoleScope(RoleScopeRow row) {
-        return new RoleScope(row.getRoleCode(), row.getOrganizationId(), row.getDataScope());
-    }
 
     private void bindDefaultRequesterRole(Long userId) {
         RoleEntity requesterRole = roleMapper.findByRoleCode(DEFAULT_REQUESTER_ROLE_CODE);

@@ -30,6 +30,10 @@ public enum ErrorCode {
     NOTIFICATION_NOT_FOUND("NOTIFICATION_404_01", "通知不存在", HttpStatus.NOT_FOUND),
     CONVERSATION_NOT_FOUND("AI_404_01", "会话不存在", HttpStatus.NOT_FOUND),
     AI_RATE_LIMITED("AI_429_01", "提问太频繁，请稍后再试", HttpStatus.TOO_MANY_REQUESTS),
+    JW_AUTH_FAILED("JW_401_01", "账号、密码或验证码错误", HttpStatus.UNAUTHORIZED),
+    JW_SESSION_EXPIRED("JW_401_02", "教务认证已失效，请重新认证", HttpStatus.UNAUTHORIZED),
+    JW_ACCOUNT_ALREADY_BOUND("JW_409_01", "该账号已被绑定到其他用户", HttpStatus.CONFLICT),
+    JW_RATE_LIMITED("JW_429_01", "操作过于频繁，请稍后再试", HttpStatus.TOO_MANY_REQUESTS),
     INTERNAL_ERROR("COMMON_500", "系统繁忙，请稍后重试", HttpStatus.INTERNAL_SERVER_ERROR);
 
     private final String code;

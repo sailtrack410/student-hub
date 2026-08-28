@@ -1,0 +1,21 @@
+CREATE TABLE jw_binding (
+    id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    sso_account VARCHAR(64) NOT NULL,
+    jw_name VARCHAR(128),
+    jw_student_no VARCHAR(64),
+    identity_kind VARCHAR(16) NOT NULL DEFAULT 'STUDENT',
+    auth_status VARCHAR(32) NOT NULL,
+    last_auth_at TIMESTAMP NOT NULL,
+    session_expires_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    created_by BIGINT NOT NULL,
+    updated_by BIGINT NOT NULL,
+    deleted TINYINT NOT NULL DEFAULT 0,
+    version INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    CONSTRAINT uk_jw_binding_user UNIQUE (user_id),
+    CONSTRAINT uk_jw_binding_sso_account UNIQUE (sso_account),
+    CONSTRAINT fk_jw_binding_user FOREIGN KEY (user_id) REFERENCES sys_user (id)
+);

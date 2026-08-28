@@ -68,6 +68,11 @@ studenthub:
     minio-access-key: ${MINIO_ACCESS_KEY:}
     minio-secret-key: ${MINIO_SECRET_KEY:}
     minio-bucket: ${MINIO_BUCKET:student-hub}
+  jw:
+    sso-base-url: ${JW_SSO_BASE_URL:https://sso.mycc.edu.cn}
+    jw-base-url: ${JW_JW_BASE_URL:https://jwgl.mycc.edu.cn}
+    encrypt-key: ${JW_ENCRYPT_KEY:dev-jw-encrypt-key-change-me}
+    session-ttl-hours: ${JW_SESSION_TTL_HOURS:48}
 
 management:
   endpoints:
