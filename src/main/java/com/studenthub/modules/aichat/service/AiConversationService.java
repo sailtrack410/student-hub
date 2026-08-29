@@ -4,6 +4,7 @@ import com.studenthub.common.PageResult;
 import com.studenthub.modules.aichat.controller.dto.AiConversationResponse;
 import com.studenthub.modules.aichat.controller.dto.AiMessageResponse;
 import com.studenthub.modules.aichat.controller.dto.SendMessageRequest;
+import com.studenthub.modules.identity.security.AuthenticatedUser;
 
 import java.util.List;
 
@@ -17,6 +18,7 @@ public interface AiConversationService {
 
     /**
      * 追加用户消息并返回助手回复；AI 不可用时返回降级回复，不抛出异常。
+     * 会按 intent 查询当前用户本人的课表/申请/服务入口数据并注入回复。
      */
-    AiMessageResponse sendMessage(Long userId, Long conversationId, SendMessageRequest request);
+    AiMessageResponse sendMessage(AuthenticatedUser user, Long conversationId, SendMessageRequest request);
 }

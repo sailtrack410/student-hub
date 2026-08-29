@@ -85,6 +85,47 @@
   white-space: pre-wrap;
 }
 
+.bubble-wrap {
+  max-width: 480rpx;
+  min-width: 0;
+}
+
+/* 动作卡片入口 */
+.action-cards {
+  margin-top: 14rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+  max-width: 480rpx;
+}
+
+.action-card {
+  background: var(--bg-card);
+  border: 2rpx solid var(--brand-soft);
+  border-radius: 16rpx;
+  padding: 18rpx 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: var(--shadow-card);
+}
+
+.action-card::after {
+  border: none;
+}
+
+.action-label {
+  font-size: 26rpx;
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.action-arrow {
+  font-size: 34rpx;
+  color: var(--brand);
+  line-height: 1;
+}
+
 .bubble-user {
   background: var(--grad-brand);
   color: #fff;

@@ -13,7 +13,22 @@
     <!-- 消息流 -->
     <view wx:for="{{messages}}" wx:key="key" id="msg-{{index}}" class="msg-row {{item.role === 'USER' ? 'msg-row-user' : ''}}">
       <image wx:if="{{item.role !== 'USER'}}" class="avatar" src="/assets/mascot/mascot-avatar.jpg" mode="aspectFill" />
-      <view class="bubble {{item.role === 'USER' ? 'bubble-user' : ''}} {{item.degraded ? 'bubble-degraded' : ''}}">{{item.content}}</view>
+      <view class="bubble-wrap">
+        <view class="bubble {{item.role === 'USER' ? 'bubble-user' : ''}} {{item.degraded ? 'bubble-degraded' : ''}}">{{item.content}}</view>
+        <view wx:if="{{item.role === 'ASSISTANT' && item.actions && item.actions.length}}" class="action-cards">
+          <view
+            wx:for="{{item.actions}}"
+            wx:for-item="action"
+            wx:key="url"
+            class="action-card"
+            bindtap="onActionTap"
+            data-url="{{action.url}}"
+          >
+            <text class="action-label">{{action.label}}</text>
+            <text class="action-arrow">›</text>
+          </view>
+        </view>
+      </view>
     </view>
 
     <!-- 思考中 -->

@@ -1,5 +1,12 @@
 package com.studenthub.modules.aichat.service.impl;
 
+import com.studenthub.modules.aichat.controller.dto.AiActionResponse;
+import com.studenthub.modules.aichat.intent.AiAssistantDataService;
+import com.studenthub.modules.aichat.intent.AiAssistantResolved;
+import com.studenthub.modules.aichat.intent.AiIntent;
+import com.studenthub.modules.aichat.intent.AiIntentClassifier;
+import com.studenthub.modules.aichat.intent.AiIntentMatch;
+import com.studenthub.modules.identity.security.AuthenticatedUser;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.studenthub.common.ErrorCode;
@@ -43,6 +50,8 @@ public class AiConversationServiceImpl implements AiConversationService {
     private final AiMessageMapper messageMapper;
     private final AiChatService aiChatService;
     private final AiChatProperties aiChatProperties;
+    private final AiIntentClassifier intentClassifier;
+    private final AiAssistantDataService assistantDataService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -76,7 +85,8 @@ public class AiConversationServiceImpl implements AiConversationService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public AiMessageResponse sendMessage(Long userId, Long conversationId, SendMessageRequest request) {
+    public AiMessageResponse sendMessage(AuthenticatedUser user, Long conversationId, SendMessageRequest request) {
+        Long userId = user.userId();
         AiConversationEntity conversation = requireOwnedConversation(userId, conversationId);
         String content = request.content().trim();
         if (content.length() > currentMaxMessageCharacters()) {
@@ -95,14 +105,17 @@ public class AiConversationServiceImpl implements AiConversationService {
         userMessage.setStatus(MESSAGE_STATUS_OK);
         messageMapper.insert(userMessage);
 
+        AiIntentMatch intent = intentClassifier.classify(content);
+        AiAssistantResolved resolved = resolveForIntent(intent, user);
+
         long start = System.currentTimeMillis();
         String reply;
-        boolean degraded = false;
-        String errorCode = null;
         String model = null;
         Integer tokenUsage = null;
+        String errorCode = null;
+        String actionsJson = assistantDataService.serializeActions(resolved == null ? null : resolved.actions());
         try {
-            List<AiMessage> prompt = buildPrompt(content, conversation.getId());
+            List<AiMessage> prompt = buildPrompt(content, conversation.getId(), resolved == null ? null : resolved.contextText());
             AiChatResponse response = aiChatService.chat(prompt);
             reply = response.content();
             model = response.model();
@@ -112,30 +125,59 @@ public class AiConversationServiceImpl implements AiConversationService {
                     ? null : (promptTokens == null ? 0 : promptTokens) + (completionTokens == null ? 0 : completionTokens);
         } catch (BusinessException exception) {
             log.warn("AI 调用失败, conversationId={}, code={}", conversation.getId(), exception.getCode());
-            reply = CampusAssistantPrompts.DEGRADED_REPLY;
-            degraded = true;
-            errorCode = exception.getCode();
+            // 查到确定性数据/入口时优先给本地兜底回复；否则退回统一降级文案
+            if (resolved != null && resolved.actions() != null && !resolved.actions().isEmpty()) {
+                reply = localFallbackReply(intent, resolved);
+            } else {
+                reply = CampusAssistantPrompts.DEGRADED_REPLY;
+                errorCode = exception.getCode();
+            }
         }
 
         AiMessageEntity assistantMessage = new AiMessageEntity();
         assistantMessage.setConversationId(conversation.getId());
         assistantMessage.setRole(ROLE_ASSISTANT);
         assistantMessage.setContent(reply);
+        assistantMessage.setActions(actionsJson);
         assistantMessage.setModel(model);
         assistantMessage.setPromptVersion(CampusAssistantPrompts.PROMPT_VERSION);
         assistantMessage.setTokenUsage(tokenUsage);
         assistantMessage.setCostMs((int) Math.min(Integer.MAX_VALUE, System.currentTimeMillis() - start));
         assistantMessage.setErrorCode(errorCode);
-        assistantMessage.setStatus(degraded ? MESSAGE_STATUS_FAILED : MESSAGE_STATUS_OK);
+        assistantMessage.setStatus(errorCode == null ? MESSAGE_STATUS_OK : MESSAGE_STATUS_FAILED);
         messageMapper.insert(assistantMessage);
 
         touchConversation(conversation);
         return AiMessageResponse.from(assistantMessage);
     }
 
-    private List<AiMessage> buildPrompt(String currentContent, Long conversationId) {
+    private AiAssistantResolved resolveForIntent(AiIntentMatch intent, AuthenticatedUser user) {
+        return switch (intent.intent()) {
+            case SCHEDULE_DAY -> assistantDataService.resolveSchedule(user.userId(), intent.dayOfWeek());
+            case SCHEDULE_WEEK -> assistantDataService.resolveSchedule(user.userId(), null);
+            case MY_REQUESTS -> assistantDataService.resolveMyRequests(user.userId(), intent.statusFilter());
+            case SERVICE_ACTION -> assistantDataService.resolveServiceItem(intent.itemCode(), user.campusId());
+            case FALLBACK -> null;
+        };
+    }
+
+    private String localFallbackReply(AiIntentMatch intent, AiAssistantResolved resolved) {
+        return switch (intent.intent()) {
+            case SCHEDULE_DAY, SCHEDULE_WEEK -> "AI 暂时无法总结，但课表信息已经为你查到啦，点下方卡片直接看课表～";
+            case MY_REQUESTS -> "AI 暂时无法总结，申请进度已经为你列好啦，点下方卡片直接查看详情～";
+            case SERVICE_ACTION -> "AI 暂时开小差了，点下方卡片可以直接办理服务～";
+            case FALLBACK -> CampusAssistantPrompts.DEGRADED_REPLY;
+        };
+    }
+
+    private List<AiMessage> buildPrompt(String currentContent, Long conversationId, String contextText) {
         List<AiMessage> prompt = new ArrayList<>();
         prompt.add(new AiMessage("system", CampusAssistantPrompts.SYSTEM_PROMPT));
+        if (contextText != null && !contextText.isBlank()) {
+            prompt.add(new AiMessage("system",
+                    "以下是系统为你查询到的、仅供本次回答使用的用户数据（仅针对当前登录用户本人，"
+                            + "不得泄露给他人，不得编造数据中不存在的字段或数值）。\n" + contextText));
+        }
         List<AiMessageEntity> history = messageMapper.selectList(new LambdaQueryWrapper<AiMessageEntity>()
                 .eq(AiMessageEntity::getConversationId, conversationId)
                 .orderByDesc(AiMessageEntity::getCreatedAt)

@@ -19,6 +19,8 @@ public class AiMessageEntity extends BaseEntity {
     /** USER / ASSISTANT */
     private String role;
     private String content;
+    /** 动作卡片 JSON 数组（仅 ASSISTANT 消息，可空） */
+    private String actions;
     private String model;
     private String promptVersion;
     private Integer tokenUsage;

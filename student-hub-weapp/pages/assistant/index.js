@@ -52,15 +52,23 @@ Page({
     this.requestReply(content);
   },
 
-  appendMessage(role, content, degraded = false) {
+  appendMessage(role, content, degraded = false, actions = null) {
     messageSeq += 1;
     const messages = this.data.messages.concat([
-      { key: `m${messageSeq}`, role, content, degraded }
+      { key: `m${messageSeq}`, role, content, degraded, actions }
     ]);
     this.setData({
       messages,
       scrollInto: `msg-${messages.length - 1}`
     });
+  },
+
+  onActionTap(event) {
+    const url = event.currentTarget.dataset.url;
+    if (!url) {
+      return;
+    }
+    wx.navigateTo({ url, fail: () => wx.showToast({ title: '页面打开失败', icon: 'none' }) });
   },
 
   async requestReply(content) {
@@ -69,7 +77,7 @@ Page({
         await this.createConversation();
       }
       const reply = await api.sendAiMessage(this.conversationId, content);
-      this.appendMessage(reply.role, reply.content, reply.degraded);
+      this.appendMessage(reply.role, reply.content, reply.degraded, reply.actions);
     } catch (error) {
       const message = error && error.code === 'AI_429_01'
         ? '你今天提问有点多啦，休息一下再聊～'

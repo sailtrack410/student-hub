@@ -64,7 +64,7 @@ public class AppAiChatController {
     @PreAuthorize("hasAuthority('ai:chat')")
     public Result<AiMessageResponse> send(@PathVariable Long conversationId,
                                           @RequestBody @Valid SendMessageRequest request) {
-        Long userId = currentUserProvider.requireCurrentUser().userId();
-        return Result.success(aiConversationService.sendMessage(userId, conversationId, request));
+        var user = currentUserProvider.requireCurrentUser();
+        return Result.success(aiConversationService.sendMessage(user, conversationId, request));
     }
 }
