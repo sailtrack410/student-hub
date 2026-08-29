@@ -184,13 +184,6 @@ Controller -> AiChatService -> AiProvider -> 外部模型 API
 - 对 Prompt Injection、越权请求、敏感信息询问和模型幻觉建立测试用例。
 - 生产环境提供模型调用限流、单用户配额、降级回复和人工转接能力。
 
-### 代码助手识图约定（DeepSeek 等非视觉模型）
-
-- 当工作模型本身无法直接看到图片（例如当前是 DeepSeek），只要用户发来图片、截图、验证码或要求“识图/OCR/看图”，一律改用本项目已配置的 `vision-understand` 技能，不得凭空猜测图片内容。
-- 识图走 `~/.zcode/skills/vision-understand/scripts/vision_call.py`；配置在 `~/Desktop/.env` 的 `viewurl`/`viewkey`，模型固定为 **`Qwen/Qwen3-VL-32B-Instruct`**（`Qwen/Qwen3-32B` 不是 VLM，会报 20041；无后缀、非 Instruct/Thinking 的 32B 识图模型在 SiliconFlow 列表中不存在）。
-- 小图先自动放大到最小边 ≥28px（脚本已内置）；key 敏感，不落仓库、不打印、日志脱敏。
-- 需要“打开网页看渲染效果/截图验收”时，用浏览器产出本地 PNG（`/tmp/zcode-shot.png`），再交给 `vision_call.py` 识读，不要依赖非视觉模型读不到的图片内容块。
-
 ## 8. 外部校园系统集成
 
 - 每个教务、财务、宿管、报修、统一身份系统都通过独立 Adapter/Facade 接入。
