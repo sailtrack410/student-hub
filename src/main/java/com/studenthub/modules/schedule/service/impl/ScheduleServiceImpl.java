@@ -13,13 +13,16 @@ import com.studenthub.modules.schedule.controller.dto.ScheduleCourseItem;
 import com.studenthub.modules.schedule.controller.dto.ScheduleImportResponse;
 import com.studenthub.modules.schedule.controller.dto.ScheduleViewResponse;
 import com.studenthub.modules.schedule.entity.ScheduleCourseEntity;
+import com.studenthub.modules.schedule.entity.ScheduleSemesterEntity;
 import com.studenthub.modules.schedule.mapper.ScheduleCourseMapper;
+import com.studenthub.modules.schedule.mapper.ScheduleSemesterMapper;
 import com.studenthub.modules.schedule.service.ScheduleService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -33,6 +36,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     private final JwSessionStore jwSessionStore;
     private final KingosoftScheduleClient scheduleClient;
     private final ScheduleCourseMapper courseMapper;
+    private final ScheduleSemesterMapper semesterMapper;
     private final TransactionTemplate transactionTemplate;
 
     @Override
@@ -76,18 +80,40 @@ public class ScheduleServiceImpl implements ScheduleService {
             entity.setRawText(entry.rawText());
             personal.add(entity);
         }
+        final String syncSemesterCode = page.semesterCode();
+        final String syncSemesterName = page.semesterName();
         transactionTemplate.executeWithoutResult(status -> {
-            // 个人课表仅保留最新学期：整用户覆盖，避免学期切换后新旧数据混排；
-            // 班级缓存由定时同步任务多源采样权威维护，避免单人选修污染
-            courseMapper.deleteByUserId(user.userId());
+            // 个人课表按学期覆盖：同一学期重新导入时替换旧数据，其它学期保留
+            courseMapper.deleteByUserIdAndSemester(user.userId(), syncSemesterCode);
             if (!personal.isEmpty()) {
                 courseMapper.insertBatch(personal);
             }
-            // 记录课表所属学期：新学期没课时视图仍能返回学期信息（前端显示假期）
+            // 记录/更新该学期（空学期也登记，保证下拉里出现）
+            ScheduleSemesterEntity existing = semesterMapper.selectByUserId(user.userId()).stream()
+                    .filter(s -> syncSemesterCode.equals(s.getSemesterCode()))
+                    .findFirst()
+                    .orElse(null);
+            if (existing == null) {
+                ScheduleSemesterEntity created = new ScheduleSemesterEntity();
+                created.setId(com.baomidou.mybatisplus.core.toolkit.IdWorker.getId());
+                created.setUserId(user.userId());
+                created.setCreatedBy(user.userId());
+                created.setUpdatedBy(user.userId());
+                created.setSemesterCode(syncSemesterCode);
+                created.setSemesterName(syncSemesterName);
+                created.setLastSyncedAt(LocalDateTime.now());
+                semesterMapper.insert(created);
+            } else {
+                existing.setSemesterName(syncSemesterName);
+                existing.setLastSyncedAt(LocalDateTime.now());
+                existing.setUpdatedBy(user.userId());
+                semesterMapper.updateById(existing);
+            }
+            // 最新同步学期写回绑定，供视图默认选中
             JwBindingEntity semesterUpdate = new JwBindingEntity();
             semesterUpdate.setId(binding.getId());
-            semesterUpdate.setLastSemesterCode(page.semesterCode());
-            semesterUpdate.setLastSemesterName(page.semesterName());
+            semesterUpdate.setLastSemesterCode(syncSemesterCode);
+            semesterUpdate.setLastSemesterName(syncSemesterName);
             semesterUpdate.setVersion(binding.getVersion());
             jwBindingMapper.updateById(semesterUpdate);
         });
@@ -103,61 +129,58 @@ public class ScheduleServiceImpl implements ScheduleService {
     public ScheduleViewResponse view(AuthenticatedUser user, String semesterCode) {
         List<ScheduleCourseEntity> courses = courseMapper.selectByUserId(user.userId());
         JwBindingEntity binding = jwBindingMapper.findByUserId(user.userId());
+        List<ScheduleSemesterEntity> registered = semesterMapper.selectByUserId(user.userId());
 
         // 学期以最后一次同步为准（写在绑定上，新学期 0 门课时依然有值）；
-        // 未同步过则回退到课程行里最新的学期
+        // 未同步过则回退到登记表/课程行里最新的学期
         String defaultCode;
-        String defaultName;
         if (binding != null && binding.getLastSemesterCode() != null) {
             defaultCode = binding.getLastSemesterCode();
-            defaultName = binding.getLastSemesterName();
         } else {
-            defaultCode = courses.stream()
-                    .map(ScheduleCourseEntity::getSemesterCode)
+            defaultCode = registered.stream()
+                    .map(ScheduleSemesterEntity::getSemesterCode)
                     .filter(java.util.Objects::nonNull)
                     .max(String::compareTo)
-                    .orElse(null);
-            defaultName = courses.isEmpty() ? null : courses.get(0).getSemesterName();
+                    .orElseGet(() -> courses.stream()
+                            .map(ScheduleCourseEntity::getSemesterCode)
+                            .filter(java.util.Objects::nonNull)
+                            .max(String::compareTo)
+                            .orElse(null));
         }
 
         String requested = semesterCode == null || semesterCode.isBlank() ? defaultCode : semesterCode.trim();
-        String chosenCode = requested;
-        String chosenName = defaultName;
-        List<ScheduleCourseEntity> current = List.of();
-        if (chosenCode != null) {
-            final String finalCode = chosenCode;
-            List<ScheduleCourseEntity> matched = courses.stream()
-                    .filter(course -> finalCode.equals(course.getSemesterCode()))
-                    .toList();
-            if (!matched.isEmpty()) {
-                current = matched;
-                chosenName = matched.get(0).getSemesterName();
-            } else if (defaultCode != null && finalCode.equals(defaultCode)) {
-                // 默认学期没有课（新学期未排）——空学期而非非法
-                current = List.of();
+        List<ScheduleCourseEntity> current = requested == null ? List.of()
+                : courses.stream()
+                        .filter(course -> requested.equals(course.getSemesterCode()))
+                        .toList();
+
+        // 可选学期：全部导入记录（累积，含空学期），再补上课程行里出现但漏登记的
+        java.util.LinkedHashMap<String, ScheduleViewResponse.SemesterOption> byCode = new java.util.LinkedHashMap<>();
+        for (ScheduleSemesterEntity s : registered) {
+            if (s.getSemesterCode() != null) {
+                byCode.put(s.getSemesterCode(),
+                        new ScheduleViewResponse.SemesterOption(s.getSemesterCode(), s.getSemesterName()));
             }
         }
-
-        // 可选学期：课程里出现过的学期 + 最近同步学期（去重、按名称降序/编码降序）
-        java.util.LinkedHashMap<String, ScheduleViewResponse.SemesterOption> options = new java.util.LinkedHashMap<>();
-        if (chosenCode != null && chosenName != null) {
-            options.put(chosenCode, new ScheduleViewResponse.SemesterOption(chosenCode, chosenName));
-        }
         for (ScheduleCourseEntity course : courses) {
-            if (course.getSemesterCode() != null) {
-                options.put(course.getSemesterCode(),
+            if (course.getSemesterCode() != null && !byCode.containsKey(course.getSemesterCode())) {
+                byCode.put(course.getSemesterCode(),
                         new ScheduleViewResponse.SemesterOption(course.getSemesterCode(), course.getSemesterName()));
             }
         }
-        List<ScheduleViewResponse.SemesterOption> available = new java.util.ArrayList<>(options.values());
-        java.util.Comparator<ScheduleViewResponse.SemesterOption> cmp =
-                java.util.Comparator.comparing(ScheduleViewResponse.SemesterOption::semesterCode,
-                        java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()));
-        available.sort(cmp);
+        List<ScheduleViewResponse.SemesterOption> available = new java.util.ArrayList<>(byCode.values());
+        available.sort(java.util.Comparator
+                .comparing(ScheduleViewResponse.SemesterOption::semesterCode,
+                        java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())));
 
         List<ScheduleCourseItem> items = current.stream().map(ScheduleCourseItem::from).toList();
         String className = binding == null ? null : binding.getClassName();
-        return new ScheduleViewResponse(chosenCode, chosenName, className, items, available);
+        String chosenName = requested == null ? null
+                : byCode.containsKey(requested)
+                        ? byCode.get(requested).semesterName()
+                        : (binding != null && requested.equals(binding.getLastSemesterCode())
+                                ? binding.getLastSemesterName() : null);
+        return new ScheduleViewResponse(requested, chosenName, className, items, available);
     }
 
     private void markExpired(JwBindingEntity binding) {
