@@ -5,6 +5,15 @@
            value="{{keyword}}" bindinput="onSearchInput" confirm-type="search" />
   </view>
 
+  <!-- 课表入口 -->
+  <view class="schedule-entry card" bindtap="goSchedule">
+    <view class="schedule-entry-left">
+      <view class="schedule-entry-title">我的课表</view>
+      <view class="schedule-entry-sub">查看每周课程安排</view>
+    </view>
+    <view class="schedule-entry-arrow">›</view>
+  </view>
+
   <!-- 结果与排序 -->
   <view class="toolbar">
     <text class="toolbar-count">共 {{totalCount}} 项服务</text>

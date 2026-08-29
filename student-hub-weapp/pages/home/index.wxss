@@ -37,6 +37,37 @@
   margin-top: 26rpx;
 }
 
+/* 课表入口 */
+.schedule-entry {
+  margin-top: 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28rpx 30rpx;
+}
+
+.schedule-entry-left {
+  display: flex;
+  flex-direction: column;
+}
+
+.schedule-entry-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #1E293B;
+}
+
+.schedule-entry-sub {
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: #94A3B8;
+}
+
+.schedule-entry-arrow {
+  font-size: 40rpx;
+  color: #CBD5E1;
+}
+
 /* 快捷入口：4 列两行 */
 .quick {
   margin-top: -30rpx;

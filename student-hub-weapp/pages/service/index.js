@@ -69,5 +69,12 @@ Page({
   onSortChange(event) {
     this.setData({ sortIndex: Number(event.detail.value) });
     this.rebuild();
+  },
+
+  goSchedule() {
+    if (!app.ensureLogin()) {
+      return;
+    }
+    wx.navigateTo({ url: '/pages/schedule/index' });
   }
 });

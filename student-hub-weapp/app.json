@@ -13,7 +13,8 @@
     "pages/notification/list",
     "pages/order/list",
     "pages/jw/auth",
-    "pages/profile/center"
+    "pages/profile/center",
+    "pages/schedule/index"
   ],
   "window": {
     "navigationBarTitleText": "Student Hub",

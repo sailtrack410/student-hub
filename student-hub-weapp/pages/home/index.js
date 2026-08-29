@@ -9,7 +9,8 @@ Page({
     userName: '同学',
     latestRequest: null,
     hotItems: [],
-    quickServices: []
+    quickServices: [],
+    scheduleBrief: ''
   },
 
   onShow() {
@@ -19,12 +20,29 @@ Page({
       userName: loggedIn && app.globalData.user ? app.globalData.user.displayName : '同学'
     });
     if (!loggedIn) {
-      this.setData({ latestRequest: null });
+      this.setData({ latestRequest: null, scheduleBrief: '' });
       return;
     }
     this.loadLatestRequest();
     this.loadServices();
+    this.loadScheduleBrief();
     this.refreshUnread();
+  },
+
+  /** 课表入口：静默拉取视图，仅用于首页摘要展示 */
+  async loadScheduleBrief() {
+    try {
+      const schedule = await api.getScheduleView();
+      if (schedule && schedule.courses && schedule.courses.length) {
+        this.setData({
+          scheduleBrief: `${schedule.semesterName || '本学期'} · ${schedule.courses.length} 门课`
+        });
+      } else {
+        this.setData({ scheduleBrief: '' });
+      }
+    } catch (error) {
+      this.setData({ scheduleBrief: '' });
+    }
   },
 
   /** 快捷入口与常用服务都从目录数据派生（与大厅同一数据源） */
@@ -79,6 +97,13 @@ Page({
 
   goMoreServices() {
     directory.toHall();
+  },
+
+  goSchedule() {
+    if (!app.ensureLogin()) {
+      return;
+    }
+    wx.navigateTo({ url: '/pages/schedule/index' });
   },
 
   goServiceDetail(event) {

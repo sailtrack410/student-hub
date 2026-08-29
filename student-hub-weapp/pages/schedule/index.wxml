@@ -1,0 +1,68 @@
+<view class="schedule">
+  <!-- 顶栏 -->
+  <view class="head">
+    <view class="head-info">
+      <view class="head-title">{{semesterName || '我的课表'}}</view>
+      <view wx:if="{{className}}" class="head-sub">{{className}}</view>
+    </view>
+    <view class="head-actions">
+      <view class="btn {{importing ? 'btn-disabled' : ''}}" bindtap="importSchedule">
+        {{importing ? '导入中…' : '导入课表'}}
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading">加载中…</view>
+
+  <block wx:elif="{{hasData}}">
+    <!-- 周视图：横向滚动，左侧为节次，右侧 7 天 -->
+    <scroll-view class="grid-scroll" scroll-x="true" enhanced show-scrollbar="{{false}}">
+      <view class="grid">
+        <!-- 表头：周几 -->
+        <view class="grid-row grid-header">
+          <view class="cell-time-cell"></view>
+          <view wx:for="{{days}}" wx:key="*this" class="cell-day">{{item}}</view>
+        </view>
+
+        <!-- 每节一行 -->
+        <view wx:for="{{cells}}" wx:key="section" wx:for-item="row" class="grid-row">
+          <view class="cell-time">
+            <text class="cell-period">{{row.period}}</text>
+            <text class="cell-section">{{row.section}}</text>
+          </view>
+          <view
+            wx:for="{{row.days}}"
+            wx:key="day"
+            wx:for-item="dayCell"
+            class="cell {{dayCell.items.length ? 'cell-has' : ''}}"
+          >
+            <view wx:for="{{dayCell.items}}" wx:key="courseName" wx:for-item="course" class="course">
+              <text class="course-name">{{course.courseName}}</text>
+              <text class="course-room">{{course.location}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+
+    <!-- 图例 -->
+    <view class="legend">
+      <text>课程详情见单元格，上课周次在课程展开后可见</text>
+    </view>
+  </block>
+
+  <block wx:elif="{{loaded}}">
+    <empty-state
+      image="/assets/empty/empty-search.jpg"
+      title="还没有导入课表"
+      subtitle="先从教务系统导入你的个人课表"
+    />
+    <view class="cta">
+      <view class="cta-btn {{importing ? 'btn-disabled' : ''}}" bindtap="importSchedule">
+        {{importing ? '导入中…' : '立即导入'}}
+      </view>
+    </view>
+  </block>
+
+  <view class="safe-bottom"></view>
+</view>
