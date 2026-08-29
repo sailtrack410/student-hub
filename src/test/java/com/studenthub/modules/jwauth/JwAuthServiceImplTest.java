@@ -84,7 +84,7 @@ class JwAuthServiceImplTest {
         when(jwClient.login(eq("2023590397"), any(), eq("captcha-uid"), eq("11"))).thenReturn(loginResult);
 
         AuthenticatedUser refreshed = new AuthenticatedUser(USER_ID, 1L, 10L, "requester",
-                "王同学", "STUDENT", "BASIC", List.of(), List.of());
+                "王同学", "STUDENT", "BASIC", List.of(), List.of(), null, null);
         when(authenticatedUserFactory.build(any())).thenReturn(refreshed);
 
         when(jwBindingMapper.findByUserId(USER_ID)).thenReturn(null);

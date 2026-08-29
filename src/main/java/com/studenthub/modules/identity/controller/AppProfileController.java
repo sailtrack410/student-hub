@@ -4,7 +4,9 @@ import com.studenthub.common.ErrorCode;
 import com.studenthub.common.Result;
 import com.studenthub.exception.BusinessException;
 import com.studenthub.modules.identity.controller.dto.CurrentUserResponse;
-import com.studenthub.modules.identity.controller.dto.UpdateIdentityRequest;
+import com.studenthub.modules.identity.controller.dto.UpdatePhoneRequest;
+import com.studenthub.modules.identity.controller.dto.UpdatePhoneRequest;
+import com.studenthub.modules.identity.controller.dto.UpdatePhoneWechatRequest;
 import com.studenthub.modules.identity.controller.dto.UpdateProfileRequest;
 import com.studenthub.modules.identity.security.AuthenticatedUser;
 import com.studenthub.modules.identity.security.BearerTokenResolver;
@@ -30,23 +32,32 @@ public class AppProfileController {
     private final CurrentUserProvider currentUserProvider;
 
     @PostMapping
-    @Operation(summary = "更新个人资料", description = "修改当前用户昵称，返回刷新后的用户信息。",
+    @Operation(summary = "更新个人资料", description = "修改昵称与头像（头像需先上传并传文件 ID），至少提供一项。",
             operationId = "updateProfile")
     public Result<CurrentUserResponse> updateProfile(@RequestBody @Valid UpdateProfileRequest request,
                                                      HttpServletRequest httpRequest) {
-        String rawToken = requireRawToken(httpRequest);
         AuthenticatedUser current = currentUserProvider.requireCurrentUser();
-        return Result.success(identityAuthService.updateProfile(rawToken, current, request.displayName()));
+        return Result.success(identityAuthService.updateProfile(
+                requireRawToken(httpRequest), current, request.displayName(), request.avatarFileId()));
     }
 
-    @PostMapping("/identity")
-    @Operation(summary = "设置本人身份", description = "学生/教师可自行申报身份标识，用于后续按身份做功能隔离；"
-            + "角色权限仍由平台分配，不受此处影响。返回刷新后的用户信息。", operationId = "updateIdentityType")
-    public Result<CurrentUserResponse> updateIdentityType(@RequestBody @Valid UpdateIdentityRequest request,
-                                                          HttpServletRequest httpRequest) {
-        String rawToken = requireRawToken(httpRequest);
+    @PostMapping("/phone")
+    @Operation(summary = "手动填写手机号", description = "微信手机号能力不可用时的备选方式。", operationId = "updatePhoneManual")
+    public Result<CurrentUserResponse> updatePhone(@RequestBody @Valid UpdatePhoneRequest request,
+                                                   HttpServletRequest httpRequest) {
         AuthenticatedUser current = currentUserProvider.requireCurrentUser();
-        return Result.success(identityAuthService.updateIdentityType(rawToken, current, request.identityType()));
+        return Result.success(identityAuthService.updatePhone(
+                requireRawToken(httpRequest), current, request.phone()));
+    }
+
+    @PostMapping("/phone/wechat")
+    @Operation(summary = "绑定微信手机号", description = "使用 button open-type=getPhoneNumber 的 code 换取微信绑定手机号；"
+            + "需要小程序完成微信认证，未认证环境请使用手动填写。", operationId = "updatePhoneByWechat")
+    public Result<CurrentUserResponse> updatePhoneByWechat(
+            @RequestBody @Valid UpdatePhoneWechatRequest request, HttpServletRequest httpRequest) {
+        AuthenticatedUser current = currentUserProvider.requireCurrentUser();
+        return Result.success(identityAuthService.updatePhoneByWechat(
+                requireRawToken(httpRequest), current, request.code()));
     }
 
     private String requireRawToken(HttpServletRequest request) {

@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -32,5 +33,12 @@ public class AppFileController {
         Long uploaderId = currentUserProvider.requireCurrentUser().userId();
         return Result.success(fileStorageService.store(file.getBytes(),
                 file.getOriginalFilename(), file.getContentType(), uploaderId));
+    }
+
+    @GetMapping("/view-url")
+    @Operation(summary = "换取签名访问路径", description = "按文件 ID 换取带签名的短时访问路径（如头像展示）。",
+            operationId = "getSignedViewUrl")
+    public Result<String> viewUrl(@org.springframework.web.bind.annotation.RequestParam("fileId") Long fileId) {
+        return Result.success(fileStorageService.signViewPath(fileId));
     }
 }

@@ -11,7 +11,9 @@ public record AuthenticatedUser(
         String identityType,
         String authorizationStatus,
         List<RoleScope> roleScopes,
-        List<String> permissionCodes) {
+        List<String> permissionCodes,
+        String avatarFileId,
+        String phone) {
 
     public List<String> roleCodes() {
         return roleScopes.stream().map(RoleScope::roleCode).distinct().toList();

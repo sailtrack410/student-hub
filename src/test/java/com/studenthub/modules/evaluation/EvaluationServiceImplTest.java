@@ -59,7 +59,7 @@ class EvaluationServiceImplTest {
         evaluationService = new EvaluationServiceImpl(evaluationMapper, serviceRequestMapper,
                 workOrderMapper, requestLogRecorder, notificationService);
         requester = new AuthenticatedUser(1002L, 1L, 10L, "requester", "开发申请人",
-                "STUDENT", "BASIC", List.of(new RoleScope("REQUESTER", 10L, null)), List.of());
+                "STUDENT", "BASIC", List.of(new RoleScope("REQUESTER", 10L, null)), List.of(), null, null);
         completedRequest = new ServiceRequestEntity();
         completedRequest.setId(3001L);
         completedRequest.setRequesterId(1002L);
@@ -98,7 +98,7 @@ class EvaluationServiceImplTest {
     void nonOwnerGetsNotFound() {
         when(serviceRequestMapper.selectById(3001L)).thenReturn(completedRequest);
         AuthenticatedUser stranger = new AuthenticatedUser(9999L, 1L, 10L, "stranger", "陌生人",
-                "STUDENT", "BASIC", List.of(), List.of());
+                "STUDENT", "BASIC", List.of(), List.of(), null, null);
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> evaluationService.submit(stranger, 3001L, request()));
         assertEquals(ErrorCode.REQUEST_NOT_FOUND.getCode(), exception.getCode());

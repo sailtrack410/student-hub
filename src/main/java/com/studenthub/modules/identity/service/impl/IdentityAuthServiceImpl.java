@@ -43,8 +43,6 @@ public class IdentityAuthServiceImpl implements IdentityAuthService {
 
     private static final String DEFAULT_REQUESTER_ROLE_CODE = "REQUESTER";
 
-    /** 允许用户自行申报的身份标识；ADMIN/LOGISTICS 等由管理员分配，防止越权自赋 */
-    private static final Set<String> SELF_DECLARABLE_IDENTITY_TYPES = Set.of("STUDENT", "TEACHER");
 
     /** 开发测试固定账号的 openid，仅 devWechatLogin 使用 */
     private static final String DEV_FIXED_OPEN_ID = "dev-fixed-openid-0001";
@@ -59,6 +57,8 @@ public class IdentityAuthServiceImpl implements IdentityAuthService {
     private final CurrentUserProvider currentUserProvider;
     private final WechatIdentityProvider wechatIdentityProvider;
     private final AuthenticatedUserFactory authenticatedUserFactory;
+    private final com.studenthub.modules.file.mapper.FileStorageMapper fileStorageMapper;
+    private final org.springframework.beans.factory.ObjectProvider<com.studenthub.integration.wechat.WechatPhoneNumberClient> phoneClientProvider;
 
     @Override
     public LoginResponse login(String username, String password) {
@@ -128,43 +128,72 @@ public class IdentityAuthServiceImpl implements IdentityAuthService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public CurrentUserResponse updateProfile(String rawToken, AuthenticatedUser current, String displayName) {
-        String normalized = displayName == null ? "" : displayName.trim();
-        if (normalized.isEmpty() || normalized.length() > 32) {
+    public CurrentUserResponse updateProfile(String rawToken, AuthenticatedUser current, String displayName,
+                                             Long avatarFileId) {
+        String normalized = displayName == null ? null : displayName.trim();
+        if (normalized != null && (normalized.isEmpty() || normalized.length() > 32)) {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER, "昵称长度需为 1-32 个字符");
+        }
+        if (normalized == null && avatarFileId == null) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "昵称与头像至少提供一项");
         }
         UserEntity user = requireEnabledUser(current.userId());
         UserEntity update = new UserEntity();
         update.setId(user.getId());
-        update.setDisplayName(normalized);
+        if (normalized != null) {
+            update.setDisplayName(normalized);
+        }
+        if (avatarFileId != null) {
+            var file = fileStorageMapper.selectById(avatarFileId);
+            if (file == null || !file.getUploaderId().equals(user.getId())) {
+                throw new BusinessException(ErrorCode.INVALID_PARAMETER, "头像文件不存在或无权使用");
+            }
+            update.setAvatarUrl(String.valueOf(avatarFileId));
+        }
         update.setVersion(user.getVersion());
         userMapper.updateById(update);
 
         AuthenticatedUser refreshed = authenticatedUserFactory.build(reload(user.getId()));
         sessionStore.replace(rawToken, refreshed);
-        log.info("用户昵称已更新, userId={}", user.getId());
+        log.info("用户资料已更新, userId={}, 昵称={}, 头像={}", user.getId(),
+                normalized != null, avatarFileId != null);
         return CurrentUserResponse.from(refreshed);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public CurrentUserResponse updateIdentityType(String rawToken, AuthenticatedUser current, String identityType) {
-        String normalized = identityType == null ? "" : identityType.trim();
-        if (!SELF_DECLARABLE_IDENTITY_TYPES.contains(normalized)) {
-            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "身份仅支持设置为学生或教师");
+    public CurrentUserResponse updatePhone(String rawToken, AuthenticatedUser current, String phone) {
+        String normalized = phone == null ? "" : phone.trim();
+        if (!normalized.matches("1[3-9]\\d{9}")) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "手机号格式不正确");
         }
+        return persistPhone(rawToken, current, normalized);
+    }
+
+    @Override
+    public CurrentUserResponse updatePhoneByWechat(String rawToken, AuthenticatedUser current, String jsCode) {
+        var phoneClient = phoneClientProvider.getIfAvailable();
+        if (phoneClient == null) {
+            throw new BusinessException(ErrorCode.PHONE_EXCHANGE_FAILED);
+        }
+        String phone = phoneClient.fetchPhone(jsCode);
+        return persistPhone(rawToken, current, phone);
+    }
+
+    private CurrentUserResponse persistPhone(String rawToken, AuthenticatedUser current, String phone) {
         UserEntity user = requireEnabledUser(current.userId());
         UserEntity update = new UserEntity();
         update.setId(user.getId());
-        update.setIdentityType(normalized);
+        update.setPhone(phone);
         update.setVersion(user.getVersion());
         userMapper.updateById(update);
 
         AuthenticatedUser refreshed = authenticatedUserFactory.build(reload(user.getId()));
         sessionStore.replace(rawToken, refreshed);
-        log.info("用户身份已更新, userId={}, identityType={}", user.getId(), normalized);
+        log.info("用户手机号已更新, userId={}", user.getId());
         return CurrentUserResponse.from(refreshed);
     }
+
 
     private UserEntity requireEnabledUser(Long userId) {
         UserEntity user = userMapper.selectById(userId);

@@ -30,6 +30,8 @@ public class AuthenticatedUserFactory {
                 user.getIdentityType(),
                 user.getAuthorizationStatus(),
                 roleScopes,
-                permissionCodes);
+                permissionCodes,
+                user.getAvatarUrl(),
+                user.getPhone());
     }
 }

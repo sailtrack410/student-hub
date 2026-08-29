@@ -59,10 +59,28 @@
   color: var(--text-1);
 }
 
-.user-meta {
+.identity-row {
   margin-top: 8rpx;
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.identity-icon {
+  width: 36rpx;
+  height: 36rpx;
+}
+
+.identity-text {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.menu-value {
   font-size: 24rpx;
   color: var(--text-2);
+  margin-right: 8rpx;
 }
 
 .login-btn {

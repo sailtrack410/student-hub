@@ -8,9 +8,11 @@ module.exports = {
   getCurrentUser: () => request({ url: '/api/common/auth/me' }),
 
   // 个人中心
-  updateProfile: (displayName) => request({ url: '/api/app/profile', method: 'POST', data: { displayName } }),
-  updateIdentity: (identityType) =>
-    request({ url: '/api/app/profile/identity', method: 'POST', data: { identityType } }),
+  updateProfile: (data) => request({ url: '/api/app/profile', method: 'POST', data }),
+  updatePhoneManual: (phone) => request({ url: '/api/app/profile/phone', method: 'POST', data: { phone } }),
+  updatePhoneWechat: (code) =>
+    request({ url: '/api/app/profile/phone/wechat', method: 'POST', data: { code }, silent: true }),
+  fileViewUrl: (fileId) => request({ url: '/api/app/files/view-url', data: { fileId }, silent: true }),
 
   // 教务认证
   jwCaptcha: () => request({ url: '/api/app/jw/captcha', silent: true }),

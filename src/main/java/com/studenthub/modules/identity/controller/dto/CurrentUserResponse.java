@@ -29,7 +29,11 @@ public record CurrentUserResponse(
         @Schema(description = "角色及其数据范围")
         List<RoleScope> roleScopes,
         @Schema(description = "已生效的权限编码", example = "[service-request:create]")
-        List<String> permissions) {
+        List<String> permissions,
+        @Schema(description = "头像文件访问路径（未签名，展示时需换取签名地址）", nullable = true)
+        String avatarPath,
+        @Schema(description = "联系电话", nullable = true, example = "15700000000")
+        String phone) {
 
     public static CurrentUserResponse from(AuthenticatedUser user) {
         return new CurrentUserResponse(
@@ -42,6 +46,8 @@ public record CurrentUserResponse(
                 user.authorizationStatus(),
                 user.roleCodes(),
                 user.roleScopes(),
-                user.permissionCodes());
+                user.permissionCodes(),
+                user.avatarFileId() == null ? null : "/api/common/files/view/" + user.avatarFileId(),
+                user.phone());
     }
 }

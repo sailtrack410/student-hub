@@ -20,12 +20,18 @@ public interface IdentityAuthService {
     CurrentUserResponse currentUser();
 
     /**
-     * 更新当前用户昵称，并原地刷新服务端会话中的用户数据。
+     * 更新当前用户昵称/头像，并原地刷新服务端会话中的用户数据。
      */
-    CurrentUserResponse updateProfile(String rawToken, AuthenticatedUser current, String displayName);
+    CurrentUserResponse updateProfile(String rawToken, AuthenticatedUser current, String displayName,
+                                      Long avatarFileId);
 
     /**
-     * 设置本人身份标识（仅允许学生/教师自行申报），并原地刷新服务端会话。
+     * 手动填写联系电话并刷新会话。
      */
-    CurrentUserResponse updateIdentityType(String rawToken, AuthenticatedUser current, String identityType);
+    CurrentUserResponse updatePhone(String rawToken, AuthenticatedUser current, String phone);
+
+    /**
+     * 用微信 getPhoneNumber 的 code 换取绑定手机号并刷新会话。
+     */
+    CurrentUserResponse updatePhoneByWechat(String rawToken, AuthenticatedUser current, String jsCode);
 }

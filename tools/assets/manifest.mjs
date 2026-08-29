@@ -102,6 +102,17 @@ export const ASSETS = [
     'sticker-style icon of a rounded megaphone with sound waves and a tiny star, coral and indigo accents',
     { post: { resize: 112 } }),
 
+  // ── 身份标识图标 ─────────────────────────────────────────────
+  A('assets/identity/icon-student.png',
+    'cute round badge sticker of a happy student character wearing a graduation cap and holding a book, bold flat vector, indigo blue and teal palette',
+    { post: { resize: 144 } }),
+  A('assets/identity/icon-teacher.png',
+    'cute round badge sticker of a friendly teacher character with round glasses holding a pointer at a chalkboard, bold flat vector, teal and warm gold palette',
+    { post: { resize: 144 } }),
+  A('assets/identity/icon-logistics.png',
+    'cute round badge sticker of a friendly campus maintenance worker character with a safety helmet and wrench, bold flat vector, coral orange and indigo palette',
+    { post: { resize: 144 } }),
+
   // ── 空状态与庆祝 ─────────────────────────────────────────────
   A('assets/empty/empty-requests.png',
     `${MASCOT} sitting on a tiny rounded empty box, relaxed pose, one or two small floating document sheets nearby, calm atmosphere`,

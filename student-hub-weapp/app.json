@@ -12,7 +12,8 @@
     "pages/evaluation/index",
     "pages/notification/list",
     "pages/order/list",
-    "pages/jw/auth"
+    "pages/jw/auth",
+    "pages/profile/center"
   ],
   "window": {
     "navigationBarTitleText": "Student Hub",

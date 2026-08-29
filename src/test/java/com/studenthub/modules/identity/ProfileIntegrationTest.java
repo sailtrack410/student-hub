@@ -16,7 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 个人中心：昵称修改与身份申报，会话内用户数据需同步刷新。
+ * 个人中心：昵称修改与手机号（手动填写），会话内用户数据需同步刷新。
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -30,31 +30,10 @@ class ProfileIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Test
-    void updateIdentityAndProfileRefreshesSession() throws Exception {
+    void updateProfileAndPhoneRefreshSession() throws Exception {
         String token = login("requester");
 
-        // 身份申报为学生 → 教师，/me 立即生效
-        mockMvc.perform(post("/api/app/profile/identity")
-                        .header("Authorization", "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"identityType\":\"TEACHER\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.identityType").value("TEACHER"));
-
-        mockMvc.perform(get("/api/common/auth/me")
-                        .header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.identityType").value("TEACHER"));
-
-        // 仅允许学生/教师自申报
-        mockMvc.perform(post("/api/app/profile/identity")
-                        .header("Authorization", "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"identityType\":\"ADMIN\"}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("COMMON_400"));
-
-        // 昵称修改同样刷新会话
+        // 昵称修改刷新会话
         mockMvc.perform(post("/api/app/profile")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -67,11 +46,27 @@ class ProfileIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.displayName").value("小张同学"));
 
-        // 未登录不可调用
-        mockMvc.perform(post("/api/app/profile/identity")
+        // 手动填写手机号（合法值）
+        mockMvc.perform(post("/api/app/profile/phone")
+                        .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"identityType\":\"TEACHER\"}"))
-                .andExpect(status().isUnauthorized());
+                        .content("{\"phone\":\"15700001234\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.phone").value("15700001234"));
+
+        // 非法手机号被拒绝
+        mockMvc.perform(post("/api/app/profile/phone")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"phone\":\"12345\"}"))
+                .andExpect(status().isBadRequest());
+
+        // 昵称与手机号都为空/缺失时拒绝
+        mockMvc.perform(post("/api/app/profile")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
     }
 
     private String login(String username) throws Exception {

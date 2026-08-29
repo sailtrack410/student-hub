@@ -34,6 +34,7 @@ public enum ErrorCode {
     JW_SESSION_EXPIRED("JW_401_02", "教务认证已失效，请重新认证", HttpStatus.UNAUTHORIZED),
     JW_ACCOUNT_ALREADY_BOUND("JW_409_01", "该账号已被绑定到其他用户", HttpStatus.CONFLICT),
     JW_RATE_LIMITED("JW_429_01", "操作过于频繁，请稍后再试", HttpStatus.TOO_MANY_REQUESTS),
+    PHONE_EXCHANGE_FAILED("PHONE_400_01", "手机号获取失败，请手动填写", HttpStatus.BAD_REQUEST),
     INTERNAL_ERROR("COMMON_500", "系统繁忙，请稍后重试", HttpStatus.INTERNAL_SERVER_ERROR);
 
     private final String code;
