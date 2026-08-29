@@ -7,6 +7,7 @@ import com.studenthub.common.PageResult;
 import com.studenthub.exception.BusinessException;
 import com.studenthub.integration.ai.AiChatResponse;
 import com.studenthub.integration.ai.AiMessage;
+import com.studenthub.integration.ai.AiRuntimeConfig;
 import com.studenthub.modules.aichat.config.AiChatProperties;
 import com.studenthub.modules.aichat.controller.dto.AiConversationResponse;
 import com.studenthub.modules.aichat.controller.dto.AiMessageResponse;
@@ -78,11 +79,11 @@ public class AiConversationServiceImpl implements AiConversationService {
     public AiMessageResponse sendMessage(Long userId, Long conversationId, SendMessageRequest request) {
         AiConversationEntity conversation = requireOwnedConversation(userId, conversationId);
         String content = request.content().trim();
-        if (content.length() > aiChatProperties.getMaxMessageCharacters()) {
+        if (content.length() > currentMaxMessageCharacters()) {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER, "消息长度超过限制");
         }
         long sentLastHour = messageMapper.countUserMessagesSince(userId, LocalDateTime.now().minusHours(1));
-        if (sentLastHour >= aiChatProperties.getHourlyMessageLimit()) {
+        if (sentLastHour >= currentHourlyMessageLimit()) {
             log.info("AI 消息触发限流, userId={}", userId);
             throw new BusinessException(ErrorCode.AI_RATE_LIMITED);
         }
@@ -138,7 +139,7 @@ public class AiConversationServiceImpl implements AiConversationService {
         List<AiMessageEntity> history = messageMapper.selectList(new LambdaQueryWrapper<AiMessageEntity>()
                 .eq(AiMessageEntity::getConversationId, conversationId)
                 .orderByDesc(AiMessageEntity::getCreatedAt)
-                .last("LIMIT " + aiChatProperties.getHistoryWindow()));
+                .last("LIMIT " + currentHistoryWindow()));
         for (int i = history.size() - 1; i >= 0; i--) {
             AiMessageEntity entity = history.get(i);
             if (MESSAGE_STATUS_OK.equals(entity.getStatus())) {
@@ -147,6 +148,22 @@ public class AiConversationServiceImpl implements AiConversationService {
         }
         prompt.add(new AiMessage("user", currentContent));
         return prompt;
+    }
+
+    /** 会话/限流参数：优先读运行时快照（管理后台动态配置），无快照回退静态配置 */
+    private int currentHourlyMessageLimit() {
+        var snapshot = AiRuntimeConfig.current();
+        return snapshot != null ? snapshot.hourlyMessageLimit() : aiChatProperties.getHourlyMessageLimit();
+    }
+
+    private int currentHistoryWindow() {
+        var snapshot = AiRuntimeConfig.current();
+        return snapshot != null ? snapshot.historyWindow() : aiChatProperties.getHistoryWindow();
+    }
+
+    private int currentMaxMessageCharacters() {
+        var snapshot = AiRuntimeConfig.current();
+        return snapshot != null ? snapshot.maxMessageCharacters() : aiChatProperties.getMaxMessageCharacters();
     }
 
     private void touchConversation(AiConversationEntity conversation) {

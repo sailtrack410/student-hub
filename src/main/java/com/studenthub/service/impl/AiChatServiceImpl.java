@@ -1,18 +1,17 @@
-package com.studenthub.service.impl;
+package com.studenthub.integration.ai;
 
 import com.studenthub.common.ErrorCode;
 import com.studenthub.exception.BusinessException;
-import com.studenthub.integration.ai.AiChatRequest;
-import com.studenthub.integration.ai.AiChatResponse;
-import com.studenthub.integration.ai.AiMessage;
-import com.studenthub.integration.ai.AiProvider;
-import com.studenthub.integration.ai.AiProperties;
 import com.studenthub.service.AiChatService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+/**
+ * AI 对话服务：每次调用读取 {@link AiRuntimeConfig} 当前快照，
+ * 管理后台修改配置（模型/限流/开关）后即时生效。
+ */
 @Service
 @RequiredArgsConstructor
 public class AiChatServiceImpl implements AiChatService {
@@ -34,11 +33,14 @@ public class AiChatServiceImpl implements AiChatService {
         if (!"user".equals(last.role()) || last.content() == null || last.content().isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER, "用户消息不能为空");
         }
+        AiRuntimeSnapshot snapshot = AiRuntimeConfig.current();
+        int maxInput = snapshot != null ? snapshot.maxInputCharacters() : aiProperties.getMaxInputCharacters();
         for (AiMessage message : messages) {
-            if (message.content() != null && message.content().length() > aiProperties.getMaxInputCharacters()) {
+            if (message.content() != null && message.content().length() > maxInput) {
                 throw new BusinessException(ErrorCode.INVALID_PARAMETER, "用户消息长度超过限制");
             }
         }
-        return aiProvider.chat(new AiChatRequest(aiProperties.getModel(), messages));
+        String model = snapshot != null ? snapshot.model() : aiProperties.getModel();
+        return aiProvider.chat(new AiChatRequest(model, messages));
     }
 }
