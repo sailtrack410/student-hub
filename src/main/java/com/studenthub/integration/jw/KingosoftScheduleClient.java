@@ -38,10 +38,9 @@ public class KingosoftScheduleClient {
 
     /** 壳页里的当前学年/学期变量 */
     private static final Pattern DQ_XNXQ = Pattern.compile("var\\s+dqxn\\s*=\\s*\"(\\d+)\";\\s*var\\s+dqxq\\s*=\\s*\"(\\d+)\";");
-    /** 学年区段（如 2025-2026 / 2026-2027），用于推断校历上的最新学年 */
-    private static final Pattern ACADEMIC_YEAR = Pattern.compile("(\\d{4})\\s*[-–—]\\s*(\\d{4})");
     /** 数据页标题里的学期名 */
     private static final Pattern SEMESTER_TITLE = Pattern.compile("(\\d{4}-\\d{4}学年.+?)教学安排表");
+    private static final Pattern XNXQ_PARTS = Pattern.compile("^(\\d{4}),(\\d)$");
 
     private final JwProperties properties;
 
@@ -56,7 +55,7 @@ public class KingosoftScheduleClient {
         try {
             HttpClient client = buildClient();
 
-            // 1. 壳页：拿当前学年学期并解析要用的 xnxq
+            // 1. 壳页：校验会话并拿教务当前学期（dqxn/dqxq）
             String shell = getString(client, cookieHeader,
                     "/frame/desk/showLessonSchedule4User.action");
             Matcher matcher = DQ_XNXQ.matcher(shell);
@@ -67,27 +66,15 @@ public class KingosoftScheduleClient {
             int shellYear = Integer.parseInt(matcher.group(1));
             int shellTerm = Integer.parseInt(matcher.group(2));
 
-            // 教务的“当前学期”可能滞后校历（新学年已开始但系统仍停在上学期）：
-            // 从壳页出现的学年区段里挑最新学年；跳入新学年时按第一学期取数
-            int chosenYear = shellYear;
-            int chosenTerm = shellTerm;
-            int todayYear = java.time.LocalDate.now().getYear();
-            Matcher yearMatcher = ACADEMIC_YEAR.matcher(shell);
-            while (yearMatcher.find()) {
-                int start = Integer.parseInt(yearMatcher.group(1));
-                int end = Integer.parseInt(yearMatcher.group(2));
-                if (end == start + 1 && start <= todayYear && start > chosenYear) {
-                    chosenYear = start;
-                    chosenTerm = 1;
-                }
-            }
-            if (chosenYear != shellYear) {
-                log.info("教务当前学期滞后校历, 由 {},{} 推进到 {},{}", shellYear, shellTerm, chosenYear, chosenTerm);
-            }
+            // 2. 按校历推算目标学期：教务的默认学期常滞后（下拉选项还是 AJAX 异步加载，页面里拿不到）。
+            //    8 月~次年 1 月为学年第一学期，2~7 月为第二学期。
             String chosen = semesterCode == null || semesterCode.isBlank()
-                    ? chosenYear + "," + chosenTerm : semesterCode;
+                    ? calendarXnxq() : semesterCode;
+            if (!chosen.equals(shellYear + "," + shellTerm)) {
+                log.info("按校历选择课表学期: 教务默认={},{} 目标={}", shellYear, shellTerm, chosen);
+            }
 
-            // 2. 数据页：POST 周视图课表
+            // 3. 数据页：POST 周视图课表
             HttpResponse<byte[]> response = client.send(
                     HttpRequest.newBuilder(URI.create(properties.getJwBaseUrl()
                                     + "/frame/desk/showLessonScheduleDetail.action"))
@@ -98,15 +85,16 @@ public class KingosoftScheduleClient {
                             .build(),
                     HttpResponse.BodyHandlers.ofByteArray());
             if (response.statusCode() != 200) {
-                log.info("教务课表数据页返回非 200, status={}", response.statusCode());
-                throw new BusinessException(ErrorCode.JW_SESSION_EXPIRED);
+                // 会话已在壳页校验过；目标学期尚未在教务发布时数据页可能异常，按空课表处理
+                log.info("教务课表数据页返回非 200, status={}, xnxq={}", response.statusCode(), chosen);
+                return new JwSchedulePage(chosen, fallbackSemesterName(chosen), List.of());
             }
 
             byte[] body = response.body();
             String page = decodeBody(body);
             Document document = Jsoup.parse(page);
 
-            String semesterName = chosen;
+            String semesterName = fallbackSemesterName(chosen);
             Matcher titleMatcher = SEMESTER_TITLE.matcher(page);
             if (titleMatcher.find()) {
                 semesterName = titleMatcher.group(1);
@@ -218,6 +206,30 @@ public class KingosoftScheduleClient {
 
         return new JwCourseEntry(null, null, courseName, teacher,
                 null, location, day, section, section, weeks, parity, line);
+    }
+
+    /** 按校历推算当前学期：8~12 月与 1 月为学年第一学期，2~7 月为第二学期 */
+    private static String calendarXnxq() {
+        java.time.LocalDate today = java.time.LocalDate.now();
+        int month = today.getMonthValue();
+        int startYear = month >= 8 ? today.getYear() : today.getYear() - 1;
+        int term = (month >= 8 || month == 1) ? 1 : 2;
+        return startYear + "," + term;
+    }
+
+    /** 校历学期名兜底：2026,1 → 2026-2027学年第一学期（数据页标题缺失时使用） */
+    private static String fallbackSemesterName(String xnxq) {
+        if (xnxq == null) {
+            return "";
+        }
+        Matcher m = XNXQ_PARTS.matcher(xnxq.trim());
+        if (!m.find()) {
+            return xnxq;
+        }
+        int year = Integer.parseInt(m.group(1));
+        int term = Integer.parseInt(m.group(2));
+        String termName = term == 1 ? "第一学期" : term == 2 ? "第二学期" : "第三学期";
+        return year + "-" + (year + 1) + "学年" + termName;
     }
 
     private String getString(HttpClient client, String cookieHeader, String path) throws Exception {
