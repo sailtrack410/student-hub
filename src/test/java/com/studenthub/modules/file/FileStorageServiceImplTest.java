@@ -6,6 +6,7 @@ import com.studenthub.integration.storage.BinaryStorage;
 import com.studenthub.modules.file.config.FileProperties;
 import com.studenthub.modules.file.entity.FileStorageEntity;
 import com.studenthub.modules.file.mapper.FileStorageMapper;
+import com.studenthub.modules.file.service.ImageCompressionService;
 import com.studenthub.modules.file.service.impl.FileStorageServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,9 @@ class FileStorageServiceImplTest {
     @Mock
     private BinaryStorage binaryStorage;
 
+    @Mock
+    private ImageCompressionService imageCompressionService;
+
     private FileStorageServiceImpl fileStorageService;
 
     @BeforeEach
@@ -47,7 +51,11 @@ class FileStorageServiceImplTest {
         FileProperties properties = new FileProperties();
         properties.setStorageDir("target/test-files");
         properties.setSignSecret("unit-test-secret");
-        fileStorageService = new FileStorageServiceImpl(fileStorageMapper, properties, binaryStorage);
+        when(imageCompressionService.compress(any(), anyString(), anyString()))
+                .thenAnswer(invocation -> new ImageCompressionService.CompressedImage(
+                        invocation.getArgument(0), invocation.getArgument(1), invocation.getArgument(2)));
+        fileStorageService = new FileStorageServiceImpl(
+                fileStorageMapper, properties, binaryStorage, imageCompressionService);
         when(fileStorageMapper.insert(any(FileStorageEntity.class))).thenAnswer(invocation -> {
             FileStorageEntity entity = invocation.getArgument(0);
             entity.setId(123L);

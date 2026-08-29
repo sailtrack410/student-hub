@@ -35,6 +35,15 @@ public class AppFileController {
                 file.getOriginalFilename(), file.getContentType(), uploaderId));
     }
 
+    @PostMapping("/audio")
+    @Operation(summary = "上传音频", description = "上传语音音频（mp3/aac/m4a/wav/ogg），供 AI 语音转写使用。",
+            operationId = "uploadAudio")
+    public Result<FileStorageService.StoredFile> uploadAudio(@RequestParam("file") MultipartFile file) throws IOException {
+        Long uploaderId = currentUserProvider.requireCurrentUser().userId();
+        return Result.success(fileStorageService.storeAudio(file.getBytes(),
+                file.getOriginalFilename(), file.getContentType(), uploaderId));
+    }
+
     @GetMapping("/view-url")
     @Operation(summary = "换取签名访问路径", description = "按文件 ID 换取带签名的短时访问路径（如头像展示）。",
             operationId = "getSignedViewUrl")

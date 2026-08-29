@@ -6,6 +6,7 @@ import com.studenthub.integration.storage.BinaryStorage;
 import com.studenthub.modules.file.config.FileProperties;
 import com.studenthub.modules.file.entity.FileStorageEntity;
 import com.studenthub.modules.file.mapper.FileStorageMapper;
+import com.studenthub.modules.file.service.ImageCompressionService;
 import com.studenthub.modules.file.service.FileStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -33,15 +35,28 @@ public class FileStorageServiceImpl implements FileStorageService {
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp");
     private static final Set<String> ALLOWED_CONTENT_TYPES =
             Set.of("image/jpeg", "image/pjpeg", "image/png", "image/webp");
+    private static final Set<String> ALLOWED_AUDIO_EXTENSIONS =
+            Set.of("mp3", "aac", "m4a", "wav", "ogg", "opus", "caf");
+    private static final Set<String> ALLOWED_AUDIO_CONTENT_TYPES = Set.of(
+            "audio/mpeg", "audio/mp3", "audio/aac", "audio/mp4",
+            "audio/x-m4a", "audio/wav", "audio/x-wav", "audio/wave",
+            "audio/ogg", "audio/opus", "audio/x-caf");
+    /** 语音音频大小上限（MB），识别模型通常 25MB 以内 */
+    private static final int AUDIO_MAX_SIZE_MB = 20;
     private static final String SIGN_ALGORITHM = "HmacSHA256";
 
     private final FileStorageMapper fileStorageMapper;
     private final FileProperties fileProperties;
     private final BinaryStorage binaryStorage;
+    private final ImageCompressionService imageCompressionService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public StoredFile store(byte[] content, String originalName, String contentType, Long uploaderId) {
+        ImageCompressionService.CompressedImage compressed = imageCompressionService.compress(content, originalName, contentType);
+        content = compressed.bytes();
+        originalName = compressed.fileName();
+        contentType = compressed.contentType();
         if (content == null || content.length == 0) {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER, "上传文件不能为空");
         }
@@ -76,6 +91,43 @@ public class FileStorageServiceImpl implements FileStorageService {
         fileStorageMapper.insert(entity);
 
         log.info("文件上传成功, fileId={}, size={}, uploaderId={}", entity.getId(), content.length, uploaderId);
+        return new StoredFile(entity.getId(), signViewPath(entity.getId()), entity.getOriginalName());
+    }
+
+    @Override
+    public StoredFile storeAudio(byte[] content, String originalName, String contentType, Long uploaderId) {
+        if (content == null || content.length == 0) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "上传音频不能为空");
+        }
+        long maxBytes = AUDIO_MAX_SIZE_MB * 1024L * 1024L;
+        if (content.length > maxBytes) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER,
+                    "音频不能超过 " + AUDIO_MAX_SIZE_MB + "MB");
+        }
+        String extension = resolveExtension(originalName);
+        if (!ALLOWED_AUDIO_EXTENSIONS.contains(extension)) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "仅支持 mp3/aac/m4a/wav/ogg 音频");
+        }
+        String normalizedType = contentType == null || contentType.isBlank()
+                ? "audio/mpeg" : contentType.toLowerCase(Locale.ROOT);
+        if (!ALLOWED_AUDIO_CONTENT_TYPES.contains(normalizedType)
+                && !normalizedType.startsWith("audio/")) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "仅支持上传音频文件");
+        }
+
+        String storageKey = UUID.randomUUID().toString().replace("-", "") + "." + extension;
+        String objectKey = objectKeyOf(Instant.now(), storageKey);
+        binaryStorage.put(objectKey, content, normalizedType);
+
+        FileStorageEntity entity = new FileStorageEntity();
+        entity.setStorageKey(storageKey);
+        entity.setOriginalName(sanitizeName(originalName, extension));
+        entity.setContentType(normalizedType);
+        entity.setFileSize((long) content.length);
+        entity.setUploaderId(uploaderId);
+        fileStorageMapper.insert(entity);
+
+        log.info("音频上传成功, fileId={}, size={}, uploaderId={}", entity.getId(), content.length, uploaderId);
         return new StoredFile(entity.getId(), signViewPath(entity.getId()), entity.getOriginalName());
     }
 
@@ -122,6 +174,23 @@ public class FileStorageServiceImpl implements FileStorageService {
         FileStorageEntity entity = requireBySignature(fileId, expiresAtEpochSeconds, signature);
         InputStreamResource resource = new InputStreamResource(binaryStorage.get(objectKeyOf(entity)));
         return new SignedContent(resource, entity.getContentType(), entity.getFileSize());
+    }
+
+    @Override
+    public StoredContent readContent(Long fileId) {
+        FileStorageEntity entity = fileStorageMapper.selectById(fileId);
+        if (entity == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "文件不存在");
+        }
+        byte[] bytes;
+        try (InputStream in = binaryStorage.get(objectKeyOf(entity))) {
+            bytes = in.readAllBytes();
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new IllegalStateException("文件读取失败: " + fileId, exception);
+        }
+        return new StoredContent(bytes, entity.getContentType(), entity.getOriginalName());
     }
 
     @Override
