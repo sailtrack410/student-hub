@@ -156,3 +156,21 @@
 .ph {
   color: var(--text-3);
 }
+
+/* 强制统一小按钮宽度：覆盖微信 button 属性选择器默认宽度 */
+.center .avatar-btn,
+.center .mini-save {
+  width: 140rpx !important;
+  min-width: 140rpx !important;
+  max-width: 140rpx !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.center .row {
+  min-height: 100rpx;
+}
+

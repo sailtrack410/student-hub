@@ -9,7 +9,7 @@
         <image wx:if="{{avatarUrl}}" class="avatar-img" src="{{avatarUrl}}" mode="aspectFill" />
         <view wx:else class="avatar-placeholder">默认</view>
       </view>
-      <button class="avatar-btn" open-type="chooseAvatar" chooseAvatar="{{true}}" bindchooseavatar="onChooseAvatar">
+      <button class="avatar-btn" size="mini" open-type="chooseAvatar" chooseAvatar="{{true}}" bindchooseavatar="onChooseAvatar">
         更换
       </button>
       <button wx:if="{{avatarUrl}}" class="avatar-btn avatar-reset-btn mini-ghost" size="mini" bindtap="onResetAvatar">
