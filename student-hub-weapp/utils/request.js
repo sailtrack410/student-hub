@@ -34,14 +34,14 @@ function ensureLogin() {
  * 返回 Promise，resolve 为 Result 的 data 字段。
  */
 function request(options) {
-  const { url, method = 'GET', data, header = {}, silent = false } = options;
+  const { url, method = 'GET', data, header = {}, silent = false, timeout = 15000 } = options;
   return new Promise((resolve, reject) => {
     const token = getToken();
     wx.request({
       url: `${config.baseUrl}${url}`,
       method,
       data,
-      timeout: 15000,
+      timeout,
       header: Object.assign(
         { 'Content-Type': 'application/json' },
         token ? { Authorization: `Bearer ${token}` } : {},

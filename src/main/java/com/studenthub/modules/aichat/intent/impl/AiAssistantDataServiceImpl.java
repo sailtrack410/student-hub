@@ -31,6 +31,8 @@ public class AiAssistantDataServiceImpl implements AiAssistantDataService {
 
     private static final DateTimeFormatter DT = DateTimeFormatter.ofPattern("MM-dd HH:mm");
     private static final int REQUEST_LIMIT = 8;
+    /** 注入提示词的课程描述条数上限，避免一周课程过大导致生成超时 */
+    private static final int SCHEDULE_CONTEXT_LIMIT = 40;
 
     private static final Map<String, String> REQUEST_STATUS_TEXT = Map.of(
             "SUBMITTED", "待受理",
@@ -96,14 +98,14 @@ public class AiAssistantDataServiceImpl implements AiAssistantDataService {
 
         StringBuilder context = new StringBuilder();
         context.append("用户课表（").append(scopeText).append("）。\n");
+        int shown = 0;
         for (ScheduleCourseEntity course : matched) {
-            context.append("- ").append(course.getCourseName())
-                    .append("｜老师:").append(nullTo(course.getTeacher()))
-                    .append("｜地点:").append(nullTo(course.getLocation()))
-                    .append("｜第").append(course.getStartSection()).append("-").append(course.getEndSection()).append("节")
-                    .append("｜周次:").append(nullTo(course.getWeeks()))
-                    .append(parityText(course.getWeekParity()))
-                    .append("\n");
+            if (shown >= SCHEDULE_CONTEXT_LIMIT) {
+                context.append("……（其余课程略，共 ").append(matched.size()).append(" 条）\n");
+                break;
+            }
+            context.append(describeCourse(course));
+            shown++;
         }
         return AiAssistantResolved.of(context.toString(),
                 List.of(new AiActionResponse("SCHEDULE", "去查看课表", "SCHEDULE-VIEW", null,
@@ -191,6 +193,16 @@ public class AiAssistantDataServiceImpl implements AiAssistantDataService {
 
     private static String statusText(String status) {
         return REQUEST_STATUS_TEXT.getOrDefault(status, status == null ? "-" : status);
+    }
+
+    private static String describeCourse(ScheduleCourseEntity course) {
+        return "- " + course.getCourseName()
+                + "｜老师:" + nullTo(course.getTeacher())
+                + "｜地点:" + nullTo(course.getLocation())
+                + "｜第" + course.getStartSection() + "-" + course.getEndSection() + "节"
+                + "｜周次:" + nullTo(course.getWeeks())
+                + parityText(course.getWeekParity())
+                + "\n";
     }
 
     private static String parityText(Integer parity) {

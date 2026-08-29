@@ -59,7 +59,13 @@ module.exports = {
   createConversation: (title) => request({ url: '/api/app/ai/conversations', method: 'POST', data: { title } }),
   listAiMessages: (conversationId) => request({ url: `/api/app/ai/conversations/${conversationId}/messages` }),
   sendAiMessage: (conversationId, content) =>
-    request({ url: `/api/app/ai/conversations/${conversationId}/messages`, method: 'POST', data: { content }, silent: true }),
+    request({
+      url: `/api/app/ai/conversations/${conversationId}/messages`,
+      method: 'POST',
+      data: { content },
+      silent: true,
+      timeout: 60000
+    }),
 
   // 我的工单（服务人员角色）
   pageAssignedOrders: (query) => request({ url: '/api/app/work-orders/assigned', data: query }),
