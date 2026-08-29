@@ -96,5 +96,23 @@ Page({
       return;
     }
     wx.navigateTo({ url: '/pages/schedule/index' });
+  },
+
+  /** 功能项点击分发：课表等特殊功能跳专页，其余跳办事指南 */
+  onItemTap(event) {
+    const itemCode = event.currentTarget.dataset.code;
+    const itemId = event.currentTarget.dataset.id;
+    if (itemCode === 'SCHEDULE-VIEW') {
+      if (!app.ensureLogin()) {
+        return;
+      }
+      wx.navigateTo({ url: '/pages/schedule/index' });
+      return;
+    }
+    if (!itemId || itemId === 'undefined') {
+      wx.showToast({ title: '服务信息加载异常，请重新进入', icon: 'none' });
+      return;
+    }
+    wx.navigateTo({ url: `/pages/service/detail?id=${itemId}` });
   }
 });
