@@ -1,0 +1,12 @@
+<view class="inbox-page">
+  <view class="inbox-tabs"><view class="inbox-tab {{tab === 'notice' ? 'inbox-tab-active' : ''}}" data-tab="notice" bindtap="switchTab">通知</view><view class="inbox-tab {{tab === 'message' ? 'inbox-tab-active' : ''}}" data-tab="message" bindtap="switchTab">消息</view></view>
+  <view wx:if="{{tab === 'notice'}}">
+    <view class="inbox-toolbar"><text>点赞和评论</text><text bindtap="markAll">全部已读</text></view>
+    <view wx:if="{{notices.length}}" class="inbox-list"><view wx:for="{{notices}}" wx:key="notificationId" class="notice-item {{item.unread ? 'notice-unread' : ''}}" bindtap="openNotice" data-index="{{index}}"><view class="notice-head"><text class="notice-title">{{item.title}}</text><text class="notice-time">{{item.timeText}}</text></view><view class="notice-content">{{item.content}}</view></view></view>
+    <empty-state wx:if="{{loaded && !notices.length}}" image="https://student.sailtrack.cn/student-hub/static/assets/empty/empty-notifications.jpg" title="暂时没有社区通知" subtitle="有人点赞或评论你的帖子时会显示在这里" />
+  </view>
+  <view wx:else>
+    <view wx:if="{{contacts.length}}" class="inbox-list"><view wx:for="{{contacts}}" wx:key="peerId" class="contact-item" bindtap="openChat" data-index="{{index}}"><image class="contact-avatar" src="{{item.avatarSrc}}" mode="aspectFill" /><view class="contact-body"><view class="contact-head"><text class="contact-name">{{item.peerName}}</text><text class="notice-time">{{item.timeText}}</text></view><view class="contact-preview">{{item.lastContent}}</view></view></view></view>
+    <empty-state wx:if="{{loaded && !contacts.length}}" image="https://student.sailtrack.cn/student-hub/static/assets/empty/empty-notifications.jpg" title="暂时没有私信" subtitle="去社区作者主页发起聊天吧" />
+  </view>
+</view>

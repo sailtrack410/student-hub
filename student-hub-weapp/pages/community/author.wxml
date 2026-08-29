@@ -1,0 +1,17 @@
+<view class="author-page" wx:if="{{profile}}">
+  <view class="author-hero">
+    <image class="hero-avatar" src="{{profile.avatarSrc}}" mode="aspectFill" />
+    <view class="author-name">{{profile.displayName}}</view>
+    <view class="author-meta-row"><view class="author-info"><text>{{profile.college}}</text><text> · {{profile.major}}</text><text> · {{profile.className}}</text><text> · {{profile.gender}}</text></view><view class="author-actions" wx:if="{{profile.userId != currentUserId}}" bindtap="openChat"><image src="/assets/icons/lucide/message-circle.svg" mode="aspectFit" /><text>私信</text></view></view>
+  </view>
+  <view class="author-section-title">发布过的内容 <text>{{posts.length}}</text></view>
+  <view class="post-list" wx:if="{{posts.length}}">
+    <view wx:for="{{posts}}" wx:key="postId" class="post" bindtap="goPost" data-id="{{item.postId}}">
+      <view class="post-title">{{item.title}}</view><view class="post-content">{{item.content}}</view>
+      <view wx:if="{{item.previewImages.length}}" class="image-grid"><image wx:for="{{item.previewImages}}" wx:key="*this" wx:for-item="url" src="{{url}}" class="post-image" mode="aspectFill" /></view>
+      <view class="post-topics"><text>{{item.sectionName}}</text><text wx:for="{{item.topics}}" wx:key="*this"> · #{{item}}</text></view>
+      <view class="post-footer"><text>{{item.createdAtText}}</text><view class="post-actions"><text>♡ {{item.likeCount}}</text><text>评论 {{item.commentCount}}</text></view></view>
+    </view>
+  </view>
+  <empty-state wx:if="{{!posts.length}}" image="https://student.sailtrack.cn/student-hub/static/assets/empty/empty-requests.jpg" title="还没有发布内容" subtitle="等他分享校园新鲜事吧" />
+</view>

@@ -51,9 +51,9 @@ module.exports = {
 
   // 通知
   pageNotifications: (query) => request({ url: '/api/app/notifications', data: query }),
-  unreadCount: () => request({ url: '/api/app/notifications/unread-count', silent: true }),
+  unreadCount: (communityOnly) => request({ url: '/api/app/notifications/unread-count', data: communityOnly ? { communityOnly: true } : {}, silent: true }),
   markNotificationRead: (id) => request({ url: `/api/app/notifications/${id}/read`, method: 'POST', silent: true }),
-  markAllNotificationsRead: () => request({ url: '/api/app/notifications/read-all', method: 'POST' }),
+  markAllNotificationsRead: (communityOnly) => request({ url: `/api/app/notifications/read-all${communityOnly ? '?communityOnly=true' : ''}`, method: 'POST' }),
 
   // AI 助手
   createConversation: (title) => request({ url: '/api/app/ai/conversations', method: 'POST', data: { title } }),
@@ -80,12 +80,18 @@ module.exports = {
   pageCommunityPosts: (query) => request({ url: '/api/app/community/posts', data: query, silent: true }),
   getCommunityPost: (postId) => request({ url: `/api/app/community/posts/${postId}`, silent: true }),
   publishCommunityPost: (data) => request({ url: '/api/app/community/posts', method: 'POST', data }),
-  commentCommunityPost: (postId, content) =>
-    request({ url: `/api/app/community/posts/${postId}/comments`, method: 'POST', data: { content } }),
+  commentCommunityPost: (postId, content, parentCommentId, imageFileIds) =>
+    request({ url: `/api/app/community/posts/${postId}/comments`, method: 'POST', data: { content, parentCommentId, imageFileIds } }),
   likeCommunityPost: (postId) => request({ url: `/api/app/community/posts/${postId}/like`, method: 'POST', silent: true }),
   likeCommunityComment: (commentId) => request({ url: `/api/app/community/comments/${commentId}/like`, method: 'POST', silent: true }),
   pinCommunityComment: (commentId) => request({ url: `/api/app/community/comments/${commentId}/pin`, method: 'POST' }),
+  deleteCommunityComment: (commentId) => request({ url: `/api/app/community/comments/${commentId}`, method: 'DELETE' }),
   getCommunityAuthor: (authorId) => request({ url: `/api/app/community/authors/${authorId}`, silent: true }),
+  listDirectMessages: (withUserId) => request({ url: '/api/app/community/messages', data: { withUserId }, silent: true }),
+  sendDirectMessage: (receiverId, content, imageFileIds) => request({ url: '/api/app/community/messages', method: 'POST', data: { receiverId, content, imageFileIds } }),
+  listMessageContacts: () => request({ url: '/api/app/community/messages/contacts', silent: true }),
+  communityUnreadCount: () => request({ url: '/api/app/community/unread-count', silent: true }),
+  markDirectMessagesRead: (withUserId) => request({ url: `/api/app/community/messages/read?withUserId=${encodeURIComponent(withUserId)}`, method: 'POST', silent: true }),
 
   // 我的工单（服务人员角色）
   pageAssignedOrders: (query) => request({ url: '/api/app/work-orders/assigned', data: query }),

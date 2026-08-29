@@ -106,6 +106,11 @@ Page({
     wx.navigateTo({ url: '/pages/schedule/index' });
   },
 
+  goCommunity() {
+    if (!app.ensureLogin()) return;
+    wx.navigateTo({ url: '/pages/community/index' });
+  },
+
   goServiceDetail(event) {
     const item = this.data.hotItems[Number(event.currentTarget.dataset.index)];
     if (item) {

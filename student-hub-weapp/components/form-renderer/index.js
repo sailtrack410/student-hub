@@ -6,6 +6,7 @@
  */
 const { uploadImage } = require('../../utils/request');
 const config = require('../../utils/config');
+const { resourceUrl } = require('../../utils/resource');
 
 Component({
   properties: {
@@ -114,7 +115,7 @@ Component({
                 break;
               }
               this.setData({
-                [`fields[${index}].urls`]: current.urls.concat(config.baseUrl + stored.viewPath),
+                [`fields[${index}].urls`]: current.urls.concat(resourceUrl(stored.viewPath)),
                 [`fields[${index}].value`]: current.value.concat(String(stored.fileId))
               });
               this.value[field.key] = this.data.fields[index].value.slice();

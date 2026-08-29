@@ -23,6 +23,7 @@ import java.util.Locale;
 public class ImageCompressionServiceImpl implements ImageCompressionService {
 
     private static final int MAX_EDGE = 1600;
+    private static final int THUMBNAIL_MAX_EDGE = 480;
     private static final float JPEG_QUALITY = 0.82f;
 
     @Override
@@ -53,6 +54,31 @@ public class ImageCompressionServiceImpl implements ImageCompressionService {
             return new CompressedImage(encoded, fileName, jpeg ? "image/jpeg" : "image/png");
         } catch (Exception exception) {
             log.warn("图片压缩失败，保留原文件, name={}", originalName);
+            return new CompressedImage(content, originalName, contentType);
+        }
+    }
+
+    @Override
+    public CompressedImage thumbnail(byte[] content, String originalName, String contentType) {
+        if (content == null || content.length == 0 || contentType == null
+                || !contentType.toLowerCase(Locale.ROOT).startsWith("image/")
+                || "image/webp".equalsIgnoreCase(contentType)) {
+            return new CompressedImage(content, originalName, contentType);
+        }
+        try {
+            BufferedImage source = ImageIO.read(new ByteArrayInputStream(content));
+            if (source == null) {
+                return new CompressedImage(content, originalName, contentType);
+            }
+            boolean jpeg = "image/jpeg".equalsIgnoreCase(contentType)
+                    || "image/jpg".equalsIgnoreCase(contentType)
+                    || (originalName != null && originalName.toLowerCase(Locale.ROOT).matches(".*\\.(jpg|jpeg)$"));
+            BufferedImage output = resize(source, THUMBNAIL_MAX_EDGE, !jpeg);
+            byte[] encoded = jpeg ? writeJpeg(output) : writePng(output);
+            String fileName = replaceExtension(originalName, jpeg ? "jpg" : "png");
+            return new CompressedImage(encoded, fileName, jpeg ? "image/jpeg" : "image/png");
+        } catch (Exception exception) {
+            log.warn("缩略图生成失败，使用原文件, name={}", originalName);
             return new CompressedImage(content, originalName, contentType);
         }
     }

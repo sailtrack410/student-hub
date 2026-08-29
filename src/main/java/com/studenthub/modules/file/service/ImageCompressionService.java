@@ -7,6 +7,9 @@ public interface ImageCompressionService {
 
     CompressedImage compress(byte[] content, String originalName, String contentType);
 
+    /** 生成列表展示用缩略图，最大边 480px。 */
+    CompressedImage thumbnail(byte[] content, String originalName, String contentType);
+
     record CompressedImage(byte[] bytes, String fileName, String contentType) {
     }
 }

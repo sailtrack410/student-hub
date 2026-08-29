@@ -5,14 +5,14 @@
       <view class="hero-title">Hi，{{userName}}</view>
       <view class="hero-sub">今天有什么可以帮到你？</view>
     </view>
-    <image class="hero-banner" src="/assets/banner/home-banner.jpg" mode="aspectFill" />
+    <image class="hero-banner" src="https://student.sailtrack.cn/student-hub/static/assets/banner/home-banner.jpg" mode="aspectFill" />
   </view>
 
   <!-- 快捷入口：课表 + 六个服务 + 更多（数据与大厅同源） -->
   <view class="quick card">
     <view class="quick-item" bindtap="goSchedule">
       <view class="quick-icon quick-icon-schedule">
-        <image src="/assets/identity/icon-schedule.png" mode="aspectFit" />
+        <image src="/assets/icons/identity/icon-schedule.png" mode="aspectFit" />
       </view>
       <text>我的课表</text>
     </view>
@@ -23,7 +23,7 @@
       bindtap="goQuickService"
       data-index="{{index}}"
     >
-      <view class="quick-icon"><image src="/assets/category/{{item.icon || 'cat-affair'}}.png" mode="aspectFit" /></view>
+      <view class="quick-icon"><image src="/assets/icons/category/{{item.icon || 'cat-affair'}}.png" mode="aspectFit" /></view>
       <text>{{item.itemName}}</text>
     </view>
     <view class="quick-item" bindtap="goMoreServices">
@@ -38,6 +38,17 @@
     </view>
   </view>
 
+  <!-- 校园社区 -->
+  <view class="community-entry" style="background-image: url('https://student.sailtrack.cn/student-hub/static/assets/community/community-card-bg.jpg')" bindtap="goCommunity">
+    <view class="community-copy">
+      <view class="community-label">CAMPUS CIRCLE</view>
+      <view class="community-title">去校园社区看看</view>
+      <view class="community-sub">失物招领 · 二手交易 · 学习交流</view>
+    </view>
+    <image class="community-logo" src="/assets/icons/community/community-logo.png" mode="aspectFit" />
+    <view class="community-arrow">›</view>
+  </view>
+
   <!-- 我的申请进展 -->
   <view class="section">
     <view class="section-head">
@@ -45,7 +56,7 @@
       <text class="section-more" bindtap="goRequestList">全部 ›</text>
     </view>
     <view wx:if="{{latestRequest}}" class="card progress-card" bindtap="goRequestDetail">
-      <image class="progress-icon" src="/assets/category/{{latestRequest.itemIcon || 'cat-affair'}}.png" mode="aspectFit" />
+      <image class="progress-icon" src="/assets/icons/category/{{latestRequest.itemIcon || 'cat-affair'}}.png" mode="aspectFit" />
       <view class="progress-body">
         <view class="progress-title">{{latestRequest.title}}</view>
         <view class="progress-time">{{latestRequest.submittedAtText}}</view>
@@ -53,10 +64,10 @@
       <status-tag text="{{latestRequest.statusText}}" theme="{{latestRequest.statusTheme}}" />
     </view>
     <view wx:elif="{{loggedIn}}" class="card">
-      <empty-state image="/assets/empty/empty-requests.jpg" title="还没有申请记录" subtitle="从上方快捷服务开始体验吧" />
+      <empty-state image="https://student.sailtrack.cn/student-hub/static/assets/empty/empty-requests.jpg" title="还没有申请记录" subtitle="从上方快捷服务开始体验吧" />
     </view>
     <view wx:else class="card login-guide" bindtap="goLogin">
-      <image class="guide-mascot" src="/assets/mascot/mascot-main.jpg" mode="aspectFit" />
+      <image class="guide-mascot" src="https://student.sailtrack.cn/student-hub/static/assets/mascot/mascot-main.jpg" mode="aspectFit" />
       <view class="guide-text">
         <view class="guide-title">登录后查看申请进度</view>
         <view class="guide-sub">报修、请假、证明办理一站搞定</view>
@@ -79,7 +90,7 @@
         bindtap="goServiceDetail"
         data-index="{{index}}"
       >
-        <image class="service-chip-icon" src="/assets/category/{{item.icon || 'cat-affair'}}.png" mode="aspectFit" />
+        <image class="service-chip-icon" src="/assets/icons/category/{{item.icon || 'cat-affair'}}.png" mode="aspectFit" />
         <view class="service-chip-body">
           <text class="service-chip-name">{{item.itemName}}</text>
           <text wx:if="{{item.slaHours}}" class="service-chip-sla">{{item.slaHours}}h 内办结</text>

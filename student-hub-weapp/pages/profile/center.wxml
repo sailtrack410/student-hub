@@ -5,7 +5,7 @@
 
     <view class="row">
       <text class="row-label">头像</text>
-      <image class="avatar-img" src="{{avatarUrl || '/assets/mascot/mascot-avatar.jpg'}}" mode="aspectFill" />
+      <image class="avatar-img" src="{{avatarUrl || 'https://student.sailtrack.cn/student-hub/static/assets/mascot/mascot-avatar.jpg'}}" mode="aspectFill" />
       <view class="row-actions">
         <button class="avatar-btn" size="mini" open-type="chooseAvatar" chooseAvatar="{{true}}" bindchooseavatar="onChooseAvatar">
           更换

@@ -1,5 +1,6 @@
 const api = require('../../utils/api');
 const config = require('../../utils/config');
+const { resourceUrl } = require('../../utils/resource');
 const { getToken, saveSession } = require('../../utils/request');
 const app = getApp();
 
@@ -25,9 +26,11 @@ Page({
     avatarUrl: '',
     isWorker: false,
     jwStatusText: '未认证',
+    profileInfo: '',
     processingCount: 0,
     completedCount: 0,
-    unreadCount: 0
+    unreadCount: 0,
+    communityUnreadCount: 0
   },
 
   onShow() {
@@ -36,15 +39,28 @@ Page({
       this.applyUser(user);
       this.loadStats();
       this.loadJwStatus();
+      this.loadCommunityUnread();
     } else {
       this.setData({
         user: null,
         processingCount: 0,
         completedCount: 0,
         unreadCount: app.globalData.unreadCount || 0,
-        jwStatusText: '未认证'
+        communityUnreadCount: 0,
+        jwStatusText: '未认证',
+        profileInfo: ''
       });
     }
+  },
+
+  loadCommunityUnread() {
+    api.communityUnreadCount()
+      .then((count) => {
+        const value = Number(count) || 0;
+        this.setData({ communityUnreadCount: value });
+        app.globalData.communityUnreadCount = value;
+      })
+      .catch(() => {});
   },
 
   applyUser(user) {
@@ -71,7 +87,7 @@ Page({
       return;
     }
     api.fileViewUrl(fileId)
-      .then((path) => this.setData({ avatarUrl: config.baseUrl + path }))
+      .then((path) => this.setData({ avatarUrl: resourceUrl(path) }))
       .catch(() => this.setData({ avatarUrl: '' }));
   },
 
@@ -79,12 +95,20 @@ Page({
     api.jwStatus()
       .then((status) => {
         const text = JW_STATUS_TEXT[status.status] || status.status;
-        this.setData({ jwStatusText: text });
+      this.setData({ jwStatusText: text });
         if (status.status === 'AUTHENTICATED' || status.status === 'EXPIRED') {
           const identity = IDENTITY[status.identityKind] || null;
           if (identity) {
             this.setData({ identityText: identity.text, identityIcon: identity.icon });
           }
+          api.jwProfile().then((profile) => {
+            const parts = profile.identityKind === 'STUDENT'
+              ? [profile.college, profile.major, profile.className]
+              : [profile.college];
+            this.setData({ profileInfo: parts.filter(Boolean).join(' · ') });
+          }).catch(() => {});
+        } else {
+          this.setData({ profileInfo: '' });
         }
         app.globalData.unreadCount = app.globalData.unreadCount || 0;
       })
@@ -126,6 +150,11 @@ Page({
   goNotifications() {
     if (!app.ensureLogin()) return;
     wx.navigateTo({ url: '/pages/notification/list' });
+  },
+
+  goCommunityInbox() {
+    if (!app.ensureLogin()) return;
+    wx.navigateTo({ url: '/pages/community/inbox' });
   },
 
   goMyOrders() {

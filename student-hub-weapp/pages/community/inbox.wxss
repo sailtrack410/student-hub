@@ -1,0 +1,17 @@
+.inbox-page { min-height: 100vh; padding: 0 30rpx 50rpx; background: #fff; }
+.inbox-tabs { display: flex; height: 86rpx; border-bottom: 1rpx solid #E8EDF3; }
+.inbox-tab { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; color: #64748B; font-size: 27rpx; }
+.inbox-tab-active { color: #1D4ED8; font-weight: 700; }
+.inbox-tab-active::after { content: ''; position: absolute; left: 54rpx; right: 54rpx; bottom: -1rpx; height: 5rpx; background: #2563EB; border-radius: 5rpx 5rpx 0 0; }
+.inbox-toolbar { display: flex; justify-content: space-between; padding: 24rpx 0 12rpx; color: #64748B; font-size: 23rpx; }
+.inbox-toolbar text:last-child { color: #2563EB; }
+.inbox-list { display: flex; flex-direction: column; }
+.notice-item, .contact-item { padding: 26rpx 0; border-bottom: 1rpx solid #E8EDF3; }
+.notice-unread { border-left: 6rpx solid #2563EB; padding-left: 18rpx; }
+.notice-head, .contact-head { display: flex; justify-content: space-between; align-items: center; gap: 16rpx; }
+.notice-title, .contact-name { color: #1E293B; font-size: 27rpx; font-weight: 650; }
+.notice-time { flex-shrink: 0; color: #94A3B8; font-size: 21rpx; }
+.notice-content, .contact-preview { margin-top: 10rpx; color: #64748B; font-size: 24rpx; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.contact-item { display: flex; align-items: center; gap: 18rpx; }
+.contact-avatar { width: 78rpx; height: 78rpx; border-radius: 50%; background: #EEF4FF; }
+.contact-body { flex: 1; min-width: 0; }

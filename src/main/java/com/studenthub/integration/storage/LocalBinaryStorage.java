@@ -43,4 +43,9 @@ public class LocalBinaryStorage implements BinaryStorage {
             throw new IllegalStateException("本地文件读取失败: " + objectKey, exception);
         }
     }
+
+    @Override
+    public boolean exists(String objectKey) {
+        return Files.exists(Path.of(properties.getStorageDir(), objectKey));
+    }
 }

@@ -1,5 +1,6 @@
 const api = require('../../utils/api');
 const config = require('../../utils/config');
+const { resourceUrl } = require('../../utils/resource');
 const format = require('../../utils/format');
 const { uploadImage } = require('../../utils/request');
 const app = getApp();
@@ -67,7 +68,7 @@ Page({
       return;
     }
     api.fileViewUrl(fileId)
-      .then((path) => this.setData({ avatarUrl: config.baseUrl + path }))
+      .then((path) => this.setData({ avatarUrl: resourceUrl(path) }))
       .catch(() => this.setData({ avatarUrl: '' }));
   },
 

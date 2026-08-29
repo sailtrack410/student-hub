@@ -102,6 +102,27 @@
   background: var(--brand);
 }
 
+/* 校园社区入口 */
+.community-entry {
+  position: relative;
+  overflow: hidden;
+  margin-top: 28rpx;
+  min-height: 142rpx;
+  padding: 28rpx 30rpx;
+  border-radius: var(--radius-lg);
+  background-color: #0F766E;
+  background-size: cover;
+  background-position: center;
+  box-shadow: 0 10rpx 28rpx rgba(20, 184, 166, .2);
+  color: #fff;
+  display: flex;
+  align-items: center;
+}
+.community-entry::before { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(15,118,110,.86), rgba(15,118,110,.2)); }
+.community-entry::after { content: ''; position: absolute; width: 210rpx; height: 210rpx; right: -70rpx; top: -80rpx; border-radius: 50%; background: rgba(255,255,255,.1); }
+.community-copy { flex: 1; position: relative; z-index: 1; }.community-label { font-size: 17rpx; letter-spacing: 3rpx; opacity: .72; }.community-title { margin-top: 5rpx; font-size: 31rpx; font-weight: 750; }.community-sub { margin-top: 7rpx; font-size: 21rpx; opacity: .84; }
+.community-logo { position: relative; z-index: 1; width: 105rpx; height: 105rpx; }.community-arrow { position: relative; z-index: 1; margin-left: 8rpx; font-size: 38rpx; opacity: .78; }
+
 /* 区块 */
 .section {
   margin-top: 36rpx;

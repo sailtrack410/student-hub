@@ -11,9 +11,9 @@ public interface NotificationService {
 
     PageResult<NotificationResponse> pageMy(Long recipientId, MyNotificationQuery query);
 
-    long unreadCount(Long recipientId);
+    long unreadCount(Long recipientId, boolean communityOnly);
 
     void markRead(Long recipientId, Long notificationId);
 
-    void markAllRead(Long recipientId);
+    void markAllRead(Long recipientId, boolean communityOnly);
 }

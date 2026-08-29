@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -34,9 +35,9 @@ public class AppNotificationController {
 
     @GetMapping("/unread-count")
     @Operation(summary = "查询未读通知数量", description = "返回当前用户未读通知条数。", operationId = "countUnreadNotifications")
-    public Result<Long> unreadCount() {
+    public Result<Long> unreadCount(@RequestParam(defaultValue = "false") boolean communityOnly) {
         Long userId = currentUserProvider.requireCurrentUser().userId();
-        return Result.success(notificationService.unreadCount(userId));
+        return Result.success(notificationService.unreadCount(userId, communityOnly));
     }
 
     @PostMapping("/{notificationId}/read")
@@ -49,9 +50,9 @@ public class AppNotificationController {
 
     @PostMapping("/read-all")
     @Operation(summary = "全部标记已读", description = "将当前用户所有未读通知标记为已读。", operationId = "markAllNotificationsRead")
-    public Result<Void> markAllRead() {
+    public Result<Void> markAllRead(@RequestParam(defaultValue = "false") boolean communityOnly) {
         Long userId = currentUserProvider.requireCurrentUser().userId();
-        notificationService.markAllRead(userId);
+        notificationService.markAllRead(userId, communityOnly);
         return Result.success();
     }
 }

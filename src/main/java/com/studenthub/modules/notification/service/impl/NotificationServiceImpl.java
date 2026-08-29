@@ -47,6 +47,8 @@ public class NotificationServiceImpl implements NotificationService {
         LambdaQueryWrapper<NotificationEntity> wrapper = new LambdaQueryWrapper<NotificationEntity>()
                 .eq(NotificationEntity::getRecipientId, recipientId)
                 .eq(query.unreadOnly() != null && query.unreadOnly(), NotificationEntity::getReadAt, null)
+                .like(query.communityOnly() != null && query.communityOnly(), NotificationEntity::getNotificationType, "COMMUNITY_")
+                .notLike(query.communityOnly() == null || !query.communityOnly(), NotificationEntity::getNotificationType, "COMMUNITY_")
                 .orderByDesc(NotificationEntity::getCreatedAt);
         Page<NotificationEntity> page = notificationMapper.selectPage(
                 new Page<>(query.pageNumOrDefault(), query.pageSizeOrDefault()), wrapper);
@@ -54,9 +56,11 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
-    public long unreadCount(Long recipientId) {
+    public long unreadCount(Long recipientId, boolean communityOnly) {
         return notificationMapper.selectCount(new LambdaQueryWrapper<NotificationEntity>()
                 .eq(NotificationEntity::getRecipientId, recipientId)
+                .like(communityOnly, NotificationEntity::getNotificationType, "COMMUNITY_")
+                .notLike(!communityOnly, NotificationEntity::getNotificationType, "COMMUNITY_")
                 .isNull(NotificationEntity::getReadAt));
     }
 
@@ -79,11 +83,13 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void markAllRead(Long recipientId) {
+    public void markAllRead(Long recipientId, boolean communityOnly) {
         NotificationEntity update = new NotificationEntity();
         update.setReadAt(LocalDateTime.now());
         notificationMapper.update(update, new LambdaQueryWrapper<NotificationEntity>()
                 .eq(NotificationEntity::getRecipientId, recipientId)
+                .like(communityOnly, NotificationEntity::getNotificationType, "COMMUNITY_")
+                .notLike(!communityOnly, NotificationEntity::getNotificationType, "COMMUNITY_")
                 .isNull(NotificationEntity::getReadAt));
     }
 }

@@ -1,7 +1,19 @@
 {
   "description": "Student Hub 微信小程序",
   "packOptions": {
-    "ignore": [],
+    "ignore": [
+      { "type": "folder", "value": "assets/banner" },
+      { "type": "folder", "value": "assets/brand" },
+      { "type": "folder", "value": "assets/category" },
+      { "type": "folder", "value": "assets/community" },
+      { "type": "folder", "value": "assets/empty" },
+      { "type": "folder", "value": "assets/frame" },
+      { "type": "folder", "value": "assets/identity" },
+      { "type": "folder", "value": "assets/mascot" },
+      { "type": "folder", "value": "assets/success" },
+      { "type": "file", "value": "assets/tab/tab-community.png" },
+      { "type": "file", "value": "assets/tab/tab-community-active.png" }
+    ],
     "include": []
   },
   "setting": {

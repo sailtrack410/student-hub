@@ -77,6 +77,13 @@
   color: var(--text-1);
 }
 
+.profile-info {
+  margin-top: 8rpx;
+  color: var(--text-2);
+  font-size: 22rpx;
+  line-height: 1.4;
+}
+
 .menu-value {
   font-size: 24rpx;
   color: var(--text-2);

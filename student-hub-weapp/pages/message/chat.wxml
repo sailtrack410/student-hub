@@ -1,0 +1,11 @@
+<view class="chat-page">
+  <view class="chat-peer-header"><image src="{{peerAvatar}}" mode="aspectFill" /><text>{{peerName}}</text></view>
+  <view wx:if="{{loading}}" class="chat-empty">加载中</view>
+  <view wx:elif="{{!messages.length}}" class="chat-empty">还没有消息，打个招呼吧</view>
+  <view wx:for="{{messages}}" wx:key="messageId" class="message-block">
+    <text wx:if="{{item.showTime}}" class="message-time">{{item.timeLabel}}</text>
+    <view class="message-row {{item.mine ? 'message-row-mine' : ''}}"><image wx:if="{{!item.mine}}" class="message-avatar" src="{{item.senderAvatarUrl || peerAvatar}}" mode="aspectFill" /><view class="message-content"><view wx:if="{{item.content}}" class="message-bubble">{{item.content}}</view><view wx:if="{{item.thumbnailUrls.length}}" class="message-images"><image wx:for="{{item.thumbnailUrls}}" wx:key="*this" wx:for-index="imageIndex" src="{{item}}" mode="aspectFill" bindtap="previewMessageImages" data-message-index="{{index}}" data-url="{{item.imageUrls[imageIndex] || item}}" /></view></view></view>
+  </view>
+  <view wx:if="{{imageFiles.length}}" class="chat-image-strip"><view wx:for="{{imageFiles}}" wx:key="fileId" class="chat-image-item"><image src="{{item.url}}" mode="aspectFill" /><text bindtap="removeImage" data-index="{{index}}">×</text></view></view>
+  <view class="chat-input-bar"><button class="image-add" bindtap="chooseImages">＋</button><input value="{{content}}" bindinput="onInput" confirm-type="send" bindconfirm="send" placeholder="输入消息" /><button bindtap="send" loading="{{false}}">发送</button></view>
+</view>

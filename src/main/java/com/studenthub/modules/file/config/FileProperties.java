@@ -25,6 +25,9 @@ public class FileProperties {
     /** MinIO 访问端点，如 http://host:9000 */
     private String minioEndpoint = "http://localhost:9000";
 
+    /** MinIO 对客户端公开的 HTTPS 端点，如 https://student.sailtrack.cn；留空则使用访问端点 */
+    private String minioPublicEndpoint;
+
     private String minioAccessKey;
 
     private String minioSecretKey;

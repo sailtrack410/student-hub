@@ -14,7 +14,13 @@
     "pages/order/list",
     "pages/jw/auth",
     "pages/profile/center",
-    "pages/schedule/index"
+    "pages/schedule/index",
+    "pages/community/index",
+    "pages/community/publish",
+    "pages/community/detail",
+    "pages/community/author"
+    ,"pages/message/chat",
+    "pages/community/inbox"
   ],
   "window": {
     "navigationBarTitleText": "Student Hub",
@@ -46,6 +52,12 @@
         "text": "AI助手",
         "iconPath": "assets/tab/tab-assistant.png",
         "selectedIconPath": "assets/tab/tab-assistant-active.png"
+      },
+      {
+        "pagePath": "pages/community/index",
+        "text": "社区",
+        "iconPath": "assets/tab/community-tab-v2.png",
+        "selectedIconPath": "assets/tab/community-tab-active-v2.png"
       },
       {
         "pagePath": "pages/profile/index",

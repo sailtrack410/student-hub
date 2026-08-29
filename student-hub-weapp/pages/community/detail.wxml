@@ -1,0 +1,34 @@
+<view class="detail-page" wx:if="{{post}}">
+  <view class="post">
+    <view class="author-row">
+      <image class="avatar" src="{{post.avatarSrc}}" mode="aspectFill" bindtap="goAuthor" data-id="{{post.authorId}}" />
+      <view class="author-body"><view class="author-name">{{post.authorName}}</view><view class="post-meta">{{post.createdAtText}}</view></view>
+    </view>
+    <view wx:if="{{post.thumbUrls.length}}" class="image-grid">
+      <image wx:for="{{post.thumbUrls}}" wx:key="*this" wx:for-item="imageUrl" wx:for-index="imageIndex" class="post-image"
+             src="{{imageUrl}}" mode="aspectFill" bindtap="previewImages" binderror="onThumbError" data-index="{{imageIndex}}" data-url="{{post.imageUrls[imageIndex]}}" />
+    </view>
+    <view class="post-title">{{post.title}}</view>
+    <view class="post-content">{{post.content}}</view>
+    <view class="post-tags"><text class="section-tag">{{post.sectionName}}</text><text wx:for="{{post.topics}}" wx:key="*this" class="topic-tag">#{{item}}</text></view>
+    <view class="post-actions"><view class="post-action-group"><view class="post-action" bindtap="togglePostLike"><image class="action-icon" src="/assets/icons/lucide/{{post.liked ? 'heart-filled' : 'heart'}}.svg" /><text>{{post.likeCount}}</text></view><view class="post-action"><image class="action-icon" src="/assets/icons/lucide/message-circle.svg" /><text>{{post.commentCount}}</text></view><button class="share-button" open-type="share"><image class="action-icon" src="/assets/icons/lucide/share-2.svg" /></button></view></view>
+  </view>
+
+  <view class="comment-head"><view><text>评论</text><text class="comment-count">{{comments.length}} 条</text></view><view class="comment-sort"><text class="{{commentSort == 'hot' ? 'sort-active' : ''}}" bindtap="setCommentSort" data-sort="hot">热门</text><text class="{{commentSort == 'asc' ? 'sort-active' : ''}}" bindtap="setCommentSort" data-sort="asc">正序</text><text class="{{commentSort == 'desc' ? 'sort-active' : ''}}" bindtap="setCommentSort" data-sort="desc">倒序</text></view></view>
+  <view class="comments">
+    <view wx:for="{{comments}}" wx:key="commentId" wx:if="{{!item.isMoreReplies}}" bindlongpress="onCommentLongPress" data-index="{{index}}" class="comment {{item.pinned ? 'comment-pinned' : ''}} {{item.parentCommentId ? 'comment-reply' : ''}}">
+      <image class="comment-avatar" src="{{item.avatarSrc}}" mode="aspectFill" bindtap="goAuthor" data-id="{{item.authorId}}" />
+      <view class="comment-body"><view class="comment-author">{{item.authorName}} <text wx:if="{{item.author}}" class="author-mark">作者</text><text>{{item.createdAtText}}</text></view><view class="comment-content {{item.expanded ? 'comment-content-expanded' : (item.longText ? 'comment-content-collapsed' : '')}}">{{item.content}}</view><text wx:if="{{item.longText}}" class="content-toggle" bindtap="toggleCommentContent" data-id="{{item.commentId}}">{{item.expanded ? '收起' : '展开'}}</text><view wx:if="{{item.imageUrls.length}}" class="comment-images"><image wx:for="{{item.imageUrls}}" wx:key="*this" src="{{item.thumbnailUrls[index] || item}}" mode="aspectFill" /></view><view class="comment-actions"><image wx:if="{{item.pinned}}" class="small-action-icon" src="/assets/icons/lucide/pin.svg" /><view class="comment-like" bindtap="toggleCommentLike" data-index="{{index}}" data-id="{{item.commentId}}"><image class="small-action-icon" src="/assets/icons/lucide/{{item.liked ? 'heart-filled' : 'heart'}}.svg" /><text>{{item.likeCount}}</text></view><view class="reply-action" bindtap="replyComment" data-index="{{index}}"><image class="small-action-icon" src="/assets/icons/lucide/reply.svg" /><text>回复</text></view></view></view>
+    </view>
+    <view wx:for="{{comments}}" wx:key="commentId" wx:if="{{item.isMoreReplies}}" class="more-replies" bindtap="expandReplies" data-id="{{item.parentCommentId}}">展开剩余 {{item.hiddenReplyCount}} 条回复</view>
+    <view wx:if="{{!comments.length}}" class="empty-comments">还没有评论，来说两句吧</view>
+  </view>
+  <view class="input-space"></view>
+  <view class="comment-bar">
+    <input class="comment-input" maxlength="500" value="{{commentText}}" bindinput="onCommentInput"
+           placeholder="友善评论，真诚交流" placeholder-class="input-placeholder" confirm-type="send" bindconfirm="submitComment" />
+    <view wx:if="{{commentImages.length}}" class="comment-image-strip"><view wx:for="{{commentImages}}" wx:key="fileId" class="comment-image-item"><image src="{{item.path}}" mode="aspectFill" /><text bindtap="removeCommentImage" data-index="{{index}}">×</text></view></view>
+    <button class="add-image-btn" bindtap="chooseCommentImage">＋</button>
+    <button class="send-btn" bindtap="submitComment">发送</button>
+  </view>
+</view>

@@ -11,7 +11,8 @@
 - MySQL、Redis 配置及本地 Docker Compose 依赖
 - Knife4j 接口调试：`/doc.html`；Swagger UI：`/api`
 - 健康检查：`GET /api/common/system/health`
-- 服务目录、服务申请、工单、评价、通知、AI 会话六大业务模块与申请-派单-办结-评价闭环
+- 服务目录、服务申请、工单、评价、通知、AI 会话等业务模块与申请-派单-办结-评价闭环
+- 校园社区：失物招领、二手交易、学习咨询、校友杂谈分区，支持发帖、图片和评论
 - 雪花 ID 全局序列化为字符串，避免小程序端精度丢失
 - 外部模型 API 的 `AiProvider` 抽象和 OpenAI-compatible 适配器
 - AI 默认关闭；配置 `AI_ENABLED=true` 后才允许调用外部模型
@@ -159,6 +160,7 @@ WECHAT_APP_SECRET=你的小程序AppSecret
 | 评价 | `POST /api/app/service-requests/{id}/evaluation` |
 | 通知 | `GET /api/app/notifications`、`GET /api/app/notifications/unread-count`、`POST /api/app/notifications/{id}/read`、`POST /api/app/notifications/read-all` |
 | AI 助手 | `POST /api/app/ai/conversations`、`GET /api/app/ai/conversations`、`GET /api/app/ai/conversations/{id}/messages`、`POST /api/app/ai/conversations/{id}/messages` |
+| 校园社区 | `GET /api/app/community/sections`、`GET /api/app/community/posts`、`GET /api/app/community/posts/{id}`、`POST /api/app/community/posts`、`POST /api/app/community/posts/{id}/comments` |
 
 ## 微信小程序
 
@@ -178,6 +180,9 @@ WECHAT_APP_SECRET=你的小程序AppSecret
 
 - `FILE_STORAGE=local`（默认）：写入 `FILE_STORAGE_DIR` 本地目录；
 - `FILE_STORAGE=minio`：写入 MinIO 桶（`MINIO_ENDPOINT`/`MINIO_BUCKET`/`MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`，凭据放未跟踪的 `.env`）。
+
+所有图片上传先经过统一图片压缩模块：小程序端调用 `utils/image.js` 压缩，服务端
+`ImageCompressionService` 再按最大边 1600px 和 JPEG 质量 0.82 做安全压缩；透明 PNG 保留透明通道，WebP 保留原格式。后续新增图片上传接口应复用 `FileStorageService.store`，不要自行实现压缩逻辑。
 
 请假申请的"请假材料"、宿舍/教室报修的"现场照片"为选填图片字段，由服务项表单 schema 驱动。
 

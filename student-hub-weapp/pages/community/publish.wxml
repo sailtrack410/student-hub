@@ -1,0 +1,40 @@
+<view class="publish-page">
+  <view class="editor card {{imageCompact ? 'editor-compact' : ''}}">
+    <scroll-view scroll-x class="editor-images" bindtap="onImagesTap" enhanced show-scrollbar="{{false}}">
+      <view class="editor-image-row">
+      <view wx:for="{{images}}" wx:key="fileId" class="image-wrap">
+        <image class="image" src="{{item.url}}" mode="aspectFill" bindtap="previewImage" data-url="{{item.url}}" />
+        <view class="image-remove" catchtap="removeImage" data-index="{{index}}">×</view>
+      </view>
+      <view wx:if="{{images.length < 9}}" class="image-add" bindtap="chooseImages"><text class="add-plus">＋</text></view>
+      </view>
+    </scroll-view>
+    <input class="title-input" maxlength="80" placeholder="填写标题" placeholder-class="input-placeholder" value="{{title}}" bindfocus="onEditorFocus" bindinput="onTitleInput" />
+    <textarea class="body-input" maxlength="2000" placeholder="添加正文" placeholder-class="input-placeholder" value="{{content}}" bindfocus="onEditorFocus" bindinput="onContentInput" />
+    <view wx:if="{{topics.length}}" class="selected-topics"><text wx:for="{{topics}}" wx:key="*this" class="topic">#{{item}}</text></view>
+  </view>
+
+  <view class="editor-toolbar">
+    <view class="meta-trigger" bindtap="openMetaSheet"><text class="toolbar-plus">＋</text><text>添加分区及话题</text></view>
+    <view class="toolbar-spacer"></view>
+  </view>
+  <button class="submit-btn" loading="{{submitting}}" disabled="{{uploading || submitting}}" bindtap="submit">发布</button>
+
+  <view wx:if="{{showMetaSheet}}" class="sheet-mask" bindtap="closeMetaSheet">
+    <view class="meta-sheet" catchtap="noop">
+      <view class="sheet-head"><text>添加分区及话题</text><text class="sheet-close" bindtap="closeMetaSheet">×</text></view>
+      <view class="sheet-label">分区</view>
+      <scroll-view scroll-x class="sheet-sections" enhanced show-scrollbar="{{false}}">
+        <view wx:for="{{sections}}" wx:key="sectionId" class="sheet-section {{sectionIndex == index ? 'sheet-section-active' : ''}}" bindtap="onSectionChange" data-value="{{index}}"><image src="/assets/icons/community/{{item.icon}}.png" mode="aspectFit" /><text>{{item.sectionName}}</text></view>
+      </scroll-view>
+      <view class="topic-search"><text>⌕</text><input value="{{topicKeyword}}" bindinput="onTopicSearch" placeholder="搜索话题" placeholder-class="input-placeholder" /></view>
+      <view class="sheet-label topic-label">已选 <text>{{topics.length}} / 8</text></view>
+      <view class="selected-sheet-topics"><text wx:for="{{topics}}" wx:key="*this" class="topic selected">#{{item}}</text><view class="add-topic-chip">＋ 添加话题</view></view>
+      <view class="sheet-label hot-label">热门话题</view>
+      <view class="hot-topics"><view wx:for="{{filteredTopics}}" wx:key="name" class="hot-topic {{topics.indexOf(item.name) >= 0 ? 'hot-topic-active' : ''}}" bindtap="toggleTopic" data-name="{{item.name}}"># {{item.name}} <text>{{item.heat}}</text></view></view>
+      <view class="topic-create"><input value="{{topicDraft}}" bindinput="onTopicInput" placeholder="输入话题名称" placeholder-class="input-placeholder" /><button bindtap="addDraftTopic">添加</button></view>
+      <button class="sheet-done" bindtap="closeMetaSheet">完成</button>
+    </view>
+  </view>
+  <view class="safe-bottom"></view>
+</view>

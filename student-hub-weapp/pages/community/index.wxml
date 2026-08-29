@@ -1,0 +1,53 @@
+<view class="community">
+  <view class="community-search">
+    <text class="search-symbol">⌕</text>
+    <input value="{{keyword}}" bindinput="onSearchInput" confirm-type="search" bindconfirm="onSearchConfirm"
+           placeholder="搜索内容或话题，如 #期末复习" placeholder-class="search-placeholder" />
+    <text wx:if="{{keyword}}" class="search-clear" bindtap="clearSearch">×</text>
+  </view>
+
+  <scroll-view scroll-x class="sections" enhanced show-scrollbar="{{false}}">
+    <view class="section-row">
+      <view class="section-tab {{activeSectionId === '' ? 'section-tab-active' : ''}}" bindtap="pickSection" data-id="">
+        <text>全部</text>
+      </view>
+      <view wx:for="{{sections}}" wx:key="sectionId"
+            class="section-tab {{activeSectionId == item.sectionId ? 'section-tab-active' : ''}}"
+            bindtap="pickSection" data-id="{{item.sectionId}}">
+        <text>{{item.sectionName}}</text>
+      </view>
+    </view>
+  </scroll-view>
+
+  <view class="feed" wx:if="{{posts.length}}">
+    <view wx:for="{{posts}}" wx:key="postId" wx:for-index="postIndex" class="post" bindtap="goDetail" data-id="{{item.postId}}">
+      <view class="author-row">
+        <image class="avatar" src="{{item.avatarSrc}}" mode="aspectFill" />
+        <view class="author-body">
+          <view class="author-name">{{item.authorName}}</view>
+          <view class="post-meta">{{item.sectionName}} · {{item.createdAtText}}</view>
+        </view>
+        <image class="section-mark" src="/assets/icons/community/{{item.sectionIcon}}.png" mode="aspectFit" />
+      </view>
+      <view class="post-title">{{item.title}}</view>
+      <view class="post-content">{{item.content}}</view>
+      <view wx:if="{{item.previewImages.length}}" class="image-grid image-grid-{{item.previewImages.length}}">
+        <image wx:for="{{item.previewImages}}" wx:key="*this" wx:for-item="imageUrl" wx:for-index="imageIndex"
+               class="post-image" src="{{imageUrl}}" mode="aspectFill" catchtap="previewImages"
+               binderror="onThumbError" data-index="{{postIndex}}" data-image-index="{{imageIndex}}" data-url="{{item.imageUrls[imageIndex]}}" />
+      </view>
+      <view class="post-topics" wx:if="{{item.topics.length}}">
+        <text wx:for="{{item.topics}}" wx:key="*this" class="topic">#{{item}}</text>
+      </view>
+      <view class="post-footer">
+        <view class="post-action-group"><view class="footer-action" catchtap="toggleLike" data-index="{{postIndex}}"><image class="action-icon" src="/assets/icons/lucide/{{item.liked ? 'heart-filled' : 'heart'}}.svg" /><text>{{item.likeCount}}</text></view><view class="footer-action"><image class="action-icon" src="/assets/icons/lucide/message-circle.svg" /><text>{{item.commentCount}}</text></view><button class="share-button" open-type="share" catchtap="prepareShare" data-index="{{postIndex}}"><image class="action-icon" src="/assets/icons/lucide/share-2.svg" /></button></view>
+      </view>
+    </view>
+  </view>
+
+  <empty-state wx:if="{{loaded && !posts.length}}" image="https://student.sailtrack.cn/student-hub/static/assets/empty/empty-requests.jpg"
+               title="这个分区还没有内容" subtitle="发布第一条校园动态吧" />
+  <view wx:if="{{!hasMore && posts.length}}" class="list-end">— 暂时看到这里 —</view>
+  <view class="safe-bottom"></view>
+  <view class="publish-fab" bindtap="goPublish"><text class="fab-plus">＋</text><text>发布</text></view>
+</view>

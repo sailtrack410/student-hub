@@ -81,6 +81,7 @@ public class FileStorageServiceImpl implements FileStorageService {
         String storageKey = UUID.randomUUID().toString().replace("-", "") + "." + extension;
         String objectKey = objectKeyOf(Instant.now(), storageKey);
         binaryStorage.put(objectKey, content, detectedType);
+        storeThumbnail(objectKey, content, originalName, detectedType);
 
         FileStorageEntity entity = new FileStorageEntity();
         entity.setStorageKey(storageKey);
@@ -145,6 +146,55 @@ public class FileStorageServiceImpl implements FileStorageService {
 
     @Override
     public String signViewPath(Long fileId) {
+        FileStorageEntity entity = fileStorageMapper.selectById(fileId);
+        if (entity != null && entity.getCreatedAt() != null && entity.getStorageKey() != null) {
+            String objectUrl = binaryStorage.presign(objectKeyOf(entity), fileProperties.getViewTtlMinutes() * 60);
+            if (objectUrl != null && !objectUrl.isBlank()) {
+                return objectUrl;
+            }
+        }
+        return signLocalViewPath(fileId);
+    }
+
+    @Override
+    public String signThumbnailPath(Long fileId) {
+        FileStorageEntity entity = fileStorageMapper.selectById(fileId);
+        if (entity != null && entity.getCreatedAt() != null && entity.getStorageKey() != null
+                && "minio".equalsIgnoreCase(fileProperties.getStorage())) {
+            String objectKey = objectKeyOf(entity);
+            String thumbnailKey = thumbnailObjectKeyOf(objectKey);
+            ensureThumbnail(entity, objectKey, thumbnailKey);
+            String objectUrl = binaryStorage.presign(thumbnailKey, fileProperties.getViewTtlMinutes() * 60);
+            if (objectUrl != null && !objectUrl.isBlank()) {
+                return objectUrl;
+            }
+        }
+        return signLocalViewPath(fileId) + "&thumb=true";
+    }
+
+    private void ensureThumbnail(FileStorageEntity entity, String objectKey, String thumbnailKey) {
+        if (binaryStorage.exists(thumbnailKey)) {
+            return;
+        }
+        try (InputStream input = binaryStorage.get(objectKey)) {
+            storeThumbnail(objectKey, input.readAllBytes(), entity.getOriginalName(), entity.getContentType());
+        } catch (Exception exception) {
+            log.warn("旧文件缩略图补生成失败, fileId={}", entity.getId(), exception);
+        }
+    }
+
+    private void storeThumbnail(String objectKey, byte[] content, String originalName, String contentType) {
+        ImageCompressionService.CompressedImage thumbnail = imageCompressionService.thumbnail(content, originalName, contentType);
+        if (thumbnail != null && thumbnail.bytes() != null && thumbnail.bytes().length > 0) {
+            binaryStorage.put(thumbnailObjectKeyOf(objectKey), thumbnail.bytes(), thumbnail.contentType());
+        }
+    }
+
+    private String thumbnailObjectKeyOf(String objectKey) {
+        return "thumbnails/" + objectKey;
+    }
+
+    private String signLocalViewPath(Long fileId) {
         long expires = Instant.now().plusSeconds(fileProperties.getViewTtlMinutes() * 60L).getEpochSecond();
         return "/api/common/files/view/" + fileId + "?expires=" + expires + "&sign=" + sign(fileId, expires);
     }

@@ -26,6 +26,9 @@ public interface FileStorageService {
      */
     String signViewPath(Long fileId);
 
+    /** 为列表首屏生成后端缩略图地址；缩略图由本地 API 从对象存储读取并压缩。 */
+    String signThumbnailPath(Long fileId);
+
     List<String> signViewPaths(List<Long> fileIds);
 
     /**
