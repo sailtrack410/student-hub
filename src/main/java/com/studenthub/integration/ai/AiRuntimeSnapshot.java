@@ -6,6 +6,7 @@ package com.studenthub.integration.ai;
  * @param enabled                全局总开关（ai_config.enabled）
  * @param chat                   默认聊天模型绑定（供应商启用且密钥已配置时才有值，可为 null）
  * @param vision                 默认图片识别模型绑定（可为 null，预留识图路由）
+ * @param asr                    默认语音识别模型绑定（可为 null）
  * @param connectTimeoutSeconds  连接超时
  * @param readTimeoutSeconds     读取超时
  * @param maxInputCharacters     单次请求最大输入字符数
@@ -18,6 +19,7 @@ public record AiRuntimeSnapshot(
         boolean enabled,
         AiModelBinding chat,
         AiModelBinding vision,
+        AiModelBinding asr,
         int connectTimeoutSeconds,
         int readTimeoutSeconds,
         int maxInputCharacters,

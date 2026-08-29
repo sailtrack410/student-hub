@@ -5,6 +5,7 @@ import com.studenthub.exception.BusinessException;
 import com.studenthub.service.AiChatService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 
@@ -26,22 +27,42 @@ public class AiChatServiceImpl implements AiChatService {
 
     @Override
     public AiChatResponse chat(List<AiMessage> messages) {
+        requireValidMessages(messages);
+        AiRuntimeSnapshot snapshot = AiRuntimeConfig.current();
+        validateInputSize(messages, snapshot);
+        AiModelBinding chat = snapshot != null ? snapshot.chat() : null;
+        String model = chat != null ? chat.model() : aiProperties.getModel();
+        return aiProvider.chat(new AiChatRequest(model, messages));
+    }
+
+    @Override
+    public AiChatResponse chatVision(List<AiMessage> messages) {
+        requireValidMessages(messages);
+        AiRuntimeSnapshot snapshot = AiRuntimeConfig.current();
+        if (snapshot == null || snapshot.vision() == null) {
+            throw new BusinessException(ErrorCode.AI_NOT_CONFIGURED, "图片识别模型尚未配置");
+        }
+        validateInputSize(messages, snapshot);
+        return aiProvider.chat(new AiChatRequest(snapshot.vision().model(), messages, true));
+    }
+
+    private void requireValidMessages(List<AiMessage> messages) {
         if (messages == null || messages.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER, "用户消息不能为空");
         }
         AiMessage last = messages.get(messages.size() - 1);
-        if (!"user".equals(last.role()) || last.content() == null || last.content().isBlank()) {
+        if (!"user".equals(last.role())
+                || (!StringUtils.hasText(last.content()) && !last.hasImages())) {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER, "用户消息不能为空");
         }
-        AiRuntimeSnapshot snapshot = AiRuntimeConfig.current();
+    }
+
+    private void validateInputSize(List<AiMessage> messages, AiRuntimeSnapshot snapshot) {
         int maxInput = snapshot != null ? snapshot.maxInputCharacters() : aiProperties.getMaxInputCharacters();
         for (AiMessage message : messages) {
             if (message.content() != null && message.content().length() > maxInput) {
                 throw new BusinessException(ErrorCode.INVALID_PARAMETER, "用户消息长度超过限制");
             }
         }
-        AiModelBinding chat = snapshot != null ? snapshot.chat() : null;
-        String model = chat != null ? chat.model() : aiProperties.getModel();
-        return aiProvider.chat(new AiChatRequest(model, messages));
     }
 }

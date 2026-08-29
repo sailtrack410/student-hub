@@ -15,8 +15,20 @@
       <image wx:if="{{item.role !== 'USER'}}" class="avatar" src="/assets/mascot/mascot-avatar.jpg" mode="aspectFill" />
       <view class="bubble-wrap">
         <!-- 用户消息纯文本；助手消息按 markdown 转 HTML 后由 rich-text 渲染 -->
-        <view wx:if="{{item.role === 'USER'}}" class="bubble bubble-user">{{item.content}}</view>
-        <rich-text wx:else class="bubble {{item.degraded ? 'bubble-degraded' : ''}}" nodes="{{item.html}}"></rich-text>
+        <view wx:if="{{item.role === 'USER' && item.content !== ' '}}" class="bubble bubble-user">{{item.content}}</view>
+        <view wx:if="{{item.role === 'USER' && item.images && item.images.length}}" class="message-images">
+          <image
+            wx:for="{{item.images}}"
+            wx:for-item="img"
+            wx:key="fileId"
+            class="message-image"
+            src="{{img.path}}"
+            mode="widthFix"
+            bindtap="previewImage"
+            data-url="{{img.path}}"
+          />
+        </view>
+        <rich-text wx:if="{{item.role === 'ASSISTANT'}}" class="bubble {{item.degraded ? 'bubble-degraded' : ''}}" nodes="{{item.html}}"></rich-text>
         <view wx:if="{{item.role === 'ASSISTANT' && item.actions && item.actions.length}}" class="action-cards">
           <view
             wx:for="{{item.actions}}"
@@ -45,8 +57,19 @@
     <view class="msg-padding"></view>
   </scroll-view>
 
-  <!-- 输入区 -->
-  <view class="input-bar safe-bottom">
+  <!-- 待发送图片预览 -->
+  <view wx:if="{{pendingImages.length && inputMode === 'text'}}" class="pending-bar">
+    <view wx:for="{{pendingImages}}" wx:key="fileId" class="pending-item">
+      <image class="pending-image" src="{{item.path}}" mode="aspectFill" />
+      <view class="pending-remove" bindtap="removeImage" data-index="{{index}}">×</view>
+    </view>
+  </view>
+
+  <!-- 输入区：文字模式 -->
+  <view wx:if="{{inputMode === 'text'}}" class="input-bar safe-bottom">
+    <button class="mode-btn" bindtap="toggleInputMode">
+      <view class="mode-icon">语音</view>
+    </button>
     <input
       class="input"
       value="{{draft}}"
@@ -56,6 +79,20 @@
       bindinput="onDraftInput"
       bindconfirm="onSend"
     />
+    <button class="tool-btn tool-btn-image" bindtap="chooseImage" disabled="{{pendingImages.length >= 4}}">图片</button>
     <button class="send-btn" disabled="{{thinking}}" bindtap="onSend">发送</button>
+  </view>
+
+  <!-- 输入区：语音模式 -->
+  <view wx:if="{{inputMode === 'voice'}}" class="input-bar safe-bottom">
+    <button class="mode-btn" bindtap="toggleInputMode">
+      <view class="mode-icon">键盘</view>
+    </button>
+    <button
+      class="voice-btn {{recording ? 'voice-btn-recording' : ''}}"
+      bindtouchstart="onVoiceStart"
+      bindtouchend="onVoiceEnd"
+      bindtouchcancel="onVoiceCancel"
+    >{{recording ? '松开 结束' : '按住 说话'}}</button>
   </view>
 </view>

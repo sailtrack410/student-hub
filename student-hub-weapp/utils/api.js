@@ -58,14 +58,34 @@ module.exports = {
   // AI 助手
   createConversation: (title) => request({ url: '/api/app/ai/conversations', method: 'POST', data: { title } }),
   listAiMessages: (conversationId) => request({ url: `/api/app/ai/conversations/${conversationId}/messages` }),
-  sendAiMessage: (conversationId, content) =>
+  sendAiMessage: (conversationId, content, images) =>
     request({
       url: `/api/app/ai/conversations/${conversationId}/messages`,
       method: 'POST',
-      data: { content },
+      data: { content, images: images && images.length ? images : undefined },
       silent: true,
+      timeout: 90000
+    }),
+  transcribeAudio: (fileId) =>
+    request({
+      url: '/api/app/ai/speech/transcribe',
+      method: 'POST',
+      data: { fileId },
       timeout: 60000
     }),
+
+  // 校园社区
+  communitySections: () => request({ url: '/api/app/community/sections', silent: true }),
+  hotCommunityTopics: () => request({ url: '/api/app/community/topics/hot', silent: true }),
+  pageCommunityPosts: (query) => request({ url: '/api/app/community/posts', data: query, silent: true }),
+  getCommunityPost: (postId) => request({ url: `/api/app/community/posts/${postId}`, silent: true }),
+  publishCommunityPost: (data) => request({ url: '/api/app/community/posts', method: 'POST', data }),
+  commentCommunityPost: (postId, content) =>
+    request({ url: `/api/app/community/posts/${postId}/comments`, method: 'POST', data: { content } }),
+  likeCommunityPost: (postId) => request({ url: `/api/app/community/posts/${postId}/like`, method: 'POST', silent: true }),
+  likeCommunityComment: (commentId) => request({ url: `/api/app/community/comments/${commentId}/like`, method: 'POST', silent: true }),
+  pinCommunityComment: (commentId) => request({ url: `/api/app/community/comments/${commentId}/pin`, method: 'POST' }),
+  getCommunityAuthor: (authorId) => request({ url: `/api/app/community/authors/${authorId}`, silent: true }),
 
   // 我的工单（服务人员角色）
   pageAssignedOrders: (query) => request({ url: '/api/app/work-orders/assigned', data: query }),

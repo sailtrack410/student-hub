@@ -24,7 +24,9 @@ import com.studenthub.modules.aichat.entity.AiMessageEntity;
 import com.studenthub.modules.aichat.mapper.AiConversationMapper;
 import com.studenthub.modules.aichat.mapper.AiMessageMapper;
 import com.studenthub.modules.aichat.service.AiConversationService;
+import com.studenthub.modules.aichat.service.AiSpeechService;
 import com.studenthub.modules.aichat.service.CampusAssistantPrompts;
+import com.studenthub.modules.file.service.FileStorageService;
 import com.studenthub.service.AiChatService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 
 @Slf4j
@@ -49,9 +52,11 @@ public class AiConversationServiceImpl implements AiConversationService {
     private final AiConversationMapper conversationMapper;
     private final AiMessageMapper messageMapper;
     private final AiChatService aiChatService;
+    private final AiSpeechService aiSpeechService;
     private final AiChatProperties aiChatProperties;
     private final AiIntentClassifier intentClassifier;
     private final AiAssistantDataService assistantDataService;
+    private final FileStorageService fileStorageService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -88,7 +93,11 @@ public class AiConversationServiceImpl implements AiConversationService {
     public AiMessageResponse sendMessage(AuthenticatedUser user, Long conversationId, SendMessageRequest request) {
         Long userId = user.userId();
         AiConversationEntity conversation = requireOwnedConversation(userId, conversationId);
-        String content = request.content().trim();
+        String content = request.content() == null ? "" : request.content().trim();
+        List<Long> imageIds = normalizeImageIds(request.images());
+        if (content.isEmpty() && imageIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "消息不能为空");
+        }
         if (content.length() > currentMaxMessageCharacters()) {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER, "消息长度超过限制");
         }
@@ -97,15 +106,20 @@ public class AiConversationServiceImpl implements AiConversationService {
             log.info("AI 消息触发限流, userId={}", userId);
             throw new BusinessException(ErrorCode.AI_RATE_LIMITED);
         }
+        // 图片走多模态识别，读取文件内容构造 OpenAI 图片 data URL
+        List<String> imageDataUrls = imageIds.stream().map(this::toImageDataUrl).toList();
 
         AiMessageEntity userMessage = new AiMessageEntity();
         userMessage.setConversationId(conversation.getId());
         userMessage.setRole(ROLE_USER);
         userMessage.setContent(content);
+        userMessage.setImages(serializeImageIds(imageIds));
         userMessage.setStatus(MESSAGE_STATUS_OK);
         messageMapper.insert(userMessage);
 
-        AiIntentMatch intent = intentClassifier.classify(content);
+        AiIntentMatch intent = imageIds.isEmpty()
+                ? intentClassifier.classify(content)
+                : AiIntentMatch.fallback();
         AiAssistantResolved resolved = resolveForIntent(intent, user);
 
         long start = System.currentTimeMillis();
@@ -115,8 +129,11 @@ public class AiConversationServiceImpl implements AiConversationService {
         String errorCode = null;
         String actionsJson = assistantDataService.serializeActions(resolved == null ? null : resolved.actions());
         try {
-            List<AiMessage> prompt = buildPrompt(content, conversation.getId(), resolved == null ? null : resolved.contextText());
-            AiChatResponse response = aiChatService.chat(prompt);
+            List<AiMessage> prompt = buildPrompt(content, conversation.getId(),
+                    resolved == null ? null : resolved.contextText(), imageDataUrls, userMessage.getId());
+            AiChatResponse response = imageIds.isEmpty()
+                    ? aiChatService.chat(prompt)
+                    : aiChatService.chatVision(prompt);
             reply = response.content();
             model = response.model();
             Integer promptTokens = response.promptTokens();
@@ -151,10 +168,62 @@ public class AiConversationServiceImpl implements AiConversationService {
         return AiMessageResponse.from(assistantMessage);
     }
 
+    @Override
+    public String transcribeAudio(Long fileId) {
+        if (fileId == null) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "音频文件 ID 不能为空");
+        }
+        FileStorageService.StoredContent stored = fileStorageService.readContent(fileId);
+        return aiSpeechService.transcribe(stored.bytes(), stored.originalName(), stored.contentType());
+    }
+
+    /** 服务端按受控 fileId 读取图片并转 data URL（仅限当前用户已上传的文件） */
+    private String toImageDataUrl(Long fileId) {
+        if (fileId == null) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "图片文件 ID 不能为空");
+        }
+        FileStorageService.StoredContent stored = fileStorageService.readContent(fileId);
+        String type = stored.contentType() == null || stored.contentType().isBlank()
+                ? "image/jpeg" : stored.contentType();
+        return "data:" + type + ";base64," + Base64.getEncoder().encodeToString(stored.bytes());
+    }
+
+    private List<Long> normalizeImageIds(List<Long> images) {
+        if (images == null || images.isEmpty()) {
+            return List.of();
+        }
+        List<Long> distinct = images.stream()
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .limit(SendMessageRequest.MAX_IMAGES)
+                .toList();
+        if (distinct.isEmpty()) {
+            return List.of();
+        }
+        if (distinct.size() > SendMessageRequest.MAX_IMAGES) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER,
+                    "最多附带 " + SendMessageRequest.MAX_IMAGES + " 张图片");
+        }
+        return distinct;
+    }
+
+    private String serializeImageIds(List<Long> imageIds) {
+        if (imageIds == null || imageIds.isEmpty()) {
+            return null;
+        }
+        try {
+            return com.fasterxml.jackson.databind.json.JsonMapper.builder().build()
+                    .writeValueAsString(imageIds);
+        } catch (Exception exception) {
+            log.warn("图片 ID 序列化失败", exception);
+            return null;
+        }
+    }
+
     private AiAssistantResolved resolveForIntent(AiIntentMatch intent, AuthenticatedUser user) {
         return switch (intent.intent()) {
-            case SCHEDULE_DAY -> assistantDataService.resolveSchedule(user.userId(), intent.dayOfWeek());
-            case SCHEDULE_WEEK -> assistantDataService.resolveSchedule(user.userId(), null);
+            case SCHEDULE_DAY -> assistantDataService.resolveSchedule(user.userId(), intent.date(), intent.dayOfWeek());
+            case SCHEDULE_WEEK -> assistantDataService.resolveSchedule(user.userId(), null, null);
             case MY_REQUESTS -> assistantDataService.resolveMyRequests(user.userId(), intent.statusFilter());
             case SERVICE_ACTION -> assistantDataService.resolveServiceItem(intent.itemCode(), user.campusId());
             case FALLBACK -> null;
@@ -170,7 +239,8 @@ public class AiConversationServiceImpl implements AiConversationService {
         };
     }
 
-    private List<AiMessage> buildPrompt(String currentContent, Long conversationId, String contextText) {
+    private List<AiMessage> buildPrompt(String currentContent, Long conversationId, String contextText,
+                                       List<String> imageDataUrls, Long currentUserMessageId) {
         List<AiMessage> prompt = new ArrayList<>();
         prompt.add(new AiMessage("system", CampusAssistantPrompts.SYSTEM_PROMPT));
         if (contextText != null && !contextText.isBlank()) {
@@ -180,15 +250,17 @@ public class AiConversationServiceImpl implements AiConversationService {
         }
         List<AiMessageEntity> history = messageMapper.selectList(new LambdaQueryWrapper<AiMessageEntity>()
                 .eq(AiMessageEntity::getConversationId, conversationId)
+                .ne(currentUserMessageId != null, AiMessageEntity::getId, currentUserMessageId)
                 .orderByDesc(AiMessageEntity::getCreatedAt)
                 .last("LIMIT " + currentHistoryWindow()));
         for (int i = history.size() - 1; i >= 0; i--) {
             AiMessageEntity entity = history.get(i);
+            // 历史里的用户图片消息只保留文本，避免重复注入图片撑大上下文
             if (MESSAGE_STATUS_OK.equals(entity.getStatus())) {
                 prompt.add(new AiMessage(entity.getRole().toLowerCase(), entity.getContent()));
             }
         }
-        prompt.add(new AiMessage("user", currentContent));
+        prompt.add(new AiMessage("user", currentContent, imageDataUrls));
         return prompt;
     }
 

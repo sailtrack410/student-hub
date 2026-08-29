@@ -52,6 +52,7 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
 
     private static final String TYPE_CHAT = "CHAT";
     private static final String TYPE_VISION = "VISION";
+    private static final String TYPE_ASR = "ASR";
     private static final Pattern VALID_PROVIDER_CODE = Pattern.compile("^[a-z0-9][a-z0-9-]{0,62}$");
     private static final Duration CHECK_CONNECT_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration CHECK_READ_TIMEOUT = Duration.ofSeconds(15);
@@ -269,7 +270,7 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
                         AiDefaultModelEntity::getModelId));
         Map<Long, String> providerNames = providerNameMap();
         List<AiDefaultModelResponse> result = new ArrayList<>();
-        for (String typeCode : List.of(TYPE_CHAT, TYPE_VISION)) {
+        for (String typeCode : List.of(TYPE_CHAT, TYPE_VISION, TYPE_ASR)) {
             Long modelId = defaults.get(typeCode);
             AiModelEntity model = modelId == null ? null : modelMap.get(modelId);
             result.add(new AiDefaultModelResponse(typeCode, typeName(typeCode),
@@ -310,9 +311,10 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
                 .findFirst().orElseThrow();
     }
 
-    /** 连通性检查/拉取模型共用的短超时客户端 */
+    /** 连通性检查/拉取模型共用的短超时客户端（显式直连，绕过系统代理避免境外绕行） */
     private RestClient modelsClient(AiProviderEntity provider) {
         HttpClient httpClient = HttpClient.newBuilder()
+                .proxy(HttpClient.Builder.NO_PROXY)
                 .connectTimeout(CHECK_CONNECT_TIMEOUT)
                 .build();
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
@@ -407,7 +409,11 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
     }
 
     private String typeName(String typeCode) {
-        return TYPE_VISION.equals(typeCode) ? "图片识别" : "聊天模型";
+        return switch (typeCode) {
+            case TYPE_VISION -> "图片识别";
+            case TYPE_ASR -> "语音识别";
+            default -> "聊天模型";
+        };
     }
 
     private String rootMessage(Exception exception) {

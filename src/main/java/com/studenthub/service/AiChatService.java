@@ -13,4 +13,9 @@ public interface AiChatService {
      * 多轮对话：messages 含历史上下文，最后一条为当前用户消息。
      */
     AiChatResponse chat(List<AiMessage> messages);
+
+    /**
+     * 多模态对话：路由到图片识别默认模型（VISION），最后一条用户消息可携带图片。
+     */
+    AiChatResponse chatVision(List<AiMessage> messages);
 }

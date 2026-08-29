@@ -21,4 +21,9 @@ public interface AiConversationService {
      * 会按 intent 查询当前用户本人的课表/申请/服务入口数据并注入回复。
      */
     AiMessageResponse sendMessage(AuthenticatedUser user, Long conversationId, SendMessageRequest request);
+
+    /**
+     * 上传的音频文件转写为文本，供发送消息使用；未配置 ASR 模型时抛业务异常。
+     */
+    String transcribeAudio(Long fileId);
 }

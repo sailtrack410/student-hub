@@ -14,6 +14,7 @@ import org.springframework.web.client.RestClient;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
@@ -43,8 +44,15 @@ public class OpenAiCompatibleProvider implements AiProvider {
     @Override
     public AiChatResponse chat(AiChatRequest request) {
         AiRuntimeSnapshot snapshot = AiRuntimeConfig.current();
-        AiModelBinding binding = snapshot != null ? snapshot.chat() : fallbackBinding();
-        boolean enabled = snapshot != null ? snapshot.enabled() : properties.isEnabled();
+        AiModelBinding binding;
+        boolean enabled;
+        if (request.vision()) {
+            binding = snapshot != null ? snapshot.vision() : null;
+            enabled = snapshot != null ? snapshot.enabled() : false;
+        } else {
+            binding = snapshot != null ? snapshot.chat() : fallbackBinding();
+            enabled = snapshot != null ? snapshot.enabled() : properties.isEnabled();
+        }
         if (!enabled || binding == null) {
             throw new BusinessException(ErrorCode.AI_NOT_CONFIGURED);
         }
@@ -59,7 +67,7 @@ public class OpenAiCompatibleProvider implements AiProvider {
         try {
             Map<String, Object> payload = new HashMap<>();
             payload.put("model", request.model());
-            payload.put("messages", request.messages());
+            payload.put("messages", toOpenAiMessages(request.messages()));
 
             String responseBody = client.post()
                     .uri("/chat/completions")
@@ -89,6 +97,33 @@ public class OpenAiCompatibleProvider implements AiProvider {
         }
     }
 
+    /**
+     * 将内部消息转为 OpenAI 兼容结构：
+     * user 消息携带图片时 content 为 [{type:text},{type:image_url}] 数组，否则为纯文本。
+     */
+    private static List<Map<String, Object>> toOpenAiMessages(List<AiMessage> messages) {
+        List<Map<String, Object>> result = new java.util.ArrayList<>();
+        for (AiMessage message : messages) {
+            Map<String, Object> item = new HashMap<>();
+            item.put("role", message.role());
+            if (message.hasImages() && "user".equals(message.role())) {
+                List<Map<String, Object>> parts = new java.util.ArrayList<>();
+                if (message.content() != null && !message.content().isBlank()) {
+                    parts.add(Map.of("type", "text", "text", message.content()));
+                }
+                for (String image : message.images()) {
+                    parts.add(Map.of("type", "image_url",
+                            "image_url", Map.of("url", image)));
+                }
+                item.put("content", parts);
+            } else {
+                item.put("content", message.content() == null ? "" : message.content());
+            }
+            result.add(item);
+        }
+        return result;
+    }
+
     /** 按供应商+配置版本懒构建/重建 RestClient；版本推进后清掉旧连接，避免缓存累积 */
     private RestClient clientFor(AiModelBinding binding, int connectTimeout, int readTimeout, int version) {
         String cacheKey = binding.providerId() + ":" + version;
@@ -97,7 +132,10 @@ public class OpenAiCompatibleProvider implements AiProvider {
             clientCache.clear();
         }
         return clientCache.computeIfAbsent(cacheKey, ignored -> {
+            // 显式直连：AI 供应商（SiliconFlow/DeepSeek 等）国内可直接访问，
+            // 开发机系统代理（如 Clash）会把请求路由到境外线路导致严重变慢
             HttpClient httpClient = HttpClient.newBuilder()
+                    .proxy(HttpClient.Builder.NO_PROXY)
                     .connectTimeout(Duration.ofSeconds(connectTimeout))
                     .build();
             JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);

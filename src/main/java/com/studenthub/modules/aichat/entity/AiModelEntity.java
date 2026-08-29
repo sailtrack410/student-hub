@@ -16,7 +16,7 @@ public class AiModelEntity {
 
     private Long providerId;
     private String providerModelId;
-    /** CHAT 聊天模型 / VISION 图片识别 */
+    /** CHAT 聊天模型 / VISION 图片识别 / ASR 语音识别 */
     private String modelType;
     /** 能力标签，逗号分隔：stream/vision/audio/tools/structured/reasoning */
     private String capabilities;

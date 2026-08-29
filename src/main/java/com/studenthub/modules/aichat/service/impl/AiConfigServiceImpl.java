@@ -38,6 +38,7 @@ public class AiConfigServiceImpl implements AiConfigService {
 
     public static final String TYPE_CHAT = "CHAT";
     public static final String TYPE_VISION = "VISION";
+    public static final String TYPE_ASR = "ASR";
 
     private static final Long SINGLETON_ID = 1L;
 
@@ -88,6 +89,7 @@ public class AiConfigServiceImpl implements AiConfigService {
                 Boolean.TRUE.equals(config.getEnabled()),
                 resolveBinding(TYPE_CHAT),
                 resolveBinding(TYPE_VISION),
+                resolveBinding(TYPE_ASR),
                 config.getConnectTimeoutSeconds(),
                 config.getReadTimeoutSeconds(),
                 config.getMaxInputCharacters(),

@@ -1,4 +1,5 @@
 const config = require('./config');
+const { compressImage } = require('./image');
 
 const TOKEN_KEY = 'accessToken';
 const USER_KEY = 'user';
@@ -76,11 +77,12 @@ function request(options) {
   });
 }
 
-function uploadImage(filePath) {
+async function uploadImage(filePath) {
+  const compressedPath = await compressImage(filePath);
   return new Promise((resolve, reject) => {
     wx.uploadFile({
       url: `${config.baseUrl}/api/app/files`,
-      filePath,
+      filePath: compressedPath,
       name: 'file',
       header: { Authorization: `Bearer ${getToken()}` },
       success(res) {
@@ -106,4 +108,35 @@ function uploadImage(filePath) {
   });
 }
 
-module.exports = { request, uploadImage, getToken, getUser, saveSession, clearSession, ensureLogin };
+function uploadAudio(filePath) {
+  return new Promise((resolve, reject) => {
+    wx.uploadFile({
+      url: `${config.baseUrl}/api/app/files/audio`,
+      filePath,
+      name: 'file',
+      header: { Authorization: `Bearer ${getToken()}` },
+      timeout: 60000,
+      success(res) {
+        let body = {};
+        try {
+          body = JSON.parse(res.data);
+        } catch (error) {
+          body = {};
+        }
+        if (res.statusCode === 200 && body.success) {
+          resolve(body.data);
+          return;
+        }
+        const message = (body && body.message) || '音频上传失败';
+        wx.showToast({ title: message, icon: 'none' });
+        reject({ message });
+      },
+      fail() {
+        wx.showToast({ title: '音频上传失败，请稍后再试', icon: 'none' });
+        reject(new Error('upload audio failed'));
+      }
+    });
+  });
+}
+
+module.exports = { request, uploadImage, uploadAudio, getToken, getUser, saveSession, clearSession, ensureLogin };

@@ -3,6 +3,7 @@ package com.studenthub.modules.aichat.controller;
 import com.studenthub.common.PageResult;
 import com.studenthub.common.Result;
 import com.studenthub.modules.aichat.controller.dto.AiConversationResponse;
+import com.studenthub.modules.aichat.controller.dto.AiAudioTranscribeRequest;
 import com.studenthub.modules.aichat.controller.dto.AiMessageResponse;
 import com.studenthub.modules.aichat.controller.dto.CreateConversationRequest;
 import com.studenthub.modules.aichat.controller.dto.SendMessageRequest;
@@ -66,5 +67,13 @@ public class AppAiChatController {
                                           @RequestBody @Valid SendMessageRequest request) {
         var user = currentUserProvider.requireCurrentUser();
         return Result.success(aiConversationService.sendMessage(user, conversationId, request));
+    }
+
+    @PostMapping("/speech/transcribe")
+    @Operation(summary = "语音转写", description = "上传音频文件（mp3/aac/m4a/wav）返回转写文本。",
+            operationId = "transcribeAiAudio")
+    @PreAuthorize("hasAuthority('ai:chat')")
+    public Result<String> transcribe(@RequestBody @Valid AiAudioTranscribeRequest request) {
+        return Result.success(aiConversationService.transcribeAudio(request.fileId()));
     }
 }

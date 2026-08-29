@@ -7,10 +7,11 @@
 
     window.AdminPages = window.AdminPages || {};
 
-    var TYPE_LABEL = { CHAT: '语言模型', VISION: '图片识别' };
+    var TYPE_LABEL = { CHAT: '语言模型', VISION: '图片识别', ASR: '语音识别' };
     var TYPE_OPTIONS = [
         { value: 'CHAT', label: '语言模型' },
-        { value: 'VISION', label: '图片识别' }
+        { value: 'VISION', label: '图片识别' },
+        { value: 'ASR', label: '语音识别' }
     ];
 
     function typeLabel(value) {

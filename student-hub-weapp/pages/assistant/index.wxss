@@ -87,7 +87,7 @@
 }
 
 .bubble-wrap {
-  max-width: 480rpx;
+  max-width: 520rpx;
   min-width: 0;
 }
 
@@ -97,7 +97,7 @@
   display: flex;
   flex-direction: column;
   gap: 14rpx;
-  max-width: 480rpx;
+  max-width: 520rpx;
 }
 
 .action-card {
@@ -171,14 +171,90 @@
   height: 30rpx;
 }
 
+/* 用户消息内图片：按原宽高比展示 */
+.message-images {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12rpx;
+  margin-top: 10rpx;
+  max-width: 440rpx;
+}
+
+.message-image {
+  max-width: 440rpx;
+  border-radius: 16rpx;
+  border: 2rpx solid rgba(255, 255, 255, 0.4);
+  background: #fff;
+}
+
+/* 待发送图片预览 */
+.pending-bar {
+  display: flex;
+  gap: 16rpx;
+  padding: 0 30rpx 14rpx;
+  background: var(--bg-card);
+}
+
+.pending-item {
+  position: relative;
+  width: 110rpx;
+  height: 110rpx;
+}
+
+.pending-image {
+  width: 110rpx;
+  height: 110rpx;
+  border-radius: 14rpx;
+  border: 2rpx solid var(--brand-soft);
+}
+
+.pending-remove {
+  position: absolute;
+  top: -14rpx;
+  right: -14rpx;
+  width: 36rpx;
+  height: 36rpx;
+  line-height: 34rpx;
+  text-align: center;
+  background: rgba(15, 23, 42, 0.72);
+  color: #fff;
+  border-radius: 50%;
+  font-size: 26rpx;
+}
+
 /* 输入区 */
 .input-bar {
   display: flex;
-  gap: 20rpx;
+  gap: 16rpx;
   padding: 18rpx 30rpx;
   background: var(--bg-card);
   align-items: center;
   box-shadow: 0 -6rpx 24rpx rgba(15, 23, 42, 0.05);
+}
+
+/* 左侧文字/语音切换按钮 */
+.mode-btn {
+  width: 80rpx;
+  height: 72rpx;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.mode-btn::after {
+  border: none;
+}
+
+.mode-icon {
+  font-size: 28rpx;
+  color: var(--brand);
+  font-weight: 600;
 }
 
 .input {
@@ -193,6 +269,34 @@
   color: var(--text-3);
 }
 
+/* 图片按钮 */
+.tool-btn {
+  height: 72rpx;
+  padding: 0;
+  margin: 0;
+  background: var(--bg-page);
+  border-radius: 999rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.tool-btn::after {
+  border: none;
+}
+
+.tool-btn-image {
+  padding: 0 22rpx;
+  font-size: 26rpx;
+  color: var(--text-1);
+}
+
+.tool-btn[disabled] {
+  opacity: 0.4;
+}
+
 .send-btn {
   background: var(--grad-brand);
   color: #fff;
@@ -205,6 +309,7 @@
   align-items: center;
   justify-content: center;
   line-height: 1;
+  flex-shrink: 0;
 }
 
 .send-btn::after {
@@ -215,4 +320,28 @@
   opacity: 0.5;
   color: #fff;
   background: var(--grad-brand);
+}
+
+/* 按住说话按钮 */
+.voice-btn {
+  flex: 1;
+  height: 72rpx;
+  margin: 0;
+  background: var(--bg-page);
+  color: var(--text-1);
+  font-size: 28rpx;
+  border-radius: 999rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.voice-btn::after {
+  border: none;
+}
+
+.voice-btn-recording {
+  background: #fee2e2;
+  color: #dc2626;
 }

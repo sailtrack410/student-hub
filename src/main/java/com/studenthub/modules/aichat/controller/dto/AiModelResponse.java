@@ -9,7 +9,7 @@ public record AiModelResponse(
         @Schema(description = "所属供应商 ID") Long providerId,
         @Schema(description = "所属供应商名称") String providerName,
         @Schema(description = "供应商模型 ID") String providerModelId,
-        @Schema(description = "模型类型：CHAT 聊天模型 / VISION 图片识别") String modelType,
+        @Schema(description = "模型类型：CHAT 聊天模型 / VISION 图片识别 / ASR 语音识别", nullable = true) String modelType,
         @Schema(description = "是否启用") boolean enabled,
         @Schema(description = "能力标签，逗号分隔", nullable = true) String capabilities) {
 
