@@ -40,7 +40,8 @@ public class AiChatServiceImpl implements AiChatService {
                 throw new BusinessException(ErrorCode.INVALID_PARAMETER, "用户消息长度超过限制");
             }
         }
-        String model = snapshot != null ? snapshot.model() : aiProperties.getModel();
+        AiModelBinding chat = snapshot != null ? snapshot.chat() : null;
+        String model = chat != null ? chat.model() : aiProperties.getModel();
         return aiProvider.chat(new AiChatRequest(model, messages));
     }
 }

@@ -1,6 +1,7 @@
 package com.studenthub.config;
 
 import com.studenthub.integration.ai.AiRuntimeConfig;
+import com.studenthub.integration.ai.AiRuntimeSnapshot;
 import com.studenthub.modules.aichat.service.impl.AiConfigServiceImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,9 +26,10 @@ public class AiRuntimeConfigInitializer implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         try {
             aiConfigService.refreshRuntime();
-            if (AiRuntimeConfig.current() != null) {
-                log.info("AI 运行时配置已加载, model={}, enabled={}",
-                        AiRuntimeConfig.current().model(), AiRuntimeConfig.current().enabled());
+            AiRuntimeSnapshot snapshot = AiRuntimeConfig.current();
+            if (snapshot != null) {
+                log.info("AI 运行时配置已加载, enabled={}, chatModel={}", snapshot.enabled(),
+                        snapshot.chat() == null ? "未配置" : snapshot.chat().model());
             }
         } catch (Exception exception) {
             // 数据库尚未就绪或表缺失时保持环境变量默认值，不阻断启动

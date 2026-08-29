@@ -15,13 +15,14 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * OpenAI 兼容 AI 供应商：按 {@link AiRuntimeConfig} 的快照懒构建/重建 RestClient，
- * 管理后台保存配置后下一次调用即使用新连接，无需重启。
+ * OpenAI 兼容 AI 供应商：默认聊天模型绑定来自 {@link AiRuntimeConfig} 快照，
+ * 按供应商懒构建/缓存 RestClient，管理后台变更配置后下一次调用即使用新连接，无需重启。
  *
- * <p>配置解析顺序：进程内快照（DB，管理后台维护）→ 环境变量默认值（AiProperties）。
+ * <p>无进程内快照（如启动早期）时回退到环境变量默认值（AiProperties）。
  */
 @Slf4j
 @Component
@@ -29,8 +30,9 @@ public class OpenAiCompatibleProvider implements AiProvider {
 
     private final AiProperties properties;
     private final ObjectMapper objectMapper;
-    private final AtomicReference<RestClient> cachedClient = new AtomicReference<>();
-    private final AtomicReference<Integer> cachedVersion = new AtomicReference<>(-1);
+    /** providerId:version -> RestClient，配置版本变化后自动重建 */
+    private final ConcurrentHashMap<String, RestClient> clientCache = new ConcurrentHashMap<>();
+    private final AtomicReference<String> lastCacheKey = new AtomicReference<>();
 
     public OpenAiCompatibleProvider(AiProperties properties,
                                     ObjectMapper objectMapper) {
@@ -41,16 +43,19 @@ public class OpenAiCompatibleProvider implements AiProvider {
     @Override
     public AiChatResponse chat(AiChatRequest request) {
         AiRuntimeSnapshot snapshot = AiRuntimeConfig.current();
-        if (snapshot == null) {
-            snapshot = fallbackSnapshot();
-        }
-        if (!snapshot.enabled()) {
+        AiModelBinding binding = snapshot != null ? snapshot.chat() : fallbackBinding();
+        boolean enabled = snapshot != null ? snapshot.enabled() : properties.isEnabled();
+        if (!enabled || binding == null) {
             throw new BusinessException(ErrorCode.AI_NOT_CONFIGURED);
         }
-        if (!StringUtils.hasText(snapshot.apiKey())) {
+        if (!StringUtils.hasText(binding.apiKey())) {
             throw new BusinessException(ErrorCode.AI_NOT_CONFIGURED);
         }
-        RestClient client = clientFor(snapshot);
+        int connectTimeout = snapshot != null ? snapshot.connectTimeoutSeconds()
+                : properties.getConnectTimeoutSeconds();
+        int readTimeout = snapshot != null ? snapshot.readTimeoutSeconds()
+                : properties.getReadTimeoutSeconds();
+        RestClient client = clientFor(binding, connectTimeout, readTimeout, snapshot == null ? 0 : snapshot.version());
         try {
             Map<String, Object> payload = new HashMap<>();
             payload.put("model", request.model());
@@ -59,7 +64,7 @@ public class OpenAiCompatibleProvider implements AiProvider {
             String responseBody = client.post()
                     .uri("/chat/completions")
                     .contentType(MediaType.APPLICATION_JSON)
-                    .header("Authorization", "Bearer " + snapshot.apiKey())
+                    .header("Authorization", "Bearer " + binding.apiKey())
                     .body(payload)
                     .retrieve()
                     .body(String.class);
@@ -84,39 +89,31 @@ public class OpenAiCompatibleProvider implements AiProvider {
         }
     }
 
-    /** 按配置版本懒构建/重建 RestClient；版本未变则复用 */
-    private RestClient clientFor(AiRuntimeSnapshot snapshot) {
-        Integer version = snapshot.version();
-        RestClient cached = cachedClient.get();
-        if (cached != null && version.equals(cachedVersion.get())) {
-            return cached;
+    /** 按供应商+配置版本懒构建/重建 RestClient；版本推进后清掉旧连接，避免缓存累积 */
+    private RestClient clientFor(AiModelBinding binding, int connectTimeout, int readTimeout, int version) {
+        String cacheKey = binding.providerId() + ":" + version;
+        String previous = lastCacheKey.getAndSet(cacheKey);
+        if (!cacheKey.equals(previous)) {
+            clientCache.clear();
         }
-        HttpClient httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(snapshot.connectTimeoutSeconds()))
-                .build();
-        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
-        requestFactory.setReadTimeout(Duration.ofSeconds(snapshot.readTimeoutSeconds()));
-        RestClient built = RestClient.builder()
-                .requestFactory(requestFactory)
-                .baseUrl(snapshot.baseUrl())
-                .build();
-        cachedClient.set(built);
-        cachedVersion.set(version);
-        return built;
+        return clientCache.computeIfAbsent(cacheKey, ignored -> {
+            HttpClient httpClient = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(connectTimeout))
+                    .build();
+            JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+            requestFactory.setReadTimeout(Duration.ofSeconds(readTimeout));
+            return RestClient.builder()
+                    .requestFactory(requestFactory)
+                    .baseUrl(binding.baseUrl())
+                    .build();
+        });
     }
 
     /** 无进程内快照（如启动早期）时回退到环境变量配置 */
-    private AiRuntimeSnapshot fallbackSnapshot() {
-        return new AiRuntimeSnapshot(
-                properties.isEnabled(),
-                "OPENAI_COMPATIBLE",
-                properties.getBaseUrl(),
-                properties.getApiKey(),
-                properties.getModel(),
-                properties.getConnectTimeoutSeconds(),
-                properties.getReadTimeoutSeconds(),
-                properties.getMaxInputCharacters(),
-                20, 10, 2000,
-                0);
+    private AiModelBinding fallbackBinding() {
+        if (!StringUtils.hasText(properties.getBaseUrl()) || !StringUtils.hasText(properties.getModel())) {
+            return null;
+        }
+        return new AiModelBinding(0L, properties.getBaseUrl(), properties.getApiKey(), properties.getModel());
     }
 }

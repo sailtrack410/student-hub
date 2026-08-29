@@ -8,7 +8,8 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * AI 动态配置：单行表（id 恒为 1），由管理后台读写，保存后即时生效。
+ * AI 全局设置：单行表（id 恒为 1），只保留总开关与超时/限流；
+ * 供应商与模型连接信息由 V17 起的 ai_provider/ai_model/ai_default_model 承载。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -19,10 +20,6 @@ public class AiConfigEntity extends BaseEntity {
     private Long id;
 
     private Boolean enabled;
-    private String provider;
-    private String baseUrl;
-    private String apiKey;
-    private String model;
     private Integer connectTimeoutSeconds;
     private Integer readTimeoutSeconds;
     private Integer maxInputCharacters;

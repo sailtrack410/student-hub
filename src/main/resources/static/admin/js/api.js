@@ -85,6 +85,7 @@
         get: function (path, options) { return request('GET', path, undefined, options); },
         post: function (path, body, options) { return request('POST', path, body, options); },
         put: function (path, body, options) { return request('PUT', path, body, options); },
+        delete: function (path, options) { return request('DELETE', path, undefined, options); },
         getToken: getToken,
         setToken: setToken,
         onUnauthorized: onUnauthorized,

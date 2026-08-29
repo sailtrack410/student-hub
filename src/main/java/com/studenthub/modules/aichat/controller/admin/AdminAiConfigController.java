@@ -16,9 +16,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * AI 全局设置（总开关 + 超时 + 限流）；供应商/模型管理见 AdminAiProviderController。
+ */
 @RestController
 @RequestMapping("/api/admin/ai-config")
-@Tag(name = "管理端-AI 配置")
+@Tag(name = "管理端-AI 全局设置")
 @RequiredArgsConstructor
 @PreAuthorize("hasAuthority('ai:manage')")
 public class AdminAiConfigController {
@@ -27,17 +30,15 @@ public class AdminAiConfigController {
     private final CurrentUserProvider currentUserProvider;
 
     @GetMapping
-    @Operation(summary = "查询 AI 配置", description = "返回当前生效的 AI 配置，API Key 脱敏。",
-            operationId = "getAiConfig")
+    @Operation(summary = "查询 AI 全局设置", operationId = "getAiConfig")
     public Result<AiConfigResponse> current() {
         return Result.success(aiConfigService.current());
     }
 
     @PutMapping
-    @Operation(summary = "保存 AI 配置", description = "保存后进程内即时生效，无需重启；API Key 留空表示保持原值。",
+    @Operation(summary = "保存 AI 全局设置", description = "保存后进程内即时生效，无需重启。",
             operationId = "updateAiConfig")
     public Result<AiConfigResponse> update(@RequestBody @Valid AiConfigUpdateRequest request) {
-        Long operatorId = currentUserProvider.currentUserIdOrSystem();
-        return Result.success(aiConfigService.update(operatorId, request));
+        return Result.success(aiConfigService.update(currentUserProvider.currentUserIdOrSystem(), request));
     }
 }

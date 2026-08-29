@@ -220,6 +220,9 @@
     app.component('WorkOrdersPage', window.AdminPages.WorkOrdersPage);
     app.component('UsersPage', window.AdminPages.UsersPage);
     app.component('AiConfigPage', window.AdminPages.AiConfigPage);
+    app.component('AiProvidersPage', window.AdminPages.AiProvidersPage);
+    app.component('AiModelsPage', window.AdminPages.AiModelsPage);
+    app.component('AiDefaultsPage', window.AdminPages.AiDefaultsPage);
     for (var name in window.ElementPlusIconsVue) {
         if (Object.prototype.hasOwnProperty.call(window.ElementPlusIconsVue, name)) {
             app.component(name, window.ElementPlusIconsVue[name]);

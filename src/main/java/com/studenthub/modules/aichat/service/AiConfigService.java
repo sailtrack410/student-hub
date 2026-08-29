@@ -4,13 +4,20 @@ import com.studenthub.modules.aichat.controller.dto.AiConfigResponse;
 import com.studenthub.modules.aichat.controller.dto.AiConfigUpdateRequest;
 
 /**
- * AI 动态配置：管理后台读写，保存后即时生效（进程内快照刷新）。
+ * AI 全局设置：管理后台读写，保存后即时生效（进程内快照刷新）。
+ * 供应商/模型/默认模型管理见 {@link AiProviderAdminService}。
  */
 public interface AiConfigService {
 
-    /** 查询当前配置（apiKey 脱敏）；DB 无配置时回退环境变量默认值 */
+    /** 查询全局设置（总开关 + 超时 + 限流），附带当前生效的默认聊天模型名 */
     AiConfigResponse current();
 
-    /** 保存配置并刷新进程内快照，返回保存后的响应 */
+    /** 保存全局设置并刷新进程内快照，返回保存后的响应 */
     AiConfigResponse update(Long operatorId, AiConfigUpdateRequest request);
+
+    /**
+     * 从 ai_provider/ai_model/ai_default_model 重建运行时快照；
+     * 启动时与供应商/模型/默认模型任何变更后调用。
+     */
+    void refreshRuntime();
 }

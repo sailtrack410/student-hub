@@ -13,7 +13,7 @@ body {
     height: 100%;
 }
 
-.layout aside {
+.layout > aside {
     width: 220px;
     background: #1f2d3d;
     color: #bfcbd9;
@@ -22,7 +22,7 @@ body {
     flex-shrink: 0;
 }
 
-.layout aside .brand {
+.layout > aside .brand {
     height: 60px;
     display: flex;
     align-items: center;
@@ -34,7 +34,7 @@ body {
     letter-spacing: 1px;
 }
 
-.layout .el-menu {
+.layout > aside .el-menu {
     border-right: none;
     background: transparent;
     flex: 1;
@@ -157,3 +157,169 @@ body {
         grid-template-columns: 1fr;
     }
 }
+
+/* ---- AI 配置页：供应商两栏布局 ---- */
+.ai-tabs .el-tabs__content {
+    padding-top: 8px;
+}
+
+.ai-layout {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+}
+
+.ai-side {
+    width: 240px;
+    flex-shrink: 0;
+    background: #fff;
+    border-radius: 8px;
+    padding: 14px 10px;
+}
+
+.ai-side-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 6px 10px;
+    border-bottom: 1px solid #f0f2f5;
+}
+
+.ai-side-title {
+    font-weight: 600;
+    color: #303133;
+}
+
+.ai-provider-item {
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-top: 6px;
+    border: 1px solid transparent;
+}
+
+.ai-provider-item:hover {
+    background: #f5f7fa;
+}
+
+.ai-provider-item.active {
+    background: #ecf5ff;
+    border-color: #d9ecff;
+}
+
+.ai-provider-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ai-provider-code {
+    margin: 3px 0 0 18px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.strong {
+    font-weight: 600;
+    color: #303133;
+}
+
+.ai-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.ai-provider-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+}
+
+.ai-title {
+    margin: 0;
+    font-size: 17px;
+    color: #303133;
+}
+
+.ai-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.ai-models-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.ai-model-row {
+    display: flex;
+    align-items: center;
+    padding: 12px 4px;
+    border-bottom: 1px solid #f0f2f5;
+}
+
+.ai-model-row:last-child {
+    border-bottom: none;
+}
+
+.dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+.dot.ok {
+    background: #67c23a;
+}
+
+.dot.off {
+    background: #c0c4cc;
+}
+
+.dot.bad {
+    background: #f56c6c;
+}
+
+.ai-fetch-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.ai-fetch-list {
+    max-height: 380px;
+    overflow: auto;
+    border: 1px solid #ebeef5;
+    border-radius: 6px;
+}
+
+.ai-fetch-row {
+    display: flex;
+    align-items: center;
+    padding: 9px 12px;
+    border-bottom: 1px solid #f0f2f5;
+}
+
+.ai-fetch-row:last-child {
+    border-bottom: none;
+}
+
+.ai-default-row {
+    display: flex;
+    align-items: center;
+    padding: 12px 0;
+}
+
+.ai-default-label {
+    width: 300px;
+    flex-shrink: 0;
+}
+
