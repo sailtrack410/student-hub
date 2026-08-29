@@ -20,4 +20,8 @@ public class ScheduleSemesterEntity extends BaseEntity {
     private String semesterCode;
     private String semesterName;
     private java.time.LocalDateTime lastSyncedAt;
+    /** 该学期第一周的周一日期（日期定位事实源） */
+    private java.time.LocalDate firstMonday;
+    /** 该学期总周数 */
+    private Integer totalWeeks;
 }

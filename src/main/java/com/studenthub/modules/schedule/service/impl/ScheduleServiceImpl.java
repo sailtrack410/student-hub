@@ -9,6 +9,7 @@ import com.studenthub.modules.identity.security.AuthenticatedUser;
 import com.studenthub.modules.jwauth.entity.JwBindingEntity;
 import com.studenthub.modules.jwauth.mapper.JwBindingMapper;
 import com.studenthub.modules.jwauth.security.JwSessionStore;
+import com.studenthub.modules.schedule.calendar.SemesterCalendar;
 import com.studenthub.modules.schedule.controller.dto.ScheduleCourseItem;
 import com.studenthub.modules.schedule.controller.dto.ScheduleImportResponse;
 import com.studenthub.modules.schedule.controller.dto.ScheduleViewResponse;
@@ -22,6 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -82,13 +84,16 @@ public class ScheduleServiceImpl implements ScheduleService {
         }
         final String syncSemesterCode = page.semesterCode();
         final String syncSemesterName = page.semesterName();
+        final LocalDate firstMonday = SemesterCalendar.firstMonday(syncSemesterCode, syncSemesterName);
+        final int totalWeeks = personal.isEmpty() ? 16
+                : Math.min(Math.max(SemesterCalendar.maxWeekOf(personal), 1), 30);
         transactionTemplate.executeWithoutResult(status -> {
             // 个人课表按学期覆盖：同一学期重新导入时替换旧数据，其它学期保留
             courseMapper.deleteByUserIdAndSemester(user.userId(), syncSemesterCode);
             if (!personal.isEmpty()) {
                 courseMapper.insertBatch(personal);
             }
-            // 记录/更新该学期（空学期也登记，保证下拉里出现）
+            // 记录/更新该学期（空学期也登记，保证下拉里出现），并固化日期定位锚点
             ScheduleSemesterEntity existing = semesterMapper.selectByUserId(user.userId()).stream()
                     .filter(s -> syncSemesterCode.equals(s.getSemesterCode()))
                     .findFirst()
@@ -102,10 +107,14 @@ public class ScheduleServiceImpl implements ScheduleService {
                 created.setSemesterCode(syncSemesterCode);
                 created.setSemesterName(syncSemesterName);
                 created.setLastSyncedAt(LocalDateTime.now());
+                created.setFirstMonday(firstMonday);
+                created.setTotalWeeks(totalWeeks);
                 semesterMapper.insert(created);
             } else {
                 existing.setSemesterName(syncSemesterName);
                 existing.setLastSyncedAt(LocalDateTime.now());
+                existing.setFirstMonday(firstMonday);
+                existing.setTotalWeeks(totalWeeks);
                 existing.setUpdatedBy(user.userId());
                 semesterMapper.updateById(existing);
             }
@@ -175,12 +184,33 @@ public class ScheduleServiceImpl implements ScheduleService {
 
         List<ScheduleCourseItem> items = current.stream().map(ScheduleCourseItem::from).toList();
         String className = binding == null ? null : binding.getClassName();
+
+        // 日期定位锚点：优先登记表，缺失时按同规则现场计算（兼容旧数据）
+        ScheduleSemesterEntity chosen = requested == null ? null
+                : registered.stream()
+                        .filter(s -> requested.equals(s.getSemesterCode()))
+                        .findFirst()
+                        .orElse(null);
+        LocalDate firstMonday = chosen != null ? chosen.getFirstMonday() : null;
+        if (firstMonday == null) {
+            String nameForCalc = requested == null ? null : (byCode.containsKey(requested)
+                    ? byCode.get(requested).semesterName()
+                    : (binding != null && requested.equals(binding.getLastSemesterCode())
+                            ? binding.getLastSemesterName() : null));
+            firstMonday = SemesterCalendar.firstMonday(requested, nameForCalc);
+        }
+        Integer totalWeeks = chosen != null ? chosen.getTotalWeeks() : null;
+        if (totalWeeks == null) {
+            totalWeeks = current.isEmpty() ? 16
+                    : Math.min(Math.max(SemesterCalendar.maxWeekOf(current), 1), 30);
+        }
+
         String chosenName = requested == null ? null
                 : byCode.containsKey(requested)
                         ? byCode.get(requested).semesterName()
                         : (binding != null && requested.equals(binding.getLastSemesterCode())
                                 ? binding.getLastSemesterName() : null);
-        return new ScheduleViewResponse(requested, chosenName, className, items, available);
+        return new ScheduleViewResponse(requested, chosenName, className, items, available, firstMonday, totalWeeks);
     }
 
     private void markExpired(JwBindingEntity binding) {

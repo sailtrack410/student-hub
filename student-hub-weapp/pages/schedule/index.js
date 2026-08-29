@@ -90,21 +90,32 @@ function mondayOf(date) {
   return d;
 }
 
-/** 按学期编码/名称估算第一周周一：第一学期约 9 月 1 日，第二学期约次年 3 月 1 日 */
+/** 解析后端下发的 firstMonday（yyyy-MM-dd）为本地日期，避免时区造成周一偏移 */
+function parseAnchor(value) {
+  if (!value) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value));
+  if (!m) return null;
+  return mondayOf(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+}
+
+/** 按学期编码/名称估算第一周周一：第一学期约 8 月 1 日，第二学期约次年 2 月 1 日 */
 function estimateSemesterStart(semesterCode, semesterName) {
   let year = null;
   let term = null;
-  const codeMatch = semesterCode ? /^(\d{4})\s*[,，-]\s*(\d)$/.exec(String(semesterCode).trim()) : null;
-  if (codeMatch) {
-    year = Number(codeMatch[1]);
-    term = Number(codeMatch[2]);
-  }
-  if (term == null && semesterName) {
+  // 学期名称优先：教务编码的学期位可能与真实“第几学期”语义相反
+  if (semesterName) {
     const nameMatch = /(\d{4})[-–—]\d{4}学年第([一二三四五六]+|\d)学期/.exec(String(semesterName));
     if (nameMatch) {
       year = Number(nameMatch[1]);
       const termMap = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6 };
       term = termMap[nameMatch[2]] || Number(nameMatch[2]);
+    }
+  }
+  if (term == null && semesterCode) {
+    const codeMatch = /^(\d{4})\s*[,，-]\s*(\d)$/.exec(String(semesterCode).trim());
+    if (codeMatch) {
+      year = Number(codeMatch[1]);
+      term = Number(codeMatch[2]);
     }
   }
   if (!year || !term) return null;
@@ -181,6 +192,8 @@ Page({
     this.rawSemesterName = data.semesterName || '';
     this.rawClassName = data.className || '';
     this.semesterOptions = data.availableSemesters || [];
+    this.rawFirstMonday = data.firstMonday || null;
+    this.rawTotalWeeks = data.totalWeeks || null;
     this.applySchedule();
   },
 
@@ -191,22 +204,28 @@ Page({
       wx.setNavigationBarTitle({ title: semesterText });
     }
 
-    // 假期/空学期也要有周次：按课程周次或默认 16 周生成周次选项
-    let maxWeek = 1;
-    if (!courses.length && this.rawSemesterName) {
-      maxWeek = 16;
-    } else {
-      this.weekSets = courses.map((course) => {
-        const set = weekSetOf(course);
-        set.forEach((w) => {
-          if (w > maxWeek) maxWeek = w;
+    // 周次范围与第一周锚点：优先后端下发的（AI 按日期查询共用同一事实源）
+    let maxWeek = parseInt(this.rawTotalWeeks, 10) || 0;
+    if (!maxWeek) {
+      if (!courses.length && this.rawSemesterName) {
+        maxWeek = 16;
+      } else {
+        maxWeek = 1;
+        this.weekSets = courses.map((course) => {
+          const set = weekSetOf(course);
+          set.forEach((w) => {
+            if (w > maxWeek) maxWeek = w;
+          });
+          return set;
         });
-        return set;
-      });
+      }
+    } else {
+      this.weekSets = courses.map((course) => weekSetOf(course));
     }
     maxWeek = Math.min(maxWeek, 30);
 
-    const anchor = estimateSemesterStart(this.semesterCode, this.rawSemesterName);
+    const anchor = parseAnchor(this.rawFirstMonday)
+      || estimateSemesterStart(this.semesterCode, this.rawSemesterName);
     let todayWeek = 0;
     if (anchor) {
       const diff = Math.floor((mondayOf(new Date()) - anchor) / 604800000) + 1;

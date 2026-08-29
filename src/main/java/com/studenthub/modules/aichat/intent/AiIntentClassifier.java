@@ -6,6 +6,8 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 规则优先的意图分类器：先用本地关键词/正则快速命中高频意图，
@@ -18,6 +20,11 @@ public class AiIntentClassifier {
     private static final Map<String, Integer> DAY_WORDS = new LinkedHashMap<>();
 
     private static final Map<String, String[]> SERVICE_KEYWORDS = new LinkedHashMap<>();
+
+    /** "8月31日/8月31号/8.31/8/31/8-31"，可选年份 "2026年" 或 "2026-" 前缀 */
+    private static final Pattern DATE_PATTERN = Pattern.compile(
+            "(?:(\\d{4})\\s*[年/-])?\\s*(\\d{1,2})\\s*月\\s*(\\d{1,2})\\s*(?:日|号)"
+                    + "|(\\d{1,2})\\s*[./-]\\s*(\\d{1,2})");
 
     static {
         DAY_WORDS.put("周一", 1);
@@ -88,22 +95,101 @@ public class AiIntentClassifier {
         if (containsAny(text, "本周", "这周", "这星期", "周几", "星期几")) {
             return AiIntentMatch.scheduleWeek();
         }
+        // 具体日期优先：今天/明天/后天/绝对日期（8月31日、8/31 …）
+        LocalDate today = LocalDate.now();
         if (contains(text, "今天")) {
-            return AiIntentMatch.scheduleDay(LocalDate.now().getDayOfWeek().getValue());
+            return AiIntentMatch.scheduleDate(today);
+        }
+        if (contains(text, "昨天")) {
+            return AiIntentMatch.scheduleDate(today.minusDays(1));
         }
         if (contains(text, "明天")) {
-            return AiIntentMatch.scheduleDay(shift(LocalDate.now().getDayOfWeek(), 1));
+            return AiIntentMatch.scheduleDate(today.plusDays(1));
         }
         if (contains(text, "后天")) {
-            return AiIntentMatch.scheduleDay(shift(LocalDate.now().getDayOfWeek(), 2));
+            return AiIntentMatch.scheduleDate(today.plusDays(2));
+        }
+        LocalDate absolute = parseAbsoluteDate(text, today);
+        if (absolute != null) {
+            return AiIntentMatch.scheduleDate(absolute);
         }
         for (Map.Entry<String, Integer> entry : DAY_WORDS.entrySet()) {
             if (contains(text, entry.getKey())) {
                 return AiIntentMatch.scheduleDay(entry.getValue());
             }
         }
-        // 只出现"课"但没有明确星期 → 默认问本周
+        // 只出现"课"但没有明确日期/星期 → 默认问本周
         return AiIntentMatch.scheduleWeek();
+    }
+
+    /** 解析 "8月31日/8月31号/8.31/8/31/8-31"，缺少年份时用当前年并折叠到最近学年 */
+    private static LocalDate parseAbsoluteDate(String text, LocalDate today) {
+        Matcher matcher = DATE_PATTERN.matcher(text);
+        while (matcher.find()) {
+            LocalDate date = null;
+            if (matcher.group(2) != null) {
+                // 月/日 形式：8月31日、8月31号、2026年8月31日
+                int month = Integer.parseInt(matcher.group(2));
+                int dayOfMonth = Integer.parseInt(matcher.group(3));
+                if (matcher.group(1) != null) {
+                    date = safeDate(Integer.parseInt(matcher.group(1)), month, dayOfMonth);
+                } else {
+                    date = foldToRecent(today, month, dayOfMonth);
+                }
+            } else if (matcher.group(4) != null) {
+                // 纯数字形式：8.31 / 8/31 / 8-31，排除 "1-8周" 这类周次表达式
+                int month = Integer.parseInt(matcher.group(4));
+                int dayOfMonth = Integer.parseInt(matcher.group(5));
+                if (matcher.end() < text.length()) {
+                    char next = text.charAt(matcher.end());
+                    if (next == '周' || next == '节' || next == '次') {
+                        continue;
+                    }
+                }
+                date = foldToRecent(today, month, dayOfMonth);
+            }
+            if (date != null) {
+                return date;
+            }
+        }
+        return null;
+    }
+
+    private static LocalDate safeDate(int year, int month, int dayOfMonth) {
+        if (month < 1 || month > 12 || dayOfMonth < 1 || dayOfMonth > 31) {
+            return null;
+        }
+        try {
+            return LocalDate.of(year, month, dayOfMonth);
+        } catch (java.time.DateTimeException ignored) {
+            return null;
+        }
+    }
+
+    /** 把无年份的月/日折叠到最近学年：8~1月归第一学年，2~7月归第二学年，再取与今天相差最小的年份 */
+    private static LocalDate foldToRecent(LocalDate today, int month, int dayOfMonth) {
+        if (month < 1 || month > 12 || dayOfMonth < 1 || dayOfMonth > 31) {
+            return null;
+        }
+        boolean firstTermTarget = (month >= 8 || month == 1);
+        boolean firstTermToday = (today.getMonthValue() >= 8 || today.getMonthValue() == 1);
+        int basisYear = firstTermTarget
+                ? (firstTermToday ? today.getYear() : today.getYear() - 1)
+                : (firstTermToday ? today.getYear() + 1 : today.getYear());
+        LocalDate best = null;
+        long bestDist = Long.MAX_VALUE;
+        for (int year : new int[]{basisYear - 1, basisYear, basisYear + 1}) {
+            LocalDate candidate = safeDate(year, month, dayOfMonth);
+            if (candidate == null) {
+                continue;
+            }
+            long dist = Math.abs(java.time.temporal.ChronoUnit.DAYS.between(today, candidate));
+            if (dist < bestDist) {
+                bestDist = dist;
+                best = candidate;
+            }
+        }
+        return best;
     }
 
     private AiIntentMatch classifyMyRequests(String text) {
