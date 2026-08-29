@@ -38,6 +38,8 @@ public class KingosoftScheduleClient {
 
     /** 壳页里的当前学年/学期变量 */
     private static final Pattern DQ_XNXQ = Pattern.compile("var\\s+dqxn\\s*=\\s*\"(\\d+)\";\\s*var\\s+dqxq\\s*=\\s*\"(\\d+)\";");
+    /** 学年区段（如 2025-2026 / 2026-2027），用于推断校历上的最新学年 */
+    private static final Pattern ACADEMIC_YEAR = Pattern.compile("(\\d{4})\\s*[-–—]\\s*(\\d{4})");
     /** 数据页标题里的学期名 */
     private static final Pattern SEMESTER_TITLE = Pattern.compile("(\\d{4}-\\d{4}学年.+?)教学安排表");
 
@@ -62,8 +64,28 @@ public class KingosoftScheduleClient {
                 log.info("课表壳页未解析到当前学年学期，判定会话失效");
                 throw new BusinessException(ErrorCode.JW_SESSION_EXPIRED);
             }
-            String currentXnxq = matcher.group(1) + "," + matcher.group(2);
-            String chosen = semesterCode == null || semesterCode.isBlank() ? currentXnxq : semesterCode;
+            int shellYear = Integer.parseInt(matcher.group(1));
+            int shellTerm = Integer.parseInt(matcher.group(2));
+
+            // 教务的“当前学期”可能滞后校历（新学年已开始但系统仍停在上学期）：
+            // 从壳页出现的学年区段里挑最新学年；跳入新学年时按第一学期取数
+            int chosenYear = shellYear;
+            int chosenTerm = shellTerm;
+            int todayYear = java.time.LocalDate.now().getYear();
+            Matcher yearMatcher = ACADEMIC_YEAR.matcher(shell);
+            while (yearMatcher.find()) {
+                int start = Integer.parseInt(yearMatcher.group(1));
+                int end = Integer.parseInt(yearMatcher.group(2));
+                if (end == start + 1 && start <= todayYear && start > chosenYear) {
+                    chosenYear = start;
+                    chosenTerm = 1;
+                }
+            }
+            if (chosenYear != shellYear) {
+                log.info("教务当前学期滞后校历, 由 {},{} 推进到 {},{}", shellYear, shellTerm, chosenYear, chosenTerm);
+            }
+            String chosen = semesterCode == null || semesterCode.isBlank()
+                    ? chosenYear + "," + chosenTerm : semesterCode;
 
             // 2. 数据页：POST 周视图课表
             HttpResponse<byte[]> response = client.send(
@@ -84,7 +106,7 @@ public class KingosoftScheduleClient {
             String page = decodeBody(body);
             Document document = Jsoup.parse(page);
 
-            String semesterName = currentXnxq;
+            String semesterName = chosen;
             Matcher titleMatcher = SEMESTER_TITLE.matcher(page);
             if (titleMatcher.find()) {
                 semesterName = titleMatcher.group(1);

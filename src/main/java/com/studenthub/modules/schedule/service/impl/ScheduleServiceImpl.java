@@ -83,6 +83,13 @@ public class ScheduleServiceImpl implements ScheduleService {
             if (!personal.isEmpty()) {
                 courseMapper.insertBatch(personal);
             }
+            // 记录课表所属学期：新学期没课时视图仍能返回学期信息（前端显示假期）
+            JwBindingEntity semesterUpdate = new JwBindingEntity();
+            semesterUpdate.setId(binding.getId());
+            semesterUpdate.setLastSemesterCode(page.semesterCode());
+            semesterUpdate.setLastSemesterName(page.semesterName());
+            semesterUpdate.setVersion(binding.getVersion());
+            jwBindingMapper.updateById(semesterUpdate);
         });
 
         String className = binding.getClassName();
@@ -95,20 +102,32 @@ public class ScheduleServiceImpl implements ScheduleService {
     @Override
     public ScheduleViewResponse view(AuthenticatedUser user) {
         List<ScheduleCourseEntity> courses = courseMapper.selectByUserId(user.userId());
-        // 只展示最新学期，历史学期不入视图
-        String latestSemester = courses.stream()
-                .map(ScheduleCourseEntity::getSemesterCode)
-                .filter(java.util.Objects::nonNull)
-                .max(String::compareTo)
-                .orElse(null);
-        List<ScheduleCourseEntity> current = courses.stream()
-                .filter(course -> latestSemester == null || latestSemester.equals(course.getSemesterCode()))
-                .toList();
         JwBindingEntity binding = jwBindingMapper.findByUserId(user.userId());
-        String semesterCode = current.isEmpty() ? null : current.get(0).getSemesterCode();
-        String semesterName = current.isEmpty() ? null : current.get(0).getSemesterName();
-        String className = binding == null ? null : binding.getClassName();
+
+        // 学期以最后一次同步为准（写在绑定上，新学期 0 门课时依然有值）；
+        // 未同步过则回退到课程行里最新的学期
+        String semesterCode;
+        String semesterName;
+        if (binding != null && binding.getLastSemesterCode() != null) {
+            semesterCode = binding.getLastSemesterCode();
+            semesterName = binding.getLastSemesterName();
+        } else {
+            semesterCode = courses.stream()
+                    .map(ScheduleCourseEntity::getSemesterCode)
+                    .filter(java.util.Objects::nonNull)
+                    .max(String::compareTo)
+                    .orElse(null);
+            semesterName = courses.isEmpty() ? null : courses.get(0).getSemesterName();
+        }
+
+        String finalSemesterCode = semesterCode;
+        List<ScheduleCourseEntity> current = semesterCode == null ? List.of()
+                : courses.stream()
+                        .filter(course -> course.getSemesterCode() != null
+                                && course.getSemesterCode().equals(finalSemesterCode))
+                        .toList();
         List<ScheduleCourseItem> items = current.stream().map(ScheduleCourseItem::from).toList();
+        String className = binding == null ? null : binding.getClassName();
         return new ScheduleViewResponse(semesterCode, semesterName, className, items);
     }
 

@@ -37,4 +37,8 @@ public class JwBindingEntity extends BaseEntity {
     private String className;
     private LocalDateTime lastAuthAt;
     private LocalDateTime sessionExpiresAt;
+    /** 最后一次同步课表的学期编码（学年,学期），如 2026,1；新学期没课时视图据此返回学期与空课表 */
+    private String lastSemesterCode;
+    /** 最后一次同步课表的学期名称，如 2026-2027学年第一学期 */
+    private String lastSemesterName;
 }

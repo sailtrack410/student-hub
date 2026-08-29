@@ -9,7 +9,8 @@
       <view class="sync-btn {{importing ? 'is-disabled' : ''}}" bindtap="importSchedule">
         {{importing ? '同步中' : '同步'}}
       </view>
-      <view class="week-btn {{hasData ? '' : 'is-disabled'}}" bindtap="onOpenWeekPicker">
+      <view wx:if="{{vacation}}" class="vacation-tag">假期</view>
+      <view wx:else class="week-btn {{hasData ? '' : 'is-disabled'}}" bindtap="onOpenWeekPicker">
         <text class="week-btn-text">{{weekLabel}}</text>
         <view class="week-caret"></view>
       </view>
@@ -18,7 +19,7 @@
 
   <view wx:if="{{loading}}" class="loading">加载中…</view>
 
-  <block wx:elif="{{hasData}}">
+  <block wx:elif="{{hasData || vacation}}">
     <!-- 固定表头：月份 + 周一~周日 -->
     <view class="week-header">
       <view class="month-cell">
@@ -59,7 +60,8 @@
       </view>
     </view>
 
-    <view class="legend">轻点色块查看课程详情</view>
+    <view wx:if="{{hasData}}" class="legend">轻点色块查看课程详情</view>
+    <view wx:elif="{{vacation}}" class="legend">本学期课表尚未发布</view>
   </block>
 
   <block wx:elif="{{loaded}}">

@@ -73,6 +73,16 @@
   border-top: 10rpx solid rgba(255, 255, 255, 0.9);
 }
 
+/* 假期标记 */
+.vacation-tag {
+  padding: 12rpx 24rpx;
+  border-radius: 999rpx;
+  background: #E2E8F0;
+  color: #475569;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
 .is-disabled {
   opacity: 0.55;
 }
