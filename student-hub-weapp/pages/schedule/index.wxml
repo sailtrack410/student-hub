@@ -1,5 +1,5 @@
 <view class="schedule">
-  <!-- 顶栏 -->
+  <!-- 顶栏：学期信息 + 导入 -->
   <view class="head">
     <view class="head-info">
       <view class="head-title">{{semesterName || '我的课表'}}</view>
@@ -7,7 +7,7 @@
     </view>
     <view class="head-actions">
       <view class="btn {{importing ? 'btn-disabled' : ''}}" bindtap="importSchedule">
-        {{importing ? '导入中…' : '导入课表'}}
+        {{importing ? '同步中…' : '同步课表'}}
       </view>
     </view>
   </view>
@@ -15,20 +15,26 @@
   <view wx:if="{{loading}}" class="loading">加载中…</view>
 
   <block wx:elif="{{hasData}}">
-    <!-- 周视图：横向滚动，左侧为节次，右侧 7 天 -->
+    <!-- 周视图：横向滚动 -->
     <scroll-view class="grid-scroll" scroll-x="true" enhanced show-scrollbar="{{false}}">
       <view class="grid">
-        <!-- 表头：周几 -->
+        <!-- 表头 -->
         <view class="grid-row grid-header">
-          <view class="cell-time-cell"></view>
-          <view wx:for="{{days}}" wx:key="*this" class="cell-day">{{item}}</view>
+          <view class="cell-time-cell">
+            <text class="hdr-month">{{monthLabel}}</text>
+          </view>
+          <view wx:for="{{days}}" wx:key="*this" wx:for-item="d" class="cell-day">
+            <text class="cell-day-name">{{d.label}}</text>
+          </view>
         </view>
 
         <!-- 每节一行 -->
-        <view wx:for="{{cells}}" wx:key="section" wx:for-item="row" class="grid-row">
-          <view class="cell-time">
-            <text class="cell-period">{{row.period}}</text>
+        <view wx:for="{{rows}}" wx:key="section" wx:for-item="row" class="grid-row">
+          <!-- 时间列：时段首行大字，其余仅节次号 -->
+          <view class="cell-time {{row.periodStart ? 'cell-time-first' : ''}}">
+            <text wx:if="{{row.periodStart}}" class="cell-period">{{row.period}}</text>
             <text class="cell-section">{{row.section}}</text>
+            <text wx:if="{{row.periodStart}}" class="cell-time-range">{{row.timeRange}}</text>
           </view>
           <view
             wx:for="{{row.days}}"
@@ -36,18 +42,23 @@
             wx:for-item="dayCell"
             class="cell {{dayCell.items.length ? 'cell-has' : ''}}"
           >
-            <view wx:for="{{dayCell.items}}" wx:key="courseName" wx:for-item="course" class="course">
+            <view
+              wx:for="{{dayCell.items}}"
+              wx:key="index"
+              wx:for-item="course"
+              class="course course-c{{course.colorIndex}}"
+            >
               <text class="course-name">{{course.courseName}}</text>
               <text class="course-room">{{course.location}}</text>
+              <text class="course-weeks">{{course.weeksText}}</text>
             </view>
           </view>
         </view>
       </view>
     </scroll-view>
 
-    <!-- 图例 -->
     <view class="legend">
-      <text>课程详情见单元格，上课周次在课程展开后可见</text>
+      <text>共 {{courses.length}} 门课 · 上课周次见格内标注</text>
     </view>
   </block>
 
@@ -55,11 +66,11 @@
     <empty-state
       image="/assets/empty/empty-search.jpg"
       title="还没有导入课表"
-      subtitle="先从教务系统导入你的个人课表"
+      subtitle="同步教务系统，每周课程一目了然"
     />
     <view class="cta">
       <view class="cta-btn {{importing ? 'btn-disabled' : ''}}" bindtap="importSchedule">
-        {{importing ? '导入中…' : '立即导入'}}
+        {{importing ? '同步中…' : '立即导入'}}
       </view>
     </view>
   </block>

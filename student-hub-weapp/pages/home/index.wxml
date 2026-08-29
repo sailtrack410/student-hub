@@ -10,6 +10,7 @@
 
   <!-- 课表入口 -->
   <view class="schedule-entry card" bindtap="goSchedule">
+    <image class="schedule-entry-icon" src="/assets/identity/icon-schedule.png" mode="aspectFit" />
     <view class="schedule-entry-left">
       <view class="schedule-entry-title">我的课表</view>
       <view class="schedule-entry-sub">{{scheduleBrief || '从教务系统导入，每周课程一目了然'}}</view>

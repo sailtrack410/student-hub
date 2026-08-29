@@ -113,6 +113,10 @@ export const ASSETS = [
     'cute round badge sticker of a friendly campus maintenance worker character with a safety helmet and wrench, bold flat vector, coral orange and indigo palette',
     { post: { resize: 144 } }),
 
+  A('assets/identity/icon-schedule.png',
+    'cute round badge sticker of a weekly class schedule grid with colorful checkmarks and a small pencil, bold flat vector, indigo blue and teal palette',
+    { post: { resize: 144 } }),
+
   // ── 空状态与庆祝 ─────────────────────────────────────────────
   A('assets/empty/empty-requests.png',
     `${MASCOT} sitting on a tiny rounded empty box, relaxed pose, one or two small floating document sheets nearby, calm atmosphere`,
