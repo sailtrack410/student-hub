@@ -5,16 +5,15 @@
 
     <view class="row">
       <text class="row-label">头像</text>
-      <view class="avatar-wrap">
-        <image wx:if="{{avatarUrl}}" class="avatar-img" src="{{avatarUrl}}" mode="aspectFill" />
-        <view wx:else class="avatar-placeholder">默认</view>
+      <image class="avatar-img" src="{{avatarUrl || '/assets/mascot/mascot-avatar.jpg'}}" mode="aspectFill" />
+      <view class="row-actions">
+        <button class="avatar-btn" size="mini" open-type="chooseAvatar" chooseAvatar="{{true}}" bindchooseavatar="onChooseAvatar">
+          更换
+        </button>
+        <button wx:if="{{avatarUrl}}" class="avatar-btn mini-ghost" size="mini" bindtap="onResetAvatar">
+          默认
+        </button>
       </view>
-      <button class="avatar-btn" size="mini" open-type="chooseAvatar" chooseAvatar="{{true}}" bindchooseavatar="onChooseAvatar">
-        更换
-      </button>
-      <button wx:if="{{avatarUrl}}" class="avatar-btn avatar-reset-btn mini-ghost" size="mini" bindtap="onResetAvatar">
-        默认
-      </button>
     </view>
 
     <view class="row">

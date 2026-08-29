@@ -54,10 +54,11 @@
   font-size: 27rpx;
 }
 
-.avatar-wrap {
-  flex: 1;
+.row-actions {
+  margin-left: auto;
   display: flex;
-  justify-content: flex-end;
+  gap: 12rpx;
+  align-items: center;
 }
 
 .avatar-img {

@@ -10,7 +10,7 @@ spring:
 
 studenthub:
   security:
-    session-store: memory
+    session-store: ${SESSION_STORE:memory}
     password-login-enabled: true
     allowed-origins:
       - http://localhost:3000
