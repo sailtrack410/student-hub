@@ -12,9 +12,7 @@ import com.studenthub.modules.jwauth.security.JwSessionStore;
 import com.studenthub.modules.schedule.controller.dto.ScheduleCourseItem;
 import com.studenthub.modules.schedule.controller.dto.ScheduleImportResponse;
 import com.studenthub.modules.schedule.controller.dto.ScheduleViewResponse;
-import com.studenthub.modules.schedule.entity.ScheduleClassCourseEntity;
 import com.studenthub.modules.schedule.entity.ScheduleCourseEntity;
-import com.studenthub.modules.schedule.mapper.ScheduleClassCourseMapper;
 import com.studenthub.modules.schedule.mapper.ScheduleCourseMapper;
 import com.studenthub.modules.schedule.service.ScheduleService;
 import lombok.RequiredArgsConstructor;
@@ -35,7 +33,6 @@ public class ScheduleServiceImpl implements ScheduleService {
     private final JwSessionStore jwSessionStore;
     private final KingosoftScheduleClient scheduleClient;
     private final ScheduleCourseMapper courseMapper;
-    private final ScheduleClassCourseMapper classCourseMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -48,7 +45,7 @@ public class ScheduleServiceImpl implements ScheduleService {
 
         JwSchedulePage page = scheduleClient.fetchSchedulePage(session.get().cookieHeader(), null);
 
-        // 1. 重写个人课表（当前学期）
+        // 仅重写个人课表；班级缓存由定时同步任务多源采样权威维护，避免单人选修污染
         courseMapper.deleteByUserIdAndSemester(user.userId(), page.semesterCode());
         List<ScheduleCourseEntity> personal = new ArrayList<>();
         for (JwCourseEntry entry : page.courses()) {
@@ -74,40 +71,11 @@ public class ScheduleServiceImpl implements ScheduleService {
             courseMapper.insertBatch(personal);
         }
 
-        // 2. 班级缓存：同一班级共用一份课表（学生班级相同，课基本一致；排除选修见同步任务）
-        int classCacheCount = 0;
         String className = binding.getClassName();
-        if (className != null && !className.isBlank()) {
-            classCourseMapper.deleteByClassAndSemester(className, page.semesterCode());
-            List<ScheduleClassCourseEntity> classCourses = new ArrayList<>();
-            for (JwCourseEntry entry : page.courses()) {
-                ScheduleClassCourseEntity entity = new ScheduleClassCourseEntity();
-                entity.setId(com.baomidou.mybatisplus.core.toolkit.IdWorker.getId());
-                entity.setCreatedBy(user.userId());
-                entity.setUpdatedBy(user.userId());
-                entity.setClassCode(className);
-                entity.setSemesterCode(page.semesterCode());
-                entity.setSemesterName(page.semesterName());
-                entity.setCourseName(entry.courseName());
-                entity.setTeacher(entry.teacher());
-                entity.setLocation(entry.location());
-                entity.setDayOfWeek(entry.dayOfWeek());
-                entity.setStartSection(entry.startSection());
-                entity.setEndSection(entry.endSection());
-                entity.setWeeks(entry.weeks());
-                entity.setWeekParity(entry.weekParity());
-                classCourses.add(entity);
-            }
-            if (!classCourses.isEmpty()) {
-                classCourseMapper.insertBatch(classCourses);
-            }
-            classCacheCount = classCourses.size();
-        }
-
-        log.info("课表导入完成, userId={}, semester={}, personal={}, classCache={}",
-                user.userId(), page.semesterCode(), page.courses().size(), classCacheCount);
+        log.info("课表导入完成, userId={}, semester={}, personal={}",
+                user.userId(), page.semesterCode(), page.courses().size());
         return new ScheduleImportResponse(page.semesterCode(), page.semesterName(),
-                className, page.courses().size(), classCacheCount);
+                className, page.courses().size(), 0);
     }
 
     @Override

@@ -14,4 +14,7 @@ public interface JwBindingMapper extends BaseMapper<JwBindingEntity> {
 
     @Select("SELECT * FROM jw_binding WHERE sso_account = #{ssoAccount} AND deleted = 0 LIMIT 1")
     JwBindingEntity findBySsoAccount(@Param("ssoAccount") String ssoAccount);
+
+    @Select("SELECT * FROM jw_binding WHERE identity_kind = 'STUDENT' AND auth_status = 'AUTHENTICATED' AND deleted = 0")
+    java.util.List<JwBindingEntity> selectAllAuthenticatedStudents();
 }

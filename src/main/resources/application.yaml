@@ -38,6 +38,10 @@ studenthub:
     session-ttl: ${SESSION_TTL:8h}
     password-login-enabled: ${PASSWORD_LOGIN_ENABLED:false}
     allowed-origins: ${ALLOWED_ORIGINS:}
+  schedule-sync:
+    enabled: ${SCHEDULE_SYNC_ENABLED:true}
+    cron: ${SCHEDULE_SYNC_CRON:0 0 7-21/2 * * *}
+    stagger-max-seconds: ${SCHEDULE_SYNC_STAGGER_MAX_SECONDS:30}
   ai:
     enabled: ${AI_ENABLED:false}
     base-url: ${AI_BASE_URL:https://api.deepseek.com}
