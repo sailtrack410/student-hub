@@ -549,6 +549,7 @@ public class KingosoftJwClient {
         return HttpClient.newBuilder()
                 .cookieHandler(cookieManager)
                 .followRedirects(HttpClient.Redirect.NORMAL)
+                .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofSeconds(properties.getConnectTimeoutSeconds()))
                 .build();
     }

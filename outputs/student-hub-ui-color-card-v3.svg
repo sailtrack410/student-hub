@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+  <style>
+    .sans { font-family: -apple-system, BlinkMacSystemFont, "STHeiti", "PingFang SC", "Helvetica Neue", sans-serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: 1px; }
+  </style>
+  <rect width="1600" height="1000" fill="#F8FAFC"/>
+
+  <!-- Full-height brand field with a diagonal handoff -->
+  <path d="M0 0H570L478 1000H0Z" fill="#2563EB"/>
+  <path d="M570 0H1600V260H535Z" fill="#0F766E"/>
+  <path d="M535 260H1600V548H508Z" fill="#14B8A6"/>
+
+  <!-- staggered status bands -->
+  <path d="M508 548H1600V690H495Z" fill="#F0FDF4"/>
+  <path d="M495 690H1600V832H482Z" fill="#FFFBEB"/>
+  <path d="M482 832H1600V1000H466Z" fill="#FEF2F2"/>
+
+  <!-- thin semantic edges -->
+  <path d="M508 548H1600V562H506Z" fill="#16A34A"/>
+  <path d="M495 690H1600V704H493Z" fill="#D97706"/>
+  <path d="M482 832H1600V846H480Z" fill="#DC2626"/>
+
+  <!-- foundation strip -->
+  <path d="M0 900H466L456 1000H0Z" fill="#0F172A"/>
+  <path d="M456 900H860L850 1000H446Z" fill="#64748B"/>
+  <path d="M850 900H1150L1140 1000H840Z" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="3"/>
+  <path d="M1140 900H1370L1360 1000H1130Z" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="3"/>
+  <path d="M1360 900H1600V1000H1350Z" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="10"/>
+
+  <g class="sans">
+    <text x="72" y="164" font-size="52" font-weight="800" fill="#FFFFFF">学生自助平台</text>
+    <text x="72" y="392" font-size="26" font-weight="700" fill="#FFFFFF">主色</text>
+    <text x="72" y="438" class="mono" font-size="30" fill="#DBEAFE">#2563EB</text>
+
+    <text x="610" y="108" font-size="26" font-weight="700" fill="#FFFFFF">辅助色</text>
+    <text x="610" y="154" class="mono" font-size="28" fill="#CCFBF1">#0F766E</text>
+    <text x="610" y="364" font-size="26" font-weight="700" fill="#042F2E">强调色</text>
+    <text x="610" y="410" class="mono" font-size="28" fill="#115E59">#14B8A6</text>
+
+    <text x="570" y="638" font-size="24" font-weight="700" fill="#166534">成功</text>
+    <text x="570" y="672" class="mono" font-size="22" fill="#16A34A">#16A34A</text>
+    <text x="890" y="780" font-size="24" font-weight="700" fill="#92400E">警告</text>
+    <text x="890" y="814" class="mono" font-size="22" fill="#D97706">#D97706</text>
+    <text x="1230" y="864" font-size="24" font-weight="700" fill="#991B1B">错误</text>
+    <text x="1230" y="892" class="mono" font-size="22" fill="#DC2626">#DC2626</text>
+
+    <text x="56" y="922" font-size="20" font-weight="700" fill="#FFFFFF">主文字</text>
+    <text x="56" y="958" class="mono" font-size="18" fill="#CBD5E1">#0F172A</text>
+    <text x="520" y="922" font-size="20" font-weight="700" fill="#FFFFFF">次文字</text>
+    <text x="520" y="958" class="mono" font-size="18" fill="#E2E8F0">#64748B</text>
+    <text x="900" y="922" font-size="20" font-weight="700" fill="#0F172A">卡片背景</text>
+    <text x="900" y="958" class="mono" font-size="18" fill="#64748B">#FFFFFF</text>
+    <text x="1160" y="922" font-size="20" font-weight="700" fill="#0F172A">页面背景</text>
+    <text x="1160" y="958" class="mono" font-size="18" fill="#64748B">#F8FAFC</text>
+    <text x="1420" y="922" font-size="20" font-weight="700" fill="#0F172A">边框</text>
+    <text x="1420" y="958" class="mono" font-size="18" fill="#64748B">#E2E8F0</text>
+  </g>
+</svg>
