@@ -6,9 +6,25 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
+import java.util.List;
+
 @Mapper
 public interface UserMapper extends BaseMapper<UserEntity> {
 
     @Select("SELECT * FROM sys_user WHERE wechat_open_id = #{wechatOpenId} AND deleted = 0 LIMIT 1")
     UserEntity findByWechatOpenId(@Param("wechatOpenId") String wechatOpenId);
+
+    @Select("""
+            SELECT DISTINCT u.id AS userId, u.username, u.display_name AS displayName, u.phone
+              FROM sys_user u
+              JOIN sys_user_role ur ON ur.user_id = u.id
+              JOIN sys_role r ON r.id = ur.role_id
+             WHERE r.role_code = 'WORKER'
+               AND r.status = 'ENABLED'
+               AND r.deleted = 0
+               AND u.status = 'ENABLED'
+               AND u.deleted = 0
+             ORDER BY u.id
+            """)
+    List<WorkerCandidateRow> findEnabledWorkers();
 }

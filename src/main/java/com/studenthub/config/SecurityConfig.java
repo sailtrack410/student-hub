@@ -49,6 +49,8 @@ public class SecurityConfig {
                                 "/api/common/auth/wechat-login",
                                 "/api/common/auth/dev-wechat-login",
                                 "/api/common/files/view/**",
+                                "/admin",
+                                "/admin/**",
                                 "/actuator/health",
                                 "/api",
                                 "/v3/api-docs/**",
@@ -79,7 +81,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(securityProperties.getAllowedOrigins());
-        configuration.setAllowedMethods(List.of("GET", "POST", "DELETE", "OPTIONS"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of(HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE, "X-Request-Id"));
         configuration.setExposedHeaders(List.of("X-Request-Id"));
         configuration.setAllowCredentials(true);

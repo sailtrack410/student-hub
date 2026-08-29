@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.Set;
 
 @Slf4j
 @Component
@@ -19,6 +20,7 @@ import java.util.Optional;
 public class RedisSessionStore implements SessionStore {
 
     private static final String KEY_PREFIX = "auth:session:";
+    private static final String USER_INDEX_PREFIX = "auth:user-sessions:";
 
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
@@ -27,8 +29,11 @@ public class RedisSessionStore implements SessionStore {
     public SessionToken create(AuthenticatedUser user, Duration ttl) {
         String rawToken = SecureTokenSupport.generate();
         Instant expiresAt = Instant.now().plus(ttl);
+        String tokenHash = SecureTokenSupport.hash(rawToken);
         try {
-            redisTemplate.opsForValue().set(key(rawToken), objectMapper.writeValueAsString(user), ttl);
+            redisTemplate.opsForValue().set(sessionKey(tokenHash), objectMapper.writeValueAsString(user), ttl);
+            redisTemplate.opsForSet().add(userIndexKey(user.userId()), tokenHash);
+            redisTemplate.expire(userIndexKey(user.userId()), ttl);
             return new SessionToken(rawToken, expiresAt);
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Cannot serialize authenticated session", exception);
@@ -37,7 +42,7 @@ public class RedisSessionStore implements SessionStore {
 
     @Override
     public Optional<AuthenticatedUser> find(String rawToken) {
-        String value = redisTemplate.opsForValue().get(key(rawToken));
+        String value = redisTemplate.opsForValue().get(sessionKey(SecureTokenSupport.hash(rawToken)));
         if (value == null) {
             return Optional.empty();
         }
@@ -45,14 +50,14 @@ public class RedisSessionStore implements SessionStore {
             return Optional.of(objectMapper.readValue(value, AuthenticatedUser.class));
         } catch (JsonProcessingException exception) {
             log.error("认证会话反序列化失败, tokenHash={}", SecureTokenSupport.hash(rawToken), exception);
-            redisTemplate.delete(key(rawToken));
+            redisTemplate.delete(sessionKey(SecureTokenSupport.hash(rawToken)));
             return Optional.empty();
         }
     }
 
     @Override
     public void replace(String rawToken, AuthenticatedUser user) {
-        String sessionKey = key(rawToken);
+        String sessionKey = sessionKey(SecureTokenSupport.hash(rawToken));
         Long remainingSeconds = redisTemplate.getExpire(sessionKey);
         if (remainingSeconds == null || remainingSeconds <= 0) {
             return;
@@ -67,10 +72,61 @@ public class RedisSessionStore implements SessionStore {
 
     @Override
     public void delete(String rawToken) {
-        redisTemplate.delete(key(rawToken));
+        redisTemplate.delete(sessionKey(SecureTokenSupport.hash(rawToken)));
     }
 
-    private String key(String rawToken) {
-        return KEY_PREFIX + SecureTokenSupport.hash(rawToken);
+    @Override
+    public int refreshUserSessions(Long userId, AuthenticatedUser refreshed) {
+        String indexKey = userIndexKey(userId);
+        Set<String> tokenHashes = redisTemplate.opsForSet().members(indexKey);
+        if (tokenHashes == null || tokenHashes.isEmpty()) {
+            return 0;
+        }
+        String serialized;
+        try {
+            serialized = objectMapper.writeValueAsString(refreshed);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Cannot serialize authenticated session", exception);
+        }
+        int count = 0;
+        for (String tokenHash : tokenHashes) {
+            String sessionKey = sessionKey(tokenHash);
+            Long remainingSeconds = redisTemplate.getExpire(sessionKey);
+            if (remainingSeconds == null || remainingSeconds <= 0) {
+                // 会话已过期，顺手清理索引残留
+                redisTemplate.opsForSet().remove(indexKey, tokenHash);
+                continue;
+            }
+            redisTemplate.opsForValue().set(sessionKey, serialized, Duration.ofSeconds(remainingSeconds));
+            count++;
+        }
+        return count;
+    }
+
+    @Override
+    public int deleteUserSessions(Long userId) {
+        String indexKey = userIndexKey(userId);
+        Set<String> tokenHashes = redisTemplate.opsForSet().members(indexKey);
+        if (tokenHashes == null || tokenHashes.isEmpty()) {
+            return 0;
+        }
+        int count = 0;
+        for (String tokenHash : tokenHashes) {
+            String sessionKey = sessionKey(tokenHash);
+            if (Boolean.TRUE.equals(redisTemplate.hasKey(sessionKey))) {
+                count++;
+            }
+            redisTemplate.delete(sessionKey);
+        }
+        redisTemplate.delete(indexKey);
+        return count;
+    }
+
+    private String sessionKey(String tokenHash) {
+        return KEY_PREFIX + tokenHash;
+    }
+
+    private String userIndexKey(Long userId) {
+        return USER_INDEX_PREFIX + userId;
     }
 }
