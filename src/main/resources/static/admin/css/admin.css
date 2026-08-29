@@ -1,0 +1,159 @@
+html, body, #app {
+    height: 100%;
+    margin: 0;
+}
+
+body {
+    font-family: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+    background: #f5f7fa;
+}
+
+.layout {
+    display: flex;
+    height: 100%;
+}
+
+.layout aside {
+    width: 220px;
+    background: #1f2d3d;
+    color: #bfcbd9;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.layout aside .brand {
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 1px;
+}
+
+.layout .el-menu {
+    border-right: none;
+    background: transparent;
+    flex: 1;
+}
+
+.layout main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.layout .topbar {
+    height: 60px;
+    background: #fff;
+    border-bottom: 1px solid #e6e8eb;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+}
+
+.layout .topbar .title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #303133;
+}
+
+.layout .content {
+    flex: 1;
+    overflow: auto;
+    padding: 16px 24px;
+}
+
+.page-card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 16px 20px;
+}
+
+.toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+.toolbar .grow {
+    flex: 1;
+}
+
+.pager {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 14px;
+}
+
+.login-wrap {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #1f2d3d 0%, #2d4a6b 100%);
+}
+
+.login-card {
+    width: 380px;
+    background: #fff;
+    border-radius: 12px;
+    padding: 36px 32px 28px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.login-card h1 {
+    margin: 0 0 4px;
+    font-size: 20px;
+    text-align: center;
+    color: #303133;
+}
+
+.login-card .subtitle {
+    margin: 0 0 24px;
+    text-align: center;
+    color: #909399;
+    font-size: 13px;
+}
+
+.muted {
+    color: #909399;
+    font-size: 12px;
+}
+
+.mono {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+}
+
+.form-hint {
+    font-size: 12px;
+    color: #909399;
+    line-height: 1.6;
+    margin: 4px 0 0;
+}
+
+.tag-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 24px;
+}
+
+@media (max-width: 720px) {
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+}
