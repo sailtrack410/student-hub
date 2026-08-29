@@ -144,11 +144,16 @@ public class IdentityAuthServiceImpl implements IdentityAuthService {
             update.setDisplayName(normalized);
         }
         if (avatarFileId != null) {
-            var file = fileStorageMapper.selectById(avatarFileId);
-            if (file == null || !file.getUploaderId().equals(user.getId())) {
-                throw new BusinessException(ErrorCode.INVALID_PARAMETER, "头像文件不存在或无权使用");
+            if (avatarFileId == 0L) {
+                // 0 = 恢复默认头像（清空绑定）
+                update.setAvatarUrl("");
+            } else {
+                var file = fileStorageMapper.selectById(avatarFileId);
+                if (file == null || !file.getUploaderId().equals(user.getId())) {
+                    throw new BusinessException(ErrorCode.INVALID_PARAMETER, "头像文件不存在或无权使用");
+                }
+                update.setAvatarUrl(String.valueOf(avatarFileId));
             }
-            update.setAvatarUrl(String.valueOf(avatarFileId));
         }
         update.setVersion(user.getVersion());
         userMapper.updateById(update);

@@ -7,10 +7,13 @@
       <text class="row-label">头像</text>
       <view class="avatar-wrap">
         <image wx:if="{{avatarUrl}}" class="avatar-img" src="{{avatarUrl}}" mode="aspectFill" />
-        <view wx:else class="avatar-placeholder">未设置</view>
+        <view wx:else class="avatar-placeholder">默认</view>
       </view>
       <button class="avatar-btn" open-type="chooseAvatar" chooseAvatar="{{true}}" bindchooseavatar="onChooseAvatar">
         更换
+      </button>
+      <button wx:if="{{avatarUrl}}" class="avatar-btn avatar-reset-btn mini-ghost" size="mini" bindtap="onResetAvatar">
+        默认
       </button>
     </view>
 

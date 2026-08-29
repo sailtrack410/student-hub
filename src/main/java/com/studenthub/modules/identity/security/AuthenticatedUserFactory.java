@@ -31,7 +31,7 @@ public class AuthenticatedUserFactory {
                 user.getAuthorizationStatus(),
                 roleScopes,
                 permissionCodes,
-                user.getAvatarUrl(),
+                user.getAvatarUrl() == null || user.getAvatarUrl().isBlank() ? null : user.getAvatarUrl(),
                 user.getPhone());
     }
 }

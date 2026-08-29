@@ -18,7 +18,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20rpx;
+  min-height: 56rpx;
+  margin-bottom: 12rpx;
 }
 
 .row {
@@ -81,15 +82,27 @@
 .avatar-btn,
 .mini-save {
   flex-shrink: 0;
+  width: 132rpx;
   background: var(--brand-soft);
   color: var(--brand);
   font-size: 24rpx;
   font-weight: 600;
   border-radius: 999rpx;
-  padding: 0 26rpx;
+  padding: 0;
   height: 60rpx;
   line-height: 60rpx;
   margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-reset {
+  margin-top: 12rpx;
+}
+
+.row {
+  min-height: 88rpx;
 }
 
 .mini-ghost {

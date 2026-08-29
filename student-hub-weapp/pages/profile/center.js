@@ -138,6 +138,18 @@ Page({
     }
   },
 
+  /** 恢复默认头像（清除自定义头像绑定） */
+  async onResetAvatar() {
+    try {
+      const user = await api.updateProfile({ avatarFileId: 0 });
+      this.persistUser(user);
+      this.setData({ avatarUrl: '' });
+      wx.showToast({ title: '已恢复默认头像', icon: 'success' });
+    } catch (error) {
+      // 请求层已提示
+    }
+  },
+
   /** 微信绑定手机号一键获取（需小程序完成微信认证） */
   async onWechatPhone(event) {
     const code = event.detail && event.detail.code;

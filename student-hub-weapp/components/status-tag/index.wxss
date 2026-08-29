@@ -5,7 +5,7 @@
   border-radius: 999rpx;
   font-size: 22rpx;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 1.2;
 }
 
 .tag-blue {
