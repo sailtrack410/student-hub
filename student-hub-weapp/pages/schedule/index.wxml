@@ -2,7 +2,10 @@
   <!-- 工具栏：学期信息 + 同步 + 周次切换 -->
   <view class="toolbar">
     <view class="toolbar-info">
-      <view class="toolbar-title">{{semesterName || '我的课表'}}</view>
+      <view class="semester-selector" bindtap="onOpenSemesterPicker">
+        <text class="toolbar-title">{{semesterName || '我的课表'}}</text>
+        <view wx:if="{{semesters.length}}" class="caret-down"></view>
+      </view>
       <view wx:if="{{className}}" class="toolbar-sub">{{className}}</view>
     </view>
     <view class="toolbar-actions">
@@ -10,7 +13,7 @@
         {{importing ? '同步中' : '同步'}}
       </view>
       <view wx:if="{{vacation}}" class="vacation-tag">假期</view>
-      <view wx:else class="week-btn {{hasData ? '' : 'is-disabled'}}" bindtap="onOpenWeekPicker">
+      <view class="week-btn {{(hasData || vacation) ? '' : 'is-disabled'}}" bindtap="onOpenWeekPicker">
         <text class="week-btn-text">{{weekLabel}}</text>
         <view class="week-caret"></view>
       </view>
@@ -61,7 +64,7 @@
     </view>
 
     <view wx:if="{{hasData}}" class="legend">轻点色块查看课程详情</view>
-    <view wx:elif="{{vacation}}" class="legend">本学期课表尚未发布</view>
+    <view wx:elif="{{vacation}}" class="legend">本学期课表尚未发布，可切换周次查看</view>
   </block>
 
   <block wx:elif="{{loaded}}">
@@ -97,6 +100,28 @@
         </view>
       </scroll-view>
       <view wx:if="{{todayWeek}}" class="sheet-hint">今天是第 {{todayWeek}} 周</view>
+    </view>
+  </view>
+
+  <!-- 学期选择弹层 -->
+  <view wx:if="{{showSemesterPicker}}" class="mask" bindtap="onCloseSemesterPicker">
+    <view class="sheet" catchtap="noop">
+      <view class="sheet-bar"></view>
+      <view class="sheet-title">选择学期</view>
+      <scroll-view class="week-scroll" scroll-y="true">
+        <view class="semester-list">
+          <view
+            wx:for="{{semesters}}"
+            wx:key="code"
+            wx:for-item="s"
+            class="semester-option {{s.name === semesterName ? 'is-selected' : ''}}"
+            data-code="{{s.code}}"
+            bindtap="onPickSemester"
+          >
+            {{s.name}}
+          </view>
+        </view>
+      </scroll-view>
     </view>
   </view>
 

@@ -36,7 +36,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     private final TransactionTemplate transactionTemplate;
 
     @Override
-    public ScheduleImportResponse importSchedule(AuthenticatedUser user) {
+    public ScheduleImportResponse importSchedule(AuthenticatedUser user, String semesterCode) {
         JwBindingEntity binding = requireAuthenticatedBinding(user.userId());
         Optional<JwSessionStore.JwSession> session = jwSessionStore.find(user.userId());
         if (session.isEmpty()) {
@@ -46,7 +46,7 @@ public class ScheduleServiceImpl implements ScheduleService {
 
         JwSchedulePage page;
         try {
-            page = scheduleClient.fetchSchedulePage(session.get().cookieHeader(), null);
+            page = scheduleClient.fetchSchedulePage(session.get().cookieHeader(), semesterCode);
         } catch (BusinessException exception) {
             // 远端会话已失效时同步翻转认证状态，保持个人中心与同步提示一致。
             // 注意此处必须发生在事务之外，否则随后抛出的异常会把标记一起回滚。
@@ -100,35 +100,64 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     @Override
-    public ScheduleViewResponse view(AuthenticatedUser user) {
+    public ScheduleViewResponse view(AuthenticatedUser user, String semesterCode) {
         List<ScheduleCourseEntity> courses = courseMapper.selectByUserId(user.userId());
         JwBindingEntity binding = jwBindingMapper.findByUserId(user.userId());
 
         // 学期以最后一次同步为准（写在绑定上，新学期 0 门课时依然有值）；
         // 未同步过则回退到课程行里最新的学期
-        String semesterCode;
-        String semesterName;
+        String defaultCode;
+        String defaultName;
         if (binding != null && binding.getLastSemesterCode() != null) {
-            semesterCode = binding.getLastSemesterCode();
-            semesterName = binding.getLastSemesterName();
+            defaultCode = binding.getLastSemesterCode();
+            defaultName = binding.getLastSemesterName();
         } else {
-            semesterCode = courses.stream()
+            defaultCode = courses.stream()
                     .map(ScheduleCourseEntity::getSemesterCode)
                     .filter(java.util.Objects::nonNull)
                     .max(String::compareTo)
                     .orElse(null);
-            semesterName = courses.isEmpty() ? null : courses.get(0).getSemesterName();
+            defaultName = courses.isEmpty() ? null : courses.get(0).getSemesterName();
         }
 
-        String finalSemesterCode = semesterCode;
-        List<ScheduleCourseEntity> current = semesterCode == null ? List.of()
-                : courses.stream()
-                        .filter(course -> course.getSemesterCode() != null
-                                && course.getSemesterCode().equals(finalSemesterCode))
-                        .toList();
+        String requested = semesterCode == null || semesterCode.isBlank() ? defaultCode : semesterCode.trim();
+        String chosenCode = requested;
+        String chosenName = defaultName;
+        List<ScheduleCourseEntity> current = List.of();
+        if (chosenCode != null) {
+            final String finalCode = chosenCode;
+            List<ScheduleCourseEntity> matched = courses.stream()
+                    .filter(course -> finalCode.equals(course.getSemesterCode()))
+                    .toList();
+            if (!matched.isEmpty()) {
+                current = matched;
+                chosenName = matched.get(0).getSemesterName();
+            } else if (defaultCode != null && finalCode.equals(defaultCode)) {
+                // 默认学期没有课（新学期未排）——空学期而非非法
+                current = List.of();
+            }
+        }
+
+        // 可选学期：课程里出现过的学期 + 最近同步学期（去重、按名称降序/编码降序）
+        java.util.LinkedHashMap<String, ScheduleViewResponse.SemesterOption> options = new java.util.LinkedHashMap<>();
+        if (chosenCode != null && chosenName != null) {
+            options.put(chosenCode, new ScheduleViewResponse.SemesterOption(chosenCode, chosenName));
+        }
+        for (ScheduleCourseEntity course : courses) {
+            if (course.getSemesterCode() != null) {
+                options.put(course.getSemesterCode(),
+                        new ScheduleViewResponse.SemesterOption(course.getSemesterCode(), course.getSemesterName()));
+            }
+        }
+        List<ScheduleViewResponse.SemesterOption> available = new java.util.ArrayList<>(options.values());
+        java.util.Comparator<ScheduleViewResponse.SemesterOption> cmp =
+                java.util.Comparator.comparing(ScheduleViewResponse.SemesterOption::semesterCode,
+                        java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()));
+        available.sort(cmp);
+
         List<ScheduleCourseItem> items = current.stream().map(ScheduleCourseItem::from).toList();
         String className = binding == null ? null : binding.getClassName();
-        return new ScheduleViewResponse(semesterCode, semesterName, className, items);
+        return new ScheduleViewResponse(chosenCode, chosenName, className, items, available);
     }
 
     private void markExpired(JwBindingEntity binding) {

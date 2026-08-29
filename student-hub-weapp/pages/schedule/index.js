@@ -137,6 +137,8 @@ Page({
     vacation: false,
     semesterName: '',
     className: '',
+    semesters: [],
+    showSemesterPicker: false,
     weekLabel: '第1周',
     monthLabel: '',
     headerDays: [],
@@ -160,17 +162,26 @@ Page({
     this.setData({ loading: true });
     try {
       const data = await api.getScheduleView();
-      this.rawCourses = data.courses || [];
-      this.semesterCode = data.semesterCode || '';
-      this.rawSemesterName = data.semesterName || '';
-      this.rawClassName = data.className || '';
-      this.applySchedule();
+      this.consume(data);
     } catch (error) {
+      this.semesterCode = '';
+      this.rawSemesterName = '';
+      this.rawClassName = '';
       this.rawCourses = [];
-      this.setData({ loaded: true, hasData: false });
+      this.semesterOptions = [];
+      this.setData({ loaded: true, hasData: false, vacation: false, semesterName: '' });
     } finally {
       this.setData({ loading: false });
     }
+  },
+
+  consume(data) {
+    this.rawCourses = data.courses || [];
+    this.semesterCode = data.semesterCode || '';
+    this.rawSemesterName = data.semesterName || '';
+    this.rawClassName = data.className || '';
+    this.semesterOptions = data.availableSemesters || [];
+    this.applySchedule();
   },
 
   applySchedule() {
@@ -180,70 +191,52 @@ Page({
       wx.setNavigationBarTitle({ title: semesterText });
     }
 
-    // 假期模式：同步过但当前学期没排课（0 门课）——空表格 + 假期标记，不显示周次
-    if (!courses.length && this.rawSemesterName) {
-      const sectionRows = [];
-      for (let s = 1; s <= MAX_SECTION; s++) {
-        sectionRows.push({ section: s, time: SECTION_TIMES[s] || '' });
-      }
-      this.anchor = null;
-      this.blockList = [];
-      this.setData({
-        loaded: true,
-        hasData: false,
-        vacation: true,
-        semesterName: semesterText,
-        className: '',
-        monthLabel: '',
-        headerDays: DAY_LABELS.map((label, index) => ({ day: index + 1, label, dateText: '', isToday: false })),
-        columns: [1, 2, 3, 4, 5, 6, 7].map((day) => ({ day, blocks: [] })),
-        sectionRows,
-        weekOptions: [],
-        selectedWeek: 0,
-        todayWeek: 0
-      });
-      return;
-    }
-
-    this.setData({ vacation: false, semesterName: semesterText, className: this.classNameOf() });
-
+    // 假期/空学期也要有周次：按课程周次或默认 16 周生成周次选项
     let maxWeek = 1;
-    this.weekSets = courses.map((course) => {
-      const set = weekSetOf(course);
-      set.forEach((w) => {
-        if (w > maxWeek) maxWeek = w;
+    if (!courses.length && this.rawSemesterName) {
+      maxWeek = 16;
+    } else {
+      this.weekSets = courses.map((course) => {
+        const set = weekSetOf(course);
+        set.forEach((w) => {
+          if (w > maxWeek) maxWeek = w;
+        });
+        return set;
       });
-      return set;
-    });
+    }
     maxWeek = Math.min(maxWeek, 30);
 
     const anchor = estimateSemesterStart(this.semesterCode, this.rawSemesterName);
     let todayWeek = 0;
     if (anchor) {
-      // 仅当今天落在学期周次范围内才标记“今天”，假期不冒充学期周
       const diff = Math.floor((mondayOf(new Date()) - anchor) / 604800000) + 1;
-      if (diff >= 1 && diff <= maxWeek) {
+      if (diff >= 1) {
         todayWeek = diff;
       }
     }
-    const selectedWeek = todayWeek || 1;
+    const selectedWeek = Math.min(Math.max(todayWeek || 1, 1), maxWeek);
 
     const weekOptions = [];
     for (let w = 1; w <= maxWeek; w++) weekOptions.push(w);
+
+    const semesters = (this.semesterOptions || []).map((item) => ({
+      code: item.semesterCode,
+      name: formatSemester(item.semesterName)
+    }));
 
     this.anchor = anchor;
     this.setData({
       loaded: true,
       hasData: courses.length > 0,
+      vacation: courses.length === 0 && !!this.rawSemesterName,
+      semesterName: semesterText,
+      className: this.rawClassName || '',
+      semesters,
       todayWeek,
       selectedWeek,
       weekOptions
     });
     this.applyWeek(selectedWeek);
-  },
-
-  classNameOf() {
-    return this.rawClassName || '';
   },
 
   /** 按选中周次重建表头与课程块 */
@@ -356,7 +349,6 @@ Page({
   },
 
   onOpenWeekPicker() {
-    if (!this.data.hasData) return;
     this.setData({ showWeekPicker: true });
   },
 
@@ -369,6 +361,35 @@ Page({
     if (!(week >= 1)) return;
     this.setData({ showWeekPicker: false });
     this.applyWeek(week);
+  },
+
+  onOpenSemesterPicker() {
+    if (!(this.semesterOptions || []).length) return;
+    this.setData({ showSemesterPicker: true });
+  },
+
+  onCloseSemesterPicker() {
+    this.setData({ showSemesterPicker: false });
+  },
+
+  onPickSemester(event) {
+    const code = event.currentTarget.dataset.code;
+    const item = (this.semesterOptions || []).find((s) => s.semesterCode === code);
+    if (!item) return;
+    this.setData({ showSemesterPicker: false });
+    this.querySemester(item.semesterCode);
+  },
+
+  async querySemester(code) {
+    this.setData({ loading: true });
+    try {
+      const data = await api.getScheduleView(code);
+      this.consume(data);
+    } catch (error) {
+      wx.showToast({ title: (error && error.message) || '切换学期失败', icon: 'none' });
+    } finally {
+      this.setData({ loading: false });
+    }
   },
 
   onBlockTap(event) {
@@ -398,7 +419,7 @@ Page({
     }
     this.setData({ importing: true });
     try {
-      const data = await api.importSchedule();
+      const data = await api.importSchedule(this.semesterCode || null);
       if (data.personalCount > 0) {
         wx.showToast({ title: `已同步 ${data.personalCount} 门课`, icon: 'success' });
       } else {

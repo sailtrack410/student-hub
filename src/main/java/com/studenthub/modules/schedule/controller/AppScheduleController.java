@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -23,15 +24,18 @@ public class AppScheduleController {
     private final CurrentUserProvider currentUserProvider;
 
     @PostMapping("/import")
-    @Operation(summary = "导入课表", description = "从教务系统拉取当前学生个人课表并保存，同时刷新班级共享缓存。",
+    @Operation(summary = "导入课表", description = "从教务系统拉取当前学生个人课表并保存；传 semesterCode 则导入指定学期。",
             operationId = "importSchedule")
-    public Result<ScheduleImportResponse> importSchedule() {
-        return Result.success(scheduleService.importSchedule(currentUserProvider.requireCurrentUser()));
+    public Result<ScheduleImportResponse> importSchedule(
+            @RequestParam(required = false) String semesterCode) {
+        return Result.success(scheduleService.importSchedule(currentUserProvider.requireCurrentUser(), semesterCode));
     }
 
     @GetMapping("/view")
-    @Operation(summary = "查询课表", description = "返回当前学生已导入的个人课表。", operationId = "getScheduleView")
-    public Result<ScheduleViewResponse> view() {
-        return Result.success(scheduleService.view(currentUserProvider.requireCurrentUser()));
+    @Operation(summary = "查询课表", description = "返回当前学生已导入的个人课表；不传 semesterCode 时返回最近同步学期。",
+            operationId = "getScheduleView")
+    public Result<ScheduleViewResponse> view(
+            @RequestParam(required = false) String semesterCode) {
+        return Result.success(scheduleService.view(currentUserProvider.requireCurrentUser(), semesterCode));
     }
 }

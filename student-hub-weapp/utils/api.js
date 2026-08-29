@@ -22,8 +22,10 @@ module.exports = {
   jwProfile: () => request({ url: '/api/app/jw/profile', silent: true }),
 
   // 课表
-  importSchedule: () => request({ url: '/api/app/schedule/import', method: 'POST' }),
-  getScheduleView: () => request({ url: '/api/app/schedule/view', silent: true }),
+  importSchedule: (semesterCode) =>
+    request({ url: '/api/app/schedule/import', method: 'POST', data: semesterCode ? { semesterCode } : {} }),
+  getScheduleView: (semesterCode) =>
+    request({ url: '/api/app/schedule/view', data: semesterCode ? { semesterCode } : {}, silent: true }),
 
   // 服务目录
   getCatalog: () => request({ url: '/api/app/services' }),
