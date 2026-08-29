@@ -1,13 +1,17 @@
 <view class="schedule">
-  <!-- 顶栏：学期信息 + 导入 -->
-  <view class="head">
-    <view class="head-info">
-      <view class="head-title">{{semesterName || '我的课表'}}</view>
-      <view wx:if="{{className}}" class="head-sub">{{className}}</view>
+  <!-- 工具栏：学期信息 + 同步 + 周次切换 -->
+  <view class="toolbar">
+    <view class="toolbar-info">
+      <view class="toolbar-title">{{semesterName || '我的课表'}}</view>
+      <view wx:if="{{className}}" class="toolbar-sub">{{className}}</view>
     </view>
-    <view class="head-actions">
-      <view class="btn {{importing ? 'btn-disabled' : ''}}" bindtap="importSchedule">
-        {{importing ? '同步中…' : '同步课表'}}
+    <view class="toolbar-actions">
+      <view class="sync-btn {{importing ? 'is-disabled' : ''}}" bindtap="importSchedule">
+        {{importing ? '同步中' : '同步'}}
+      </view>
+      <view class="week-btn {{hasData ? '' : 'is-disabled'}}" bindtap="onOpenWeekPicker">
+        <text class="week-btn-text">{{weekLabel}}</text>
+        <view class="week-caret"></view>
       </view>
     </view>
   </view>
@@ -15,51 +19,47 @@
   <view wx:if="{{loading}}" class="loading">加载中…</view>
 
   <block wx:elif="{{hasData}}">
-    <!-- 周视图：横向滚动 -->
-    <scroll-view class="grid-scroll" scroll-x="true" enhanced show-scrollbar="{{false}}">
-      <view class="grid">
-        <!-- 表头 -->
-        <view class="grid-row grid-header">
-          <view class="cell-time-cell">
-            <text class="hdr-month">{{monthLabel}}</text>
-          </view>
-          <view wx:for="{{days}}" wx:key="*this" wx:for-item="d" class="cell-day">
-            <text class="cell-day-name">{{d.label}}</text>
-          </view>
-        </view>
+    <!-- 固定表头：月份 + 周一~周日 -->
+    <view class="week-header">
+      <view class="month-cell">
+        <text class="month-text">{{monthLabel}}</text>
+      </view>
+      <view
+        wx:for="{{headerDays}}"
+        wx:key="day"
+        wx:for-item="d"
+        class="day-cell {{d.isToday ? 'is-today' : ''}}"
+      >
+        <text class="day-date">{{d.dateText}}</text>
+        <text class="day-label">{{d.label}}</text>
+      </view>
+    </view>
 
-        <!-- 每节一行 -->
-        <view wx:for="{{rows}}" wx:key="section" wx:for-item="row" class="grid-row">
-          <!-- 时间列：时段首行大字，其余仅节次号 -->
-          <view class="cell-time {{row.periodStart ? 'cell-time-first' : ''}}">
-            <text wx:if="{{row.periodStart}}" class="cell-period">{{row.period}}</text>
-            <text class="cell-section">{{row.section}}</text>
-            <text wx:if="{{row.periodStart}}" class="cell-time-range">{{row.timeRange}}</text>
-          </view>
-          <view
-            wx:for="{{row.days}}"
-            wx:key="day"
-            wx:for-item="dayCell"
-            class="cell {{dayCell.items.length ? 'cell-has' : ''}}"
-          >
-            <view
-              wx:for="{{dayCell.items}}"
-              wx:key="index"
-              wx:for-item="course"
-              class="course course-c{{course.colorIndex}}"
-            >
-              <text class="course-name">{{course.courseName}}</text>
-              <text class="course-room">{{course.location}}</text>
-              <text class="course-weeks">{{course.weeksText}}</text>
-            </view>
-          </view>
+    <!-- 课程网格：时间列 + 7 天列，连堂课合并为一个色块 -->
+    <view class="grid">
+      <view class="time-col">
+        <view wx:for="{{sectionRows}}" wx:key="section" wx:for-item="row" class="time-cell">
+          <text class="time-no">{{row.section}}</text>
+          <text class="time-range">{{row.time}}</text>
         </view>
       </view>
-    </scroll-view>
-
-    <view class="legend">
-      <text>共 {{courses.length}} 门课 · 上课周次见格内标注</text>
+      <view wx:for="{{columns}}" wx:key="day" wx:for-item="column" class="day-col">
+        <view
+          wx:for="{{column.blocks}}"
+          wx:key="id"
+          wx:for-item="block"
+          class="course-block"
+          style="top: {{block.top}}rpx; height: {{block.height}}rpx; background: {{block.bg}};"
+          data-id="{{block.id}}"
+          bindtap="onBlockTap"
+        >
+          <text class="block-name">{{block.name}}</text>
+          <text wx:if="{{block.room}}" class="block-room">@{{block.room}}</text>
+        </view>
+      </view>
     </view>
+
+    <view class="legend">轻点色块查看课程详情</view>
   </block>
 
   <block wx:elif="{{loaded}}">
@@ -69,11 +69,60 @@
       subtitle="同步教务系统，每周课程一目了然"
     />
     <view class="cta">
-      <view class="cta-btn {{importing ? 'btn-disabled' : ''}}" bindtap="importSchedule">
+      <view class="cta-btn {{importing ? 'is-disabled' : ''}}" bindtap="importSchedule">
         {{importing ? '同步中…' : '立即导入'}}
       </view>
     </view>
   </block>
+
+  <!-- 周次选择弹层 -->
+  <view wx:if="{{showWeekPicker}}" class="mask" bindtap="onCloseWeekPicker">
+    <view class="sheet" catchtap="noop">
+      <view class="sheet-bar"></view>
+      <view class="sheet-title">选择周次</view>
+      <scroll-view class="week-scroll" scroll-y="true">
+        <view class="week-grid">
+          <view
+            wx:for="{{weekOptions}}"
+            wx:key="*this"
+            wx:for-item="w"
+            class="week-chip {{w === selectedWeek ? 'is-selected' : ''}} {{w === todayWeek && w !== selectedWeek ? 'is-today' : ''}}"
+            data-week="{{w}}"
+            bindtap="onPickWeek"
+          >
+            {{w}}
+          </view>
+        </view>
+      </scroll-view>
+      <view wx:if="{{todayWeek}}" class="sheet-hint">今天是第 {{todayWeek}} 周</view>
+    </view>
+  </view>
+
+  <!-- 课程详情弹窗 -->
+  <view wx:if="{{detail}}" class="mask" bindtap="onCloseDetail">
+    <view class="dialog" catchtap="noop">
+      <view class="dialog-title">{{detail.name}}</view>
+      <view class="dialog-rows">
+        <view class="dialog-row">
+          <text class="dialog-label">时间</text>
+          <text class="dialog-value">{{detail.timeText}}</text>
+        </view>
+        <view class="dialog-row">
+          <text class="dialog-label">教师</text>
+          <text class="dialog-value">{{detail.teacher || '暂无'}}</text>
+        </view>
+        <view class="dialog-row">
+          <text class="dialog-label">周次</text>
+          <text class="dialog-value">{{detail.weeksText}}</text>
+        </view>
+        <view class="dialog-row">
+          <text class="dialog-label">地点</text>
+          <text class="dialog-value">{{detail.room || '暂无'}}</text>
+        </view>
+      </view>
+      <view class="dialog-close" bindtap="onCloseDetail">知道了</view>
+    </view>
+  </view>
 
   <view class="safe-bottom"></view>
 </view>

@@ -3,45 +3,77 @@
   background: #F1F5F9;
 }
 
-/* 顶栏 */
-.head {
+/* 工具栏 */
+.toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 28rpx 28rpx 20rpx;
+  gap: 16rpx;
+  padding: 24rpx 24rpx 20rpx;
 }
 
-.head-info {
+.toolbar-info {
+  min-width: 0;
   display: flex;
   flex-direction: column;
 }
 
-.head-title {
+.toolbar-title {
   font-size: 32rpx;
   font-weight: 700;
   color: #0F172A;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.head-sub {
+.toolbar-sub {
   margin-top: 4rpx;
-  font-size: 24rpx;
+  font-size: 22rpx;
   color: #94A3B8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.head-actions {
+.toolbar-actions {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
 }
 
-.btn {
-  padding: 14rpx 28rpx;
+.sync-btn {
+  padding: 12rpx 22rpx;
+  border-radius: 999rpx;
+  background: #FFFFFF;
+  color: #2563EB;
+  font-size: 24rpx;
+  font-weight: 600;
+  border: 1rpx solid #D8E2F8;
+}
+
+.week-btn {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  padding: 12rpx 20rpx;
   border-radius: 999rpx;
   background: #2563EB;
   color: #FFFFFF;
-  font-size: 26rpx;
-  font-weight: 500;
+  font-size: 24rpx;
+  font-weight: 600;
 }
 
-.btn-disabled {
+.week-caret {
+  width: 0;
+  height: 0;
+  border-left: 8rpx solid transparent;
+  border-right: 8rpx solid transparent;
+  border-top: 10rpx solid rgba(255, 255, 255, 0.9);
+}
+
+.is-disabled {
   opacity: 0.55;
 }
 
@@ -52,139 +84,167 @@
   font-size: 26rpx;
 }
 
-/* 周视图网格 */
-.grid-scroll {
+/* 固定表头：月份 + 周一~周日 */
+.week-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: stretch;
   margin: 0 16rpx;
   background: #FFFFFF;
-  border-radius: 20rpx;
-  overflow: hidden;
-  box-shadow: 0 2rpx 12rpx rgba(15, 23, 42, 0.05);
+  border-radius: 16rpx 16rpx 0 0;
+  border-bottom: 1rpx solid #EDF1F7;
+  padding: 12rpx 0;
+  box-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.04);
 }
 
-.grid {
-  width: 1155rpx; /* 105 + 7*150 */
-}
-
-.grid-row {
-  display: flex;
-  border-bottom: 1rpx solid #F1F5F9;
-}
-
-.grid-row:last-child {
-  border-bottom: none;
-}
-
-.grid-header {
-  background: #F8FAFC;
-}
-
-/* 时间列（固定 105rpx） */
-.cell-time-cell {
-  width: 105rpx;
+.month-cell {
+  width: 88rpx;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.hdr-month {
-  font-size: 26rpx;
+.month-text {
+  font-size: 28rpx;
   font-weight: 700;
   color: #2563EB;
 }
 
-.cell-day {
-  width: 150rpx;
-  flex-shrink: 0;
-  text-align: center;
-  padding: 18rpx 0;
-  font-size: 26rpx;
-  font-weight: 600;
-  color: #334155;
-  border-left: 1rpx solid #F1F5F9;
+.day-cell {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rpx;
 }
 
-.cell-time {
-  width: 105rpx;
+.day-date {
+  font-size: 22rpx;
+  color: #94A3B8;
+}
+
+.day-label {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #334155;
+}
+
+.day-cell.is-today .day-label {
+  color: #FFFFFF;
+  background: #2563EB;
+  border-radius: 8rpx;
+  padding: 0 10rpx;
+}
+
+.day-cell.is-today .day-date {
+  color: #2563EB;
+  font-weight: 700;
+}
+
+/* 课程网格 */
+.grid {
+  display: flex;
+  margin: 0 16rpx;
+  background: #FFFFFF;
+  border-radius: 0 0 16rpx 16rpx;
+  overflow: hidden;
+}
+
+.time-col {
+  width: 88rpx;
   flex-shrink: 0;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 119rpx,
+    #EEF1F6 119rpx,
+    #EEF1F6 120rpx
+  );
+}
+
+.time-cell {
+  height: 120rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 10rpx 0;
+  gap: 4rpx;
 }
 
-.cell-time-first {
-  background: #F8FAFC;
+.time-no {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #CBD5E1;
 }
 
-.cell-period {
+.time-range {
+  font-size: 18rpx;
+  color: #C4CDDA;
+  transform: scale(0.9);
+}
+
+.day-col {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 1320rpx; /* 11 节 × 120rpx */
+  border-left: 1rpx solid #EEF1F6;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 119rpx,
+    #EEF1F6 119rpx,
+    #EEF1F6 120rpx
+  );
+}
+
+/* 连堂课合并色块 */
+.course-block {
+  position: absolute;
+  left: 4rpx;
+  right: 4rpx;
+  border-radius: 12rpx;
+  padding: 10rpx 10rpx;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  box-shadow: 0 4rpx 10rpx rgba(15, 23, 42, 0.10);
+}
+
+.block-name {
   font-size: 22rpx;
   font-weight: 600;
-  color: #475569;
-}
-
-.cell-section {
-  font-size: 28rpx;
-  color: #0F172A;
-  font-weight: 700;
-  margin: 4rpx 0;
-}
-
-.cell-time-range {
-  font-size: 18rpx;
-  color: #94A3B8;
-}
-
-/* 课程格 */
-.cell {
-  width: 150rpx;
-  flex-shrink: 0;
-  min-height: 110rpx;
-  border-left: 1rpx solid #F1F5F9;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 6rpx;
-  padding: 6rpx;
-}
-
-.cell-has {
-  padding: 6rpx 4rpx;
-}
-
-.course {
-  display: flex;
-  flex-direction: column;
-  padding: 8rpx 8rpx;
-  border-radius: 10rpx;
+  color: #FFFFFF;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
   overflow: hidden;
 }
 
-.course-name {
-  font-size: 22rpx;
-  font-weight: 600;
-  line-height: 1.3;
-}
-
-.course-room {
-  margin-top: 4rpx;
+.block-room {
   font-size: 19rpx;
-  line-height: 1.25;
-}
-
-.course-weeks {
-  margin-top: 4rpx;
-  font-size: 18rpx;
-  color: #94A3B8;
+  color: rgba(255, 255, 255, 0.95);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .legend {
-  padding: 12rpx 28rpx;
+  padding: 16rpx 28rpx 4rpx;
   color: #94A3B8;
   font-size: 22rpx;
+  text-align: center;
 }
 
+/* 空态 */
 .cta {
   display: flex;
   justify-content: center;
@@ -198,6 +258,146 @@
   color: #FFFFFF;
   font-size: 30rpx;
   font-weight: 500;
+}
+
+/* 弹层通用 */
+.mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+/* 周次选择面板 */
+.sheet {
+  width: 100%;
+  background: #FFFFFF;
+  border-radius: 28rpx 28rpx 0 0;
+  padding: 16rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+
+.sheet-bar {
+  width: 72rpx;
+  height: 8rpx;
+  border-radius: 999rpx;
+  background: #E2E8F0;
+  margin: 0 auto 20rpx;
+}
+
+.sheet-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #0F172A;
+  text-align: center;
+  margin-bottom: 24rpx;
+}
+
+.week-scroll {
+  max-height: 50vh;
+}
+
+.week-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18rpx;
+  padding: 4rpx;
+}
+
+.week-chip {
+  width: calc((100% - 72rpx) / 5);
+  height: 80rpx;
+  border-radius: 16rpx;
+  background: #F1F5F9;
+  color: #334155;
+  font-size: 28rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 2rpx solid transparent;
+}
+
+.week-chip.is-today {
+  border-color: #2563EB;
+  color: #2563EB;
+  background: #EAF0FE;
+}
+
+.week-chip.is-selected {
+  background: #2563EB;
+  color: #FFFFFF;
+}
+
+.sheet-hint {
+  margin-top: 20rpx;
+  text-align: center;
+  font-size: 22rpx;
+  color: #94A3B8;
+}
+
+/* 课程详情弹窗 */
+.dialog {
+  width: 600rpx;
+  background: #FFFFFF;
+  border-radius: 28rpx;
+  padding: 40rpx 36rpx 32rpx;
+  box-sizing: border-box;
+  margin: 0 auto;
+}
+
+.dialog-title {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #0F172A;
+  line-height: 1.35;
+  margin-bottom: 24rpx;
+}
+
+.dialog-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.dialog-row {
+  display: flex;
+  gap: 20rpx;
+}
+
+.dialog-label {
+  flex-shrink: 0;
+  width: 88rpx;
+  font-size: 26rpx;
+  color: #94A3B8;
+}
+
+.dialog-value {
+  flex: 1;
+  min-width: 0;
+  font-size: 26rpx;
+  color: #1E293B;
+  line-height: 1.5;
+}
+
+.dialog-close {
+  margin-top: 32rpx;
+  height: 84rpx;
+  border-radius: 42rpx;
+  background: #2563EB;
+  color: #FFFFFF;
+  font-size: 28rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .safe-bottom {
