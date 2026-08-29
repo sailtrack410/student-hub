@@ -8,18 +8,14 @@
     <image class="hero-banner" src="/assets/banner/home-banner.jpg" mode="aspectFill" />
   </view>
 
-  <!-- 课表入口 -->
-  <view class="schedule-entry card" bindtap="goSchedule">
-    <image class="schedule-entry-icon" src="/assets/identity/icon-schedule.png" mode="aspectFit" />
-    <view class="schedule-entry-left">
-      <view class="schedule-entry-title">我的课表</view>
-      <view class="schedule-entry-sub">{{scheduleBrief || '从教务系统导入，每周课程一目了然'}}</view>
-    </view>
-    <view class="schedule-entry-arrow">›</view>
-  </view>
-
-  <!-- 快捷入口：两行，最后一格为更多（数据与大厅同源） -->
+  <!-- 快捷入口：课表 + 六个服务 + 更多（数据与大厅同源） -->
   <view class="quick card">
+    <view class="quick-item" bindtap="goSchedule">
+      <view class="quick-icon quick-icon-schedule">
+        <image src="/assets/identity/icon-schedule.png" mode="aspectFit" />
+      </view>
+      <text>我的课表</text>
+    </view>
     <view
       wx:for="{{quickServices}}"
       wx:key="itemId"

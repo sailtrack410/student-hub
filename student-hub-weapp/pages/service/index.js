@@ -1,4 +1,5 @@
 const directory = require('../../utils/directory');
+const api = require('../../utils/api');
 const app = getApp();
 
 const SORT_OPTIONS = ['默认排序', '办结最快', '名称排序'];
@@ -12,6 +13,8 @@ Page({
     sortOptions: SORT_OPTIONS,
     sortIndex: 0,
     totalCount: 0,
+    scheduleCount: 0,
+    scheduleSemesterName: '',
     loaded: false
   },
 
@@ -20,6 +23,23 @@ Page({
       return;
     }
     this.loadCatalog();
+    this.loadScheduleSummary();
+  },
+
+  /** 课表摘要：供顶部"我的课表"分组展示 */
+  loadScheduleSummary() {
+    api.getScheduleView()
+      .then((schedule) => {
+        if (schedule && schedule.courses && schedule.courses.length) {
+          this.setData({
+            scheduleCount: schedule.courses.length,
+            scheduleSemesterName: schedule.semesterName || '我的课表'
+          });
+        } else {
+          this.setData({ scheduleCount: 0, scheduleSemesterName: '' });
+        }
+      })
+      .catch(() => {});
   },
 
   async loadCatalog() {
