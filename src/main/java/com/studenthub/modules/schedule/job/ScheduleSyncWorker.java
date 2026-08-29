@@ -1,6 +1,8 @@
 package com.studenthub.modules.schedule.job;
 
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
+import com.studenthub.common.ErrorCode;
+import com.studenthub.exception.BusinessException;
 import com.studenthub.integration.jw.KingosoftScheduleClient;
 import com.studenthub.integration.jw.KingosoftScheduleClient.JwCourseEntry;
 import com.studenthub.integration.jw.KingosoftScheduleClient.JwSchedulePage;
@@ -81,6 +83,13 @@ public class ScheduleSyncWorker {
             try {
                 JwSchedulePage page = scheduleClient.fetchSchedulePage(session.get().cookieHeader(), null);
                 samples.add(new Sample(binding, page));
+            } catch (BusinessException exception) {
+                if (ErrorCode.JW_SESSION_EXPIRED.getCode().equals(exception.getCode())) {
+                    // 会话已被学校服务器拒绝：按约定标记已失效并换下一个采样源
+                    markExpired(binding);
+                }
+                log.info("采样课表失败, userId={}, className={}, msg={}",
+                        binding.getUserId(), className, exception.getMessage());
             } catch (Exception exception) {
                 log.info("采样课表失败, userId={}, className={}, msg={}",
                         binding.getUserId(), className, exception.getMessage());
@@ -133,6 +142,14 @@ public class ScheduleSyncWorker {
 
     private List<String> distinctSignatures(List<JwCourseEntry> courses) {
         return courses.stream().map(CourseAggregate::signatureOf).distinct().toList();
+    }
+
+    private void markExpired(JwBindingEntity binding) {
+        JwBindingEntity update = new JwBindingEntity();
+        update.setId(binding.getId());
+        update.setAuthStatus("EXPIRED");
+        update.setVersion(binding.getVersion());
+        jwBindingMapper.updateById(update);
     }
 
     private void sleep(long amount, TimeUnit unit) {

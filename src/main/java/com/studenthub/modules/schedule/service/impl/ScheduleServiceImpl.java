@@ -40,13 +40,23 @@ public class ScheduleServiceImpl implements ScheduleService {
         JwBindingEntity binding = requireAuthenticatedBinding(user.userId());
         Optional<JwSessionStore.JwSession> session = jwSessionStore.find(user.userId());
         if (session.isEmpty()) {
+            markExpired(binding);
             throw new BusinessException(ErrorCode.JW_SESSION_EXPIRED);
         }
 
-        JwSchedulePage page = scheduleClient.fetchSchedulePage(session.get().cookieHeader(), null);
+        JwSchedulePage page;
+        try {
+            page = scheduleClient.fetchSchedulePage(session.get().cookieHeader(), null);
+        } catch (BusinessException exception) {
+            // 远端会话已失效时同步翻转认证状态，保持个人中心与同步提示一致
+            if (ErrorCode.JW_SESSION_EXPIRED.getCode().equals(exception.getCode())) {
+                markExpired(binding);
+            }
+            throw exception;
+        }
 
-        // 仅重写个人课表；班级缓存由定时同步任务多源采样权威维护，避免单人选修污染
-        courseMapper.deleteByUserIdAndSemester(user.userId(), page.semesterCode());
+        // 个人课表仅保留最新学期：整用户覆盖，避免学期切换后新旧数据混排
+        courseMapper.deleteByUserId(user.userId());
         List<ScheduleCourseEntity> personal = new ArrayList<>();
         for (JwCourseEntry entry : page.courses()) {
             ScheduleCourseEntity entity = new ScheduleCourseEntity();
@@ -81,12 +91,29 @@ public class ScheduleServiceImpl implements ScheduleService {
     @Override
     public ScheduleViewResponse view(AuthenticatedUser user) {
         List<ScheduleCourseEntity> courses = courseMapper.selectByUserId(user.userId());
+        // 只展示最新学期，历史学期不入视图
+        String latestSemester = courses.stream()
+                .map(ScheduleCourseEntity::getSemesterCode)
+                .filter(java.util.Objects::nonNull)
+                .max(String::compareTo)
+                .orElse(null);
+        List<ScheduleCourseEntity> current = courses.stream()
+                .filter(course -> latestSemester == null || latestSemester.equals(course.getSemesterCode()))
+                .toList();
         JwBindingEntity binding = jwBindingMapper.findByUserId(user.userId());
-        String semesterCode = courses.isEmpty() ? null : courses.get(0).getSemesterCode();
-        String semesterName = courses.isEmpty() ? null : courses.get(0).getSemesterName();
+        String semesterCode = current.isEmpty() ? null : current.get(0).getSemesterCode();
+        String semesterName = current.isEmpty() ? null : current.get(0).getSemesterName();
         String className = binding == null ? null : binding.getClassName();
-        List<ScheduleCourseItem> items = courses.stream().map(ScheduleCourseItem::from).toList();
+        List<ScheduleCourseItem> items = current.stream().map(ScheduleCourseItem::from).toList();
         return new ScheduleViewResponse(semesterCode, semesterName, className, items);
+    }
+
+    private void markExpired(JwBindingEntity binding) {
+        JwBindingEntity update = new JwBindingEntity();
+        update.setId(binding.getId());
+        update.setAuthStatus("EXPIRED");
+        update.setVersion(binding.getVersion());
+        jwBindingMapper.updateById(update);
     }
 
     private JwBindingEntity requireAuthenticatedBinding(Long userId) {

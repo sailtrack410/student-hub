@@ -21,6 +21,9 @@ public interface ScheduleCourseMapper extends BaseMapper<ScheduleCourseEntity> {
     @Delete("DELETE FROM schedule_course WHERE user_id = #{userId} AND semester_code = #{semesterCode}")
     int deleteByUserIdAndSemester(@Param("userId") Long userId, @Param("semesterCode") String semesterCode);
 
+    @Delete("DELETE FROM schedule_course WHERE user_id = #{userId}")
+    int deleteByUserId(@Param("userId") Long userId);
+
     @Insert("<script>" +
             "INSERT INTO schedule_course (id, user_id, semester_code, semester_name, course_code, course_name, teacher, class_code, course_nature, location, day_of_week, start_section, end_section, weeks, week_parity, raw_text, created_at, updated_at, created_by, updated_by, deleted, version) VALUES " +
             "<foreach collection='list' item='e' separator=','>" +
