@@ -18,7 +18,7 @@ import com.studenthub.modules.schedule.service.ScheduleService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -33,9 +33,9 @@ public class ScheduleServiceImpl implements ScheduleService {
     private final JwSessionStore jwSessionStore;
     private final KingosoftScheduleClient scheduleClient;
     private final ScheduleCourseMapper courseMapper;
+    private final TransactionTemplate transactionTemplate;
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public ScheduleImportResponse importSchedule(AuthenticatedUser user) {
         JwBindingEntity binding = requireAuthenticatedBinding(user.userId());
         Optional<JwSessionStore.JwSession> session = jwSessionStore.find(user.userId());
@@ -48,15 +48,14 @@ public class ScheduleServiceImpl implements ScheduleService {
         try {
             page = scheduleClient.fetchSchedulePage(session.get().cookieHeader(), null);
         } catch (BusinessException exception) {
-            // 远端会话已失效时同步翻转认证状态，保持个人中心与同步提示一致
+            // 远端会话已失效时同步翻转认证状态，保持个人中心与同步提示一致。
+            // 注意此处必须发生在事务之外，否则随后抛出的异常会把标记一起回滚。
             if (ErrorCode.JW_SESSION_EXPIRED.getCode().equals(exception.getCode())) {
                 markExpired(binding);
             }
             throw exception;
         }
 
-        // 个人课表仅保留最新学期：整用户覆盖，避免学期切换后新旧数据混排
-        courseMapper.deleteByUserId(user.userId());
         List<ScheduleCourseEntity> personal = new ArrayList<>();
         for (JwCourseEntry entry : page.courses()) {
             ScheduleCourseEntity entity = new ScheduleCourseEntity();
@@ -77,9 +76,14 @@ public class ScheduleServiceImpl implements ScheduleService {
             entity.setRawText(entry.rawText());
             personal.add(entity);
         }
-        if (!personal.isEmpty()) {
-            courseMapper.insertBatch(personal);
-        }
+        transactionTemplate.executeWithoutResult(status -> {
+            // 个人课表仅保留最新学期：整用户覆盖，避免学期切换后新旧数据混排；
+            // 班级缓存由定时同步任务多源采样权威维护，避免单人选修污染
+            courseMapper.deleteByUserId(user.userId());
+            if (!personal.isEmpty()) {
+                courseMapper.insertBatch(personal);
+            }
+        });
 
         String className = binding.getClassName();
         log.info("课表导入完成, userId={}, semester={}, personal={}",
