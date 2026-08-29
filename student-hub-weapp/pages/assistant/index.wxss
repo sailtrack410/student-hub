@@ -74,6 +74,7 @@
 }
 
 .bubble {
+  display: block;
   max-width: 480rpx;
   background: var(--bg-card);
   border-radius: 6rpx 28rpx 28rpx 28rpx;

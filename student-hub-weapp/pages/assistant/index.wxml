@@ -14,7 +14,9 @@
     <view wx:for="{{messages}}" wx:key="key" id="msg-{{index}}" class="msg-row {{item.role === 'USER' ? 'msg-row-user' : ''}}">
       <image wx:if="{{item.role !== 'USER'}}" class="avatar" src="/assets/mascot/mascot-avatar.jpg" mode="aspectFill" />
       <view class="bubble-wrap">
-        <view class="bubble {{item.role === 'USER' ? 'bubble-user' : ''}} {{item.degraded ? 'bubble-degraded' : ''}}">{{item.content}}</view>
+        <!-- 用户消息纯文本；助手消息按 markdown 转 HTML 后由 rich-text 渲染 -->
+        <view wx:if="{{item.role === 'USER'}}" class="bubble bubble-user">{{item.content}}</view>
+        <rich-text wx:else class="bubble {{item.degraded ? 'bubble-degraded' : ''}}" nodes="{{item.html}}"></rich-text>
         <view wx:if="{{item.role === 'ASSISTANT' && item.actions && item.actions.length}}" class="action-cards">
           <view
             wx:for="{{item.actions}}"

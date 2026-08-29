@@ -1,5 +1,6 @@
 const api = require('../../utils/api');
 const app = getApp();
+const { markdownToHtml } = require('../../utils/markdown');
 
 const SUGGESTIONS = ['宿舍报修怎么办理？', '在读证明去哪开？', '请假流程是什么？', '平台能帮我做什么？'];
 
@@ -55,7 +56,14 @@ Page({
   appendMessage(role, content, degraded = false, actions = null) {
     messageSeq += 1;
     const messages = this.data.messages.concat([
-      { key: `m${messageSeq}`, role, content, degraded, actions }
+      {
+        key: `m${messageSeq}`,
+        role,
+        content,
+        degraded,
+        actions,
+        html: role === 'ASSISTANT' ? markdownToHtml(content) : ''
+      }
     ]);
     this.setData({
       messages,
