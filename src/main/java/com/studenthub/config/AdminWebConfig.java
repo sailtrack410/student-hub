@@ -14,5 +14,7 @@ public class AdminWebConfig implements WebMvcConfigurer {
     public void addViewControllers(ViewControllerRegistry registry) {
         registry.addViewController("/admin").setViewName("forward:/admin/index.html");
         registry.addViewController("/admin/").setViewName("forward:/admin/index.html");
+        registry.addViewController("/screen").setViewName("forward:/screen/index.html");
+        registry.addViewController("/screen/").setViewName("forward:/screen/index.html");
     }
 }

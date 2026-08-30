@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>绵城码上办 · 数据大屏</title>
+    <link rel="stylesheet" href="/screen/css/screen.css">
+</head>
+<body>
+<div id="app">
+    <!-- 顶部标题栏 -->
+    <header class="topbar">
+        <div class="topbar-side topbar-left">
+            <span class="chip" id="clock-date">--</span>
+            <span class="chip" id="clock-week">--</span>
+        </div>
+        <div class="topbar-title">
+            <span class="title-deco left"></span>
+            <h1>绵城码上办 · AI 校园智慧服务平台</h1>
+            <span class="title-deco right"></span>
+        </div>
+        <div class="topbar-side topbar-right">
+            <span class="chip" id="clock-time">--:--:--</span>
+            <span class="chip live"><i class="live-dot"></i>实时数据</span>
+        </div>
+    </header>
+
+    <!-- 三栏主体 -->
+    <main class="grid">
+        <!-- 左列 -->
+        <section class="col">
+            <div class="panel">
+                <div class="panel-head"><h2>用户规模</h2></div>
+                <div class="stat-row" id="user-stats"></div>
+            </div>
+            <div class="panel grow">
+                <div class="panel-head"><h2>近 7 日办理趋势</h2></div>
+                <div class="chart" id="chart-trend"></div>
+            </div>
+            <div class="panel">
+                <div class="panel-head"><h2>服务申请状态分布</h2></div>
+                <div class="status-badges" id="request-status"></div>
+            </div>
+        </section>
+
+        <!-- 中列 -->
+        <section class="col col-center">
+            <div class="kpi-row" id="kpi-row"></div>
+            <div class="panel grow">
+                <div class="panel-head"><h2>服务热度 TOP6</h2></div>
+                <div class="chart" id="chart-heat"></div>
+            </div>
+            <div class="panel">
+                <div class="panel-head"><h2>社区互动</h2></div>
+                <div class="stat-row" id="community-stats"></div>
+            </div>
+        </section>
+
+        <!-- 右列 -->
+        <section class="col">
+            <div class="panel">
+                <div class="panel-head"><h2>AI 校园助手</h2></div>
+                <div class="stat-row" id="ai-stats"></div>
+            </div>
+            <div class="panel grow">
+                <div class="panel-head"><h2>最新办结动态</h2></div>
+                <ul class="feed" id="recent-completed"></ul>
+            </div>
+            <div class="panel qrcode-panel">
+                <div class="panel-head"><h2>扫码即办</h2></div>
+                <div class="qrcode-row">
+                    <div id="qrcode"></div>
+                    <div class="qrcode-tip">
+                        <p class="qrcode-line strong">微信扫码进入小程序</p>
+                        <p class="qrcode-line">服务申请 · 工单进度</p>
+                        <p class="qrcode-line">AI 助手 · 校园社区</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footbar">
+        <span>数据来源：平台真实运营数据（已脱敏）</span>
+        <span id="refresh-info">--</span>
+    </footer>
+</div>
+
+<script src="/screen/vendor/echarts.min.js"></script>
+<script src="/screen/vendor/qrcode.min.js"></script>
+<script src="/screen/js/screen.js"></script>
+</body>
+</html>
