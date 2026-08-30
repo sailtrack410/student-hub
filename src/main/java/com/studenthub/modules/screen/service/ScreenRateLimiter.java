@@ -11,4 +11,9 @@ public interface ScreenRateLimiter {
      * @return true=放行；false=超出窗口内限额
      */
     boolean tryAcquire(String clientKey);
+
+    /**
+     * 指定窗口内限额的限流（key 建议带能力前缀，如 "chat:" + ip，与普通访问隔离计数）。
+     */
+    boolean tryAcquire(String clientKey, int limit);
 }

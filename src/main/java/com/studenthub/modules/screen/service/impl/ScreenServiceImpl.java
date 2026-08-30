@@ -1,6 +1,10 @@
 package com.studenthub.modules.screen.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.studenthub.common.ErrorCode;
+import com.studenthub.exception.BusinessException;
+import com.studenthub.integration.ai.AiChatResponse;
+import com.studenthub.integration.ai.AiMessage;
 import com.studenthub.modules.aichat.entity.AiConversationEntity;
 import com.studenthub.modules.aichat.entity.AiMessageEntity;
 import com.studenthub.modules.aichat.mapper.AiConversationMapper;
@@ -13,21 +17,33 @@ import com.studenthub.modules.community.mapper.CommunityDirectMessageMapper;
 import com.studenthub.modules.community.mapper.CommunityPostMapper;
 import com.studenthub.modules.identity.entity.UserEntity;
 import com.studenthub.modules.identity.mapper.UserMapper;
+import com.studenthub.modules.screen.controller.dto.PublicChatResponse;
+import com.studenthub.modules.screen.controller.dto.ScreenCatalogResponse;
+import com.studenthub.modules.screen.controller.dto.ScreenOrderProgressResponse;
 import com.studenthub.modules.screen.controller.dto.ScreenOverviewResponse;
 import com.studenthub.modules.screen.service.ScreenService;
+import com.studenthub.modules.servicecatalog.entity.ServiceCategoryEntity;
+import com.studenthub.modules.servicecatalog.entity.ServiceItemEntity;
+import com.studenthub.modules.servicecatalog.mapper.ServiceCategoryMapper;
+import com.studenthub.modules.servicecatalog.mapper.ServiceItemMapper;
 import com.studenthub.modules.servicerequest.entity.ServiceRequestEntity;
+import com.studenthub.modules.servicerequest.entity.ServiceRequestLogEntity;
+import com.studenthub.modules.servicerequest.mapper.ServiceRequestLogMapper;
 import com.studenthub.modules.servicerequest.mapper.ServiceRequestMapper;
 import com.studenthub.modules.workorder.entity.WorkOrderEntity;
 import com.studenthub.modules.workorder.mapper.WorkOrderMapper;
+import com.studenthub.service.AiChatService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -45,12 +61,16 @@ public class ScreenServiceImpl implements ScreenService {
 
     private final UserMapper userMapper;
     private final ServiceRequestMapper requestMapper;
+    private final ServiceRequestLogMapper requestLogMapper;
     private final WorkOrderMapper workOrderMapper;
     private final CommunityPostMapper postMapper;
     private final CommunityCommentMapper commentMapper;
     private final CommunityDirectMessageMapper messageMapper;
     private final AiConversationMapper conversationMapper;
     private final AiMessageMapper aiMessageMapper;
+    private final ServiceCategoryMapper categoryMapper;
+    private final ServiceItemMapper itemMapper;
+    private final AiChatService aiChatService;
 
     private volatile ScreenOverviewResponse cachedOverview;
     private volatile long cachedAt;
@@ -223,5 +243,182 @@ public class ScreenServiceImpl implements ScreenService {
                 .map(order -> new ScreenOverviewResponse.RecentCompleted(order.getTitle(),
                         order.getCompletedAt().format(COMPLETED_AT)))
                 .toList();
+    }
+
+    /* ==================== 互动能力 ==================== */
+
+    @Override
+    public ScreenCatalogResponse catalog() {
+        List<ServiceCategoryEntity> categories = categoryMapper.selectList(new LambdaQueryWrapper<ServiceCategoryEntity>()
+                .eq(ServiceCategoryEntity::getStatus, "ENABLED")
+                .orderByAsc(ServiceCategoryEntity::getSortOrder));
+        List<ServiceItemEntity> items = itemMapper.selectList(new LambdaQueryWrapper<ServiceItemEntity>()
+                .eq(ServiceItemEntity::getStatus, "ENABLED")
+                .orderByAsc(ServiceItemEntity::getSortOrder));
+        Map<Long, List<ServiceItemEntity>> byCategory = new LinkedHashMap<>();
+        for (ServiceItemEntity item : items) {
+            byCategory.computeIfAbsent(item.getCategoryId(), key -> new ArrayList<>()).add(item);
+        }
+        List<ScreenCatalogResponse.Category> list = categories.stream()
+                .filter(category -> byCategory.containsKey(category.getId()))
+                .map(category -> {
+                    List<ScreenCatalogResponse.Item> its = byCategory.get(category.getId()).stream()
+                            .map(item -> new ScreenCatalogResponse.Item(item.getId(), item.getItemCode(),
+                                    item.getItemName(), item.getIcon(), item.getSummary(),
+                                    item.getDescription(), item.getSlaHours()))
+                            .toList();
+                    return new ScreenCatalogResponse.Category(category.getId(), category.getCategoryName(),
+                            category.getIcon(), category.getDescription(), its);
+                })
+                .toList();
+        return new ScreenCatalogResponse(list);
+    }
+
+    @Override
+    public ScreenOrderProgressResponse track(String no) {
+        if (!StringUtils.hasText(no)) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "请输入工单号或申请单号");
+        }
+        String key = no.trim().toUpperCase();
+        ServiceRequestEntity request;
+        if (key.startsWith("SR-")) {
+            request = requestMapper.selectOne(new LambdaQueryWrapper<ServiceRequestEntity>()
+                    .eq(ServiceRequestEntity::getRequestNo, key));
+        } else if (key.startsWith("WO-")) {
+            WorkOrderEntity order = workOrderMapper.selectOne(new LambdaQueryWrapper<WorkOrderEntity>()
+                    .eq(WorkOrderEntity::getOrderNo, key));
+            if (order == null) {
+                throw new BusinessException(ErrorCode.NOT_FOUND, "未查到该工单，请核对单号");
+            }
+            request = requestMapper.selectById(order.getRequestId());
+        } else {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "单号格式应以 SR- 或 WO- 开头");
+        }
+        if (request == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "未查到该单据，请核对单号");
+        }
+
+        String orderNo = null;
+        WorkOrderEntity order = workOrderMapper.selectOne(new LambdaQueryWrapper<WorkOrderEntity>()
+                .eq(WorkOrderEntity::getRequestId, request.getId()));
+        String status;
+        if (order != null) {
+            orderNo = order.getOrderNo();
+            status = order.getStatus();
+        } else {
+            status = request.getStatus();
+        }
+
+        List<ScreenOrderProgressResponse.TimelinePoint> timeline = buildTimeline(request, order);
+        return new ScreenOrderProgressResponse(orderNo, request.getRequestNo(), request.getItemName(),
+                status, orderStatusText(status),
+                request.getSubmittedAt() == null ? null : request.getSubmittedAt().format(DT),
+                timeline);
+    }
+
+    /** 时间线：合并申请提交 + 工单流转日志（已脱敏，仅展示动作文案，不展示操作人姓名） */
+    private List<ScreenOrderProgressResponse.TimelinePoint> buildTimeline(ServiceRequestEntity request,
+                                                                          WorkOrderEntity order) {
+        List<ScreenOrderProgressResponse.TimelinePoint> points = new ArrayList<>();
+        if (request.getSubmittedAt() != null) {
+            points.add(new ScreenOrderProgressResponse.TimelinePoint(request.getSubmittedAt().format(DT),
+                    "提交申请", "申请材料已提交"));
+        }
+        if (order != null) {
+            List<ServiceRequestLogEntity> logs = requestLogMapper.selectList(
+                    new LambdaQueryWrapper<ServiceRequestLogEntity>()
+                            .eq(ServiceRequestLogEntity::getRequestId, request.getId())
+                            .and(w -> w.eq(ServiceRequestLogEntity::getWorkOrderId, order.getId())
+                                    .or().isNull(ServiceRequestLogEntity::getWorkOrderId))
+                            .orderByAsc(ServiceRequestLogEntity::getCreatedAt));
+            for (ServiceRequestLogEntity entry : logs) {
+                String action = timelineAction(entry.getAction());
+                String note = StringUtils.hasText(entry.getComment()) ? entry.getComment() : action;
+                points.add(new ScreenOrderProgressResponse.TimelinePoint(
+                        entry.getCreatedAt() == null ? null : entry.getCreatedAt().format(DT),
+                        action, note));
+            }
+        }
+        return points;
+    }
+
+    private String timelineAction(String action) {
+        if (action == null) {
+            return "状态更新";
+        }
+        return switch (action) {
+            case "SUBMIT" -> "提交申请";
+            case "DISPATCH" -> "受理派单";
+            case "START" -> "开始处理";
+            case "ARRIVAL_PHOTO" -> "到达现场";
+            case "COMPLETION_PHOTO" -> "处理完成";
+            case "REOPEN", "REOPEN_CONFIRMATION" -> "退回补充";
+            case "COMPLETE", "CONFIRM" -> "办结确认";
+            case "REJECT" -> "驳回";
+            case "CANCEL" -> "撤销";
+            default -> action;
+        };
+    }
+
+    private String orderStatusText(String status) {
+        if (status == null) {
+            return "未知";
+        }
+        return switch (status) {
+            case "PENDING_DISPATCH" -> "待派单";
+            case "ASSIGNED" -> "已派单";
+            case "PROCESSING" -> "处理中";
+            case "ONSITE_PHOTO_RECORDED" -> "现场处理中";
+            case "PENDING_CONFIRMATION" -> "待确认";
+            case "COMPLETED" -> "已完成";
+            case "REJECTED" -> "未受理";
+            case "CANCELLED" -> "已撤销";
+            default -> status;
+        };
+    }
+
+    @Override
+    public PublicChatResponse chat(String question, List<ScreenService.ChatTurn> history) {
+        List<AiMessage> messages = new ArrayList<>();
+        messages.add(new AiMessage("system", buildPublicSystemPrompt()));
+        if (history != null) {
+            for (ScreenService.ChatTurn turn : history) {
+                if (turn != null && StringUtils.hasText(turn.content())) {
+                    String role = "assistant".equalsIgnoreCase(turn.role()) ? "assistant" : "user";
+                    messages.add(new AiMessage(role, turn.content().trim()));
+                }
+            }
+        }
+        messages.add(new AiMessage("user", question.trim()));
+        AiChatResponse response = aiChatService.chat(messages);
+        return new PublicChatResponse(response.content(), response.model());
+    }
+
+    /** 公开问答 system prompt：实时注入公开办事指南（服务目录），强调不编造 */
+    private String buildPublicSystemPrompt() {
+        List<ServiceCategoryEntity> categories = categoryMapper.selectList(new LambdaQueryWrapper<ServiceCategoryEntity>()
+                .eq(ServiceCategoryEntity::getStatus, "ENABLED")
+                .orderByAsc(ServiceCategoryEntity::getSortOrder));
+        List<ServiceItemEntity> items = itemMapper.selectList(new LambdaQueryWrapper<ServiceItemEntity>()
+                .eq(ServiceItemEntity::getStatus, "ENABLED")
+                .orderByAsc(ServiceItemEntity::getSortOrder));
+        Map<Long, String> categoryNames = new HashMap<>();
+        for (ServiceCategoryEntity category : categories) {
+            categoryNames.put(category.getId(), category.getCategoryName());
+        }
+        StringBuilder knowledge = new StringBuilder();
+        for (ServiceItemEntity item : items) {
+            knowledge.append("●【").append(item.getItemName()).append("】")
+                    .append(StringUtils.hasText(item.getSummary()) ? item.getSummary() : "")
+                    .append(item.getSlaHours() != null ? "（承诺时限" + item.getSlaHours() + "小时）" : "")
+                    .append(StringUtils.hasText(item.getDescription()) ? " " + item.getDescription() : "")
+                    .append("\n");
+        }
+        return "你是「绵城码上办」AI 校园服务终端助手，面向创意集市现场观众提供免登录公开咨询。\n"
+                + "只能依据下列公开办事指南回答，不得编造任何不存在的政策、流程、电话或地点；"
+                + "指南没有的信息要明确说“该问题我暂不清楚，建议联系学生事务中心”。\n"
+                + "回答简洁口语化，单条不超过 100 字。引导现场观众体验办事闭环："
+                + "若涉及办事，可提示其扫码进入小程序提交申请并获取单号，回到本终端查询进度。\n\n"
+                + "公开办事指南：\n" + knowledge;
     }
 }

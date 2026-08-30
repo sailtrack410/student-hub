@@ -26,6 +26,11 @@ public class ScreenRateLimiterImpl implements ScreenRateLimiter {
 
     @Override
     public boolean tryAcquire(String clientKey) {
+        return tryAcquire(clientKey, LIMIT);
+    }
+
+    @Override
+    public boolean tryAcquire(String clientKey, int limit) {
         if (clientKey == null || clientKey.isBlank()) {
             return true;
         }
@@ -38,7 +43,7 @@ public class ScreenRateLimiterImpl implements ScreenRateLimiter {
             existing[1]++;
             return existing;
         });
-        if (window[1] > LIMIT) {
+        if (window[1] > limit) {
             allowed = false;
         }
         if (windows.size() > CLEAN_THRESHOLD) {
