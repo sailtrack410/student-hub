@@ -103,22 +103,21 @@ body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans 
     position: relative; z-index: 1;
 }
 
-/* 功能卡：带实时预览的活卡片，不是死按钮 */
+/* 功能卡：整卡浅色渐变铺底 + 彩色圆角图标，不用单边色条 */
 .home-cards { flex: 1; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 22px; min-height: 0; }
 .fcard {
     display: flex; flex-direction: column; text-align: left;
-    background: var(--card); border: none; border-radius: 26px;
+    background: var(--card); border: 1.5px solid rgba(226, 232, 240, .9); border-radius: 26px;
     padding: 26px 28px; box-shadow: var(--shadow-card);
     cursor: pointer; font-family: inherit;
-    border-top: 6px solid transparent;
     transition: transform .16s ease, box-shadow .16s ease;
     position: relative; overflow: hidden;
 }
 .fcard:active { transform: scale(.965); box-shadow: 0 4px 14px rgba(15, 23, 42, .12); }
-.fcard-chat { border-top-color: var(--brand); }
-.fcard-guide { border-top-color: var(--accent); }
-.fcard-track { border-top-color: var(--orange); }
-.fcard-data { border-top-color: var(--purple); }
+.fcard-chat { background: linear-gradient(155deg, #EAF2FF 0%, #F7FAFF 55%, #FFFFFF 100%); }
+.fcard-guide { background: linear-gradient(155deg, #E6FBF6 0%, #F5FDFB 55%, #FFFFFF 100%); }
+.fcard-track { background: linear-gradient(155deg, #FFF5E0 0%, #FFFBF2 55%, #FFFFFF 100%); }
+.fcard-data { background: linear-gradient(155deg, #F1ECFE 0%, #FAF8FF 55%, #FFFFFF 100%); }
 .fcard-head { display: flex; align-items: center; gap: 16px; }
 .fcard-icon {
     width: 64px; height: 64px; border-radius: 18px;
@@ -315,8 +314,10 @@ body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans 
 .guide-items-wrap::-webkit-scrollbar { display: none; }
 .guide-items { list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-content: start; }
 .guide-item {
-    background: var(--card); border-radius: 20px; box-shadow: var(--shadow-card);
-    padding: 24px 26px; cursor: pointer; border-left: 6px solid var(--accent);
+    background: linear-gradient(155deg, #F2FBF9 0%, #FFFFFF 60%);
+    border: 1.5px solid rgba(226, 232, 240, .9);
+    border-radius: 20px; box-shadow: var(--shadow-card);
+    padding: 24px 26px; cursor: pointer;
     transition: transform .14s ease;
 }
 .guide-item:active { transform: scale(.96); }
