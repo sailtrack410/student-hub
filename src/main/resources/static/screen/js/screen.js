@@ -1,5 +1,5 @@
-/* 现场服务终端：数据大屏 + AI 问答 + 办事指南 + 进度查询。
-   底部导航切换视图；数据大屏 15 秒自动刷新；1920×1080 等比缩放。 */
+/* 现场服务终端：首页宫格 + AI 问答 + 办事指南 + 进度查询 + 数据一览。
+   底部导航/宫格点选切换视图；数据页懒加载并 15 秒自动刷新；1920×1080 等比缩放。 */
 (function () {
     'use strict';
 
@@ -34,28 +34,34 @@
     });
 
     /* ---------- 视图切换 ---------- */
-    var TITLES = {
-        dashboard: '绵城码上办 · 数据大屏',
-        chat: '绵城码上办 · AI 问答',
-        guide: '绵城码上办 · 办事指南',
-        track: '绵城码上办 · 进度查询'
-    };
+    var currentView = 'home';
+    var dataLoaded = false;
 
     function switchView(name) {
+        currentView = name;
         document.querySelectorAll('.view').forEach(function (view) {
             view.classList.toggle('is-active', view.id === 'view-' + name);
         });
         document.querySelectorAll('.nav-item').forEach(function (item) {
             item.classList.toggle('is-active', item.dataset.view === name);
         });
-        document.getElementById('view-title').textContent = TITLES[name] || TITLES.dashboard;
-        Object.keys(charts).forEach(function (key) { charts[key].resize(); });
-        if (name === 'guide' && catalogue === null) loadCatalogue();
-        if (name === 'dashboard') loadOverview();
+        if (name === 'data') {
+            loadOverview();
+            requestAnimationFrame(function () {
+                Object.keys(charts).forEach(function (key) { charts[key].resize(); });
+            });
+        }
+        if (name === 'guide' && catalogue === null) {
+            loadCatalogue();
+        }
     }
 
-    Array.prototype.forEach.call(document.querySelectorAll('.nav-item'), function (item) {
+    document.querySelectorAll('.nav-item').forEach(function (item) {
         item.addEventListener('click', function () { switchView(item.dataset.view); });
+    });
+
+    document.querySelectorAll('.tile').forEach(function (tile) {
+        tile.addEventListener('click', function () { switchView(tile.dataset.view); });
     });
 
     /* ---------- 时钟 ---------- */
@@ -136,26 +142,26 @@
     function renderTrend(trend) {
         chart('chart-trend').setOption({
             grid: { left: 42, right: 18, top: 34, bottom: 30 },
-            legend: { data: ['提交申请', '办结工单'], textStyle: { color: '#8fa8cf', fontSize: 12 },
+            legend: { data: ['提交申请', '办结工单'], textStyle: { color: '#64748B', fontSize: 12 },
                 itemWidth: 14, itemHeight: 8, top: 2, right: 8 },
             tooltip: { trigger: 'axis' },
             xAxis: { type: 'category', data: trend.map(function (p) { return p.date + '\n' + p.weekday; }),
-                axisLine: { lineStyle: { color: 'rgba(86,144,235,0.4)' } }, axisTick: { show: false },
-                axisLabel: { color: '#8fa8cf', fontSize: 11, lineHeight: 15, interval: 0 } },
+                axisLine: { lineStyle: { color: '#CBD5E1' } }, axisTick: { show: false },
+                axisLabel: { color: '#64748B', fontSize: 11, lineHeight: 15, interval: 0 } },
             yAxis: { type: 'value', minInterval: 1,
-                splitLine: { lineStyle: { color: 'rgba(56,97,175,0.22)' } },
-                axisLabel: { color: '#8fa8cf', fontSize: 11 } },
+                splitLine: { lineStyle: { color: '#EDF2F7' } },
+                axisLabel: { color: '#64748B', fontSize: 11 } },
             series: [
                 { name: '提交申请', type: 'bar', barWidth: 14,
                   data: trend.map(function (p) { return p.submitted; }),
                   itemStyle: { borderRadius: [4, 4, 0, 0],
                     color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                        { offset: 0, color: '#35d0ff' }, { offset: 1, color: 'rgba(53,208,255,0.15)' }]) } },
+                        { offset: 0, color: '#2563EB' }, { offset: 1, color: 'rgba(37,99,235,0.35)' }]) } },
                 { name: '办结工单', type: 'line', smooth: true, symbolSize: 6,
                   data: trend.map(function (p) { return p.completed; }),
-                  lineStyle: { color: '#ffc257', width: 2 }, itemStyle: { color: '#ffc257' },
+                  lineStyle: { color: '#D97706', width: 2 }, itemStyle: { color: '#D97706' },
                   areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                        { offset: 0, color: 'rgba(255,194,87,0.25)' }, { offset: 1, color: 'rgba(255,194,87,0)' }]) } }
+                        { offset: 0, color: 'rgba(217,119,6,0.2)' }, { offset: 1, color: 'rgba(217,119,6,0)' }]) } }
             ]
         });
     }
@@ -169,20 +175,20 @@
                 axisLabel: { show: false }, axisLine: { show: false }, axisTick: { show: false } },
             yAxis: { type: 'category', data: sorted.map(function (i) { return i.itemName; }),
                 axisLine: { show: false }, axisTick: { show: false },
-                axisLabel: { color: '#cfe4ff', fontSize: 13 } },
+                axisLabel: { color: '#0F172A', fontSize: 13 } },
             series: [{ type: 'bar', barWidth: 16,
-                label: { show: true, position: 'right', color: '#35d0ff', fontWeight: 700 },
+                label: { show: true, position: 'right', color: '#2563EB', fontWeight: 700 },
                 data: sorted.map(function (i) { return i.count; }),
                 itemStyle: { borderRadius: [0, 8, 8, 0],
                   color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-                        { offset: 0, color: 'rgba(77,139,255,0.35)' }, { offset: 1, color: '#35d0ff' }]) } }]
+                        { offset: 0, color: 'rgba(37,99,235,0.3)' }, { offset: 1, color: '#14B8A6' }]) } }]
         });
     }
 
     var STATUS_LABEL = { SUBMITTED: '待受理', PROCESSING: '处理中', COMPLETED: '已完成',
         REJECTED: '未受理', CANCELLED: '已撤销' };
-    var STATUS_COLOR = { SUBMITTED: 'c-gold', PROCESSING: 'c-cyan', COMPLETED: 'c-green',
-        REJECTED: 'c-red', CANCELLED: 'c-blue' };
+    var STATUS_COLOR = { SUBMITTED: 'c-gold', PROCESSING: 'c-brand', COMPLETED: 'c-green',
+        REJECTED: 'c-brand', CANCELLED: 'c-accent' };
 
     function renderStatus(dist) {
         document.getElementById('request-status').innerHTML = Object.keys(STATUS_LABEL).map(function (key) {
@@ -194,7 +200,7 @@
     function renderFeed(list) {
         var host = document.getElementById('recent-completed');
         if (!list || !list.length) {
-            host.innerHTML = '<li><span class="feed-title" style="color:#8fa8cf">暂无办结记录</span></li>';
+            host.innerHTML = '<li><span class="feed-title" style="color:#64748B">暂无办结记录</span></li>';
             return;
         }
         host.innerHTML = list.map(function (item, index) {
@@ -209,7 +215,7 @@
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
-    /* ---------- 数据大屏 ---------- */
+    /* ---------- 数据一览 ---------- */
     function loadOverview() {
         fetch('/api/public/screen/overview')
             .then(function (res) { return res.json(); })
@@ -217,45 +223,41 @@
                 if (!body || body.success !== true || !body.data) throw new Error(body && body.message || 'bad');
                 var data = body.data;
                 renderStats('user-stats', [
-                    { value: data.users.total, label: '累计用户', color: 'c-cyan' },
-                    { value: data.users.students, label: '在校学生', color: 'c-blue' },
+                    { value: data.users.total, label: '累计用户', color: 'c-brand' },
+                    { value: data.users.students, label: '在校学生', color: 'c-accent' },
                     { value: data.users.todayNew, label: '今日新增', color: 'c-gold' }
                 ]);
                 renderKpis([
-                    { value: data.requests.total, label: '累计服务申请', color: 'c-cyan' },
+                    { value: data.requests.total, label: '累计服务申请', color: 'c-brand' },
                     { value: data.requests.today, label: '今日新增申请', color: 'c-gold' },
                     { value: data.orders.completed, label: '累计办结工单', color: 'c-green' },
-                    { value: data.ai.answers, label: 'AI 助手答疑', color: 'c-cyan' }
+                    { value: data.ai.answers, label: 'AI 助手答疑', color: 'c-brand' }
                 ]);
                 renderStats('community-stats', [
-                    { value: data.community.posts, label: '社区动态', color: 'c-cyan' },
-                    { value: data.community.comments, label: '互动评论', color: 'c-blue' },
+                    { value: data.community.posts, label: '社区动态', color: 'c-brand' },
+                    { value: data.community.comments, label: '互动评论', color: 'c-accent' },
                     { value: data.community.messages, label: '私信互动', color: 'c-gold' }
                 ]);
                 renderStats('ai-stats', [
-                    { value: data.ai.conversations, label: 'AI 会话', color: 'c-cyan' },
-                    { value: data.ai.answers, label: 'AI 回答', color: 'c-blue' },
+                    { value: data.ai.conversations, label: 'AI 会话', color: 'c-brand' },
+                    { value: data.ai.answers, label: 'AI 回答', color: 'c-accent' },
                     { value: data.ai.todayAnswers, label: '今日回答', color: 'c-gold' }
                 ]);
                 renderTrend(data.trend);
                 renderHeat(data.topServices);
                 renderStatus(data.requests.statusDist || {});
                 renderFeed(data.recentCompleted);
-                document.getElementById('refresh-info').textContent =
-                    '更新于 ' + data.generatedAt + ' · 每 15 秒自动刷新';
             })
-            .catch(function () {
-                document.getElementById('refresh-info').textContent = '数据更新失败，自动重试中…';
-            })
+            .catch(function () { /* 数据页静默重试 */ })
             .finally(function () {
                 setTimeout(function () {
-                    if (document.getElementById('view-dashboard').classList.contains('is-active')) loadOverview();
+                    if (currentView === 'data') loadOverview();
                 }, REFRESH_MS);
             });
     }
 
     /* ---------- AI 问答 ---------- */
-    var chatHistory = [[], [], []];
+    var chatHistory = [];
     var chatBusy = false;
 
     function addMessage(role, text) {
@@ -313,6 +315,9 @@
     });
     document.getElementById('chat-text').addEventListener('keydown', function (event) {
         if (event.key === 'Enter') sendChat(document.getElementById('chat-text').value);
+    });
+    document.querySelectorAll('.suggest-chip').forEach(function (chip) {
+        chip.addEventListener('click', function () { sendChat(chip.dataset.q); });
     });
 
     /* ---------- 语音转写（按住说话） ---------- */
@@ -532,10 +537,8 @@
     setInterval(tickClock, 1000);
 
     new QRCode(document.getElementById('qrcode'), {
-        text: QR_CONTENT, width: 108, height: 108,
-        colorDark: '#0b1830', colorLight: '#ffffff',
+        text: QR_CONTENT, width: 96, height: 96,
+        colorDark: '#0F172A', colorLight: '#ffffff',
         correctLevel: QRCode.CorrectLevel.M
     });
-
-    loadOverview();
 })();
