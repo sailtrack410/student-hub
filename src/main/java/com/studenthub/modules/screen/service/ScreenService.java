@@ -2,6 +2,7 @@ package com.studenthub.modules.screen.service;
 
 import com.studenthub.modules.screen.controller.dto.PublicChatResponse;
 import com.studenthub.modules.screen.controller.dto.ScreenCatalogResponse;
+import com.studenthub.modules.screen.controller.dto.ScreenNoticeResponse;
 import com.studenthub.modules.screen.controller.dto.ScreenOrderProgressResponse;
 import com.studenthub.modules.screen.controller.dto.ScreenOverviewResponse;
 
@@ -20,6 +21,9 @@ public interface ScreenService {
     ScreenOrderProgressResponse track(String no);
 
     PublicChatResponse chat(String question, List<ScreenService.ChatTurn> history);
+
+    /** 信息要闻：公开通知/要闻/活动，供终端待机屏与主控台轮播 */
+    ScreenNoticeResponse notices();
 
     record ChatTurn(String role, String content) {
     }

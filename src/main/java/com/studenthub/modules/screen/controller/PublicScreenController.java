@@ -7,6 +7,7 @@ import com.studenthub.modules.aichat.service.AiSpeechService;
 import com.studenthub.modules.screen.controller.dto.PublicChatRequest;
 import com.studenthub.modules.screen.controller.dto.PublicChatResponse;
 import com.studenthub.modules.screen.controller.dto.ScreenCatalogResponse;
+import com.studenthub.modules.screen.controller.dto.ScreenNoticeResponse;
 import com.studenthub.modules.screen.controller.dto.ScreenOrderProgressResponse;
 import com.studenthub.modules.screen.controller.dto.ScreenOverviewResponse;
 import com.studenthub.modules.screen.service.ScreenRateLimiter;
@@ -78,6 +79,16 @@ public class PublicScreenController {
             throw new BusinessException(ErrorCode.PUBLIC_RATE_LIMITED);
         }
         return Result.success(screenService.track(no));
+    }
+
+    @GetMapping("/notices")
+    @Operation(summary = "信息要闻", description = "免登录只读；公开通知/要闻/活动，供终端待机屏与主控台轮播。",
+            operationId = "getPublicScreenNotices")
+    public Result<ScreenNoticeResponse> notices(HttpServletRequest request) {
+        if (!rateLimiter.tryAcquire(clientKey(request))) {
+            throw new BusinessException(ErrorCode.PUBLIC_RATE_LIMITED);
+        }
+        return Result.success(screenService.notices());
     }
 
     @PostMapping("/chat")

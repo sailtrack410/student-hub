@@ -4,152 +4,262 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="robots" content="noindex, nofollow">
-    <title>绵城码上办 · 现场服务终端</title>
+    <title>绵城码上办 · 校园自助服务终端</title>
     <link rel="stylesheet" href="/screen/css/screen.css">
 </head>
 <body>
 <div id="app">
-    <!-- ===== 顶栏 ===== -->
+
+    <!-- ===== 全局顶栏（品牌 + 时钟，任务流中常驻） ===== -->
     <header class="topbar">
         <div class="brand">
             <img class="brand-logo" src="/screen/assets/logo-mark.png" alt="logo">
             <div class="brand-text">
                 <span class="brand-name">绵城码上办</span>
-                <span class="brand-sub">校园服务现场终端</span>
+                <span class="brand-sub">校园自助服务终端</span>
             </div>
         </div>
         <div class="topbar-side">
+            <span class="idle-chip" id="idle-chip" hidden></span>
             <span class="chip" id="clock-date">--</span>
             <span class="chip" id="clock-week">--</span>
             <span class="chip chip-time" id="clock-time">--:--:--</span>
         </div>
     </header>
 
-    <!-- ===== 主视图区 ===== -->
+    <!-- ===== 主舞台 ===== -->
     <main class="view-root">
 
-        <!-- 视图：首页（功能宫格） -->
+        <!-- ========== 主控台（首页）：功能分区 + 信息要闻 ========== -->
         <section class="view is-active" id="view-home">
-            <div class="home-layout">
-                <div class="home-hero">
-                    <img class="home-mascot" src="/screen/assets/mascot-main.jpg" alt="">
-                    <div class="home-hero-text">
-                        <h2>你好呀同学，需要办什么事？</h2>
-                        <p>点下面的功能就能直接用，也可以问我哦</p>
+            <div class="home-main">
+                <!-- 左：功能操作区 -->
+                <div class="home-left">
+                    <div class="home-hero">
+                        <img class="home-mascot" src="/screen/assets/mascot-main.jpg" alt="">
+                        <div class="home-hero-text">
+                            <h2 id="home-greeting">你好呀同学</h2>
+                            <p>点选下面任意服务直接开始办理，无需登录</p>
+                        </div>
+                        <div class="home-hero-badge">创意集市<br>现场服务点</div>
+                    </div>
+                    <div class="home-cards">
+                        <button class="fcard fcard-chat" data-goto="chat">
+                            <div class="fcard-head">
+                                <span class="fcard-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                                </span>
+                                <span class="fcard-title">AI 问答</span>
+                                <span class="fcard-go">进入</span>
+                            </div>
+                            <div class="fcard-body">
+                                <p class="fcard-desc">打字或按住说话，办事问题随问随答</p>
+                                <p class="fcard-live" id="preview-chat">「请假怎么办理？」</p>
+                            </div>
+                        </button>
+                        <button class="fcard fcard-guide" data-goto="guide">
+                            <div class="fcard-head">
+                                <span class="fcard-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                                </span>
+                                <span class="fcard-title">办事指南</span>
+                                <span class="fcard-go">进入</span>
+                            </div>
+                            <div class="fcard-body">
+                                <p class="fcard-desc">报修、请假、证明，流程材料一看就懂</p>
+                                <p class="fcard-live" id="preview-guide">服务目录加载中…</p>
+                            </div>
+                        </button>
+                        <button class="fcard fcard-track" data-goto="track">
+                            <div class="fcard-head">
+                                <span class="fcard-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+                                </span>
+                                <span class="fcard-title">进度查询</span>
+                                <span class="fcard-go">进入</span>
+                            </div>
+                            <div class="fcard-body">
+                                <p class="fcard-desc">凭 SR- / WO- 单号，十秒查到办理进度</p>
+                                <p class="fcard-live fcard-mono">SR-2026… ・ WO-2026…</p>
+                            </div>
+                        </button>
+                        <button class="fcard fcard-data" data-goto="data">
+                            <div class="fcard-head">
+                                <span class="fcard-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                                </span>
+                                <span class="fcard-title">数据一览</span>
+                                <span class="fcard-go">进入</span>
+                            </div>
+                            <div class="fcard-body">
+                                <p class="fcard-desc">平台实时运营数据公开透明</p>
+                                <p class="fcard-live" id="preview-data">今日申请 - ・ 今日办结 -</p>
+                            </div>
+                        </button>
                     </div>
                 </div>
-                <div class="home-grid">
-                    <div class="tile tile-chat" data-view="chat">
-                        <div class="tile-icon">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-                        </div>
-                        <div class="tile-title">AI 问答</div>
-                        <div class="tile-sub">想问就问我，按住说话也可以</div>
-                    </div>
-                    <div class="tile tile-guide" data-view="guide">
-                        <div class="tile-icon">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-                        </div>
-                        <div class="tile-title">办事指南</div>
-                        <div class="tile-sub">报修、请假、证明怎么办一看就懂</div>
-                    </div>
-                    <div class="tile tile-track" data-view="track">
-                        <div class="tile-icon">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                        </div>
-                        <div class="tile-title">进度查询</div>
-                        <div class="tile-sub">输入单号，随时知道办到哪一步</div>
-                    </div>
-                    <div class="tile tile-data" data-view="data">
-                        <div class="tile-icon">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-                        </div>
-                        <div class="tile-title">数据一览</div>
-                        <div class="tile-sub">平台运营实时数据</div>
-                    </div>
-                </div>
-                <div class="home-foot">
-                    <div class="home-qr">
-                        <div id="qrcode"></div>
-                        <div class="home-qr-text">
-                            <p class="strong">微信扫码进入小程序</p>
-                            <p>申请 · 查进度 · AI 助手 · 社区</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
 
-        <!-- 视图：AI 问答 -->
-        <section class="view" id="view-chat">
-            <div class="chat-layout">
-                <div class="panel chat-panel">
-                    <div class="panel-head">
-                        <img class="panel-mascot" src="/screen/assets/mascot-avatar.jpg" alt="">
-                        <div class="panel-title-wrap">
-                            <h2>AI 校园小助手</h2>
-                            <p class="panel-tip">公开办事咨询 · 打字或按住说话</p>
-                        </div>
-                    </div>
-                    <div class="chat-body" id="chat-body">
-                        <div class="chat-empty" id="chat-empty">
-                            <img class="chat-mascot" src="/screen/assets/mascot-main.jpg" alt="">
-                            <p class="chat-empty-title">你好，我是校园小助手</p>
-                            <p class="chat-empty-sub">可以问我：请假怎么办理 / 宿舍报修在哪里申请 / 在读证明去哪开</p>
-                            <div class="chat-suggests">
-                                <button class="suggest-chip" data-q="请假怎么办理？">请假怎么办理？</button>
-                                <button class="suggest-chip" data-q="宿舍报修在哪里申请？">宿舍报修在哪里申请？</button>
-                                <button class="suggest-chip" data-q="在读证明去哪开？">在读证明去哪开？</button>
-                                <button class="suggest-chip" data-q="活动场地怎么预约？">活动场地怎么预约？</button>
+                <!-- 右：信息要闻区 -->
+                <aside class="home-right">
+                    <div class="news-panel">
+                        <div class="news-head">
+                            <h3>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-8-8 18-2.5-7.5L3 11z"/></svg>
+                                信息要闻
+                            </h3>
+                            <div class="news-tabs" id="news-tabs">
+                                <button class="news-tab is-active" data-type="">全部</button>
+                                <button class="news-tab" data-type="NOTICE">通知</button>
+                                <button class="news-tab" data-type="NEWS">要闻</button>
+                                <button class="news-tab" data-type="ACTIVITY">活动</button>
                             </div>
                         </div>
+                        <div class="news-scroll" id="news-scroll">
+                            <ul class="news-list" id="news-list">
+                                <li class="news-empty">要闻加载中…</li>
+                            </ul>
+                        </div>
                     </div>
-                    <div class="chat-inputbar">
-                        <input type="text" id="chat-text" placeholder="输入你的问题…" maxlength="500">
-                        <button class="btn btn-talk" id="chat-talk">按住说话</button>
-                        <button class="btn btn-send" id="chat-send">发送</button>
+                    <div class="qr-card">
+                        <div class="qr-box" id="qrcode"></div>
+                        <div class="qr-text">
+                            <p class="strong">微信扫码 · 手机上继续办</p>
+                            <p>提交申请 / 查进度 / AI 助手 / 校园社区</p>
+                        </div>
                     </div>
+                </aside>
+            </div>
+            <!-- 底部：最新办结动态走马灯 -->
+            <footer class="home-ticker">
+                <span class="ticker-label">最新办结</span>
+                <div class="ticker-clip"><div class="ticker-track" id="home-ticker"></div></div>
+            </footer>
+        </section>
+
+        <!-- ========== 任务流：AI 问答 ========== -->
+        <section class="view task" id="view-chat">
+            <header class="task-bar">
+                <button class="task-back" data-goto="home">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    返回首页
+                </button>
+                <h2 class="task-title">AI 问答</h2>
+                <span class="task-tip">公开办事咨询 · 打字或按住说话</span>
+            </header>
+            <div class="chat-panel">
+                <div class="chat-body" id="chat-body">
+                    <div class="chat-empty" id="chat-empty">
+                        <img class="chat-mascot" src="/screen/assets/mascot-main.jpg" alt="">
+                        <p class="chat-empty-title">你好，我是校园小助手</p>
+                        <p class="chat-empty-sub">办事流程、所需材料、办理地点，都可以问我</p>
+                    </div>
+                </div>
+                <div class="chat-suggests" id="chat-suggests">
+                    <button class="suggest-chip" data-q="请假怎么办理？">请假怎么办理？</button>
+                    <button class="suggest-chip" data-q="宿舍报修在哪里申请？">宿舍报修在哪里申请？</button>
+                    <button class="suggest-chip" data-q="在读证明去哪开？">在读证明去哪开？</button>
+                    <button class="suggest-chip" data-q="活动场地怎么预约？">活动场地怎么预约？</button>
+                    <button class="suggest-chip" data-q="创意集市摊位怎么申请？">创意集市摊位怎么申请？</button>
+                </div>
+                <div class="chat-inputbar">
+                    <input type="text" id="chat-text" placeholder="输入你的问题…" maxlength="500">
+                    <button class="btn btn-talk" id="chat-talk">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+                        <span>按住说话</span>
+                    </button>
+                    <button class="btn btn-send" id="chat-send">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        <span>发送</span>
+                    </button>
                 </div>
             </div>
         </section>
 
-        <!-- 视图：办事指南 -->
-        <section class="view" id="view-guide">
+        <!-- ========== 任务流：办事指南 ========== -->
+        <section class="view task" id="view-guide">
+            <header class="task-bar">
+                <button class="task-back" data-goto="home">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    返回首页
+                </button>
+                <h2 class="task-title">办事指南</h2>
+                <span class="task-tip">选择分类查看事项与办理说明</span>
+            </header>
             <div class="guide-layout">
-                <div class="panel guide-cats">
-                    <div class="panel-head"><h2>办事分类</h2></div>
-                    <ul class="cat-list" id="guide-cats"></ul>
+                <ul class="guide-cats" id="guide-cats"></ul>
+                <div class="guide-items-wrap">
+                    <ul class="guide-items" id="guide-items"></ul>
                 </div>
-                <div class="panel guide-items">
-                    <div class="panel-head"><h2 id="guide-items-title">服务事项</h2></div>
-                    <ul class="item-list" id="guide-items"></ul>
-                </div>
-                <div class="panel guide-detail">
-                    <div class="panel-head"><h2>办理详情</h2></div>
-                    <div id="guide-detail">
-                        <p class="guide-placeholder">点击左侧事项查看办理说明</p>
-                    </div>
-                </div>
+            </div>
+            <!-- 事项详情：抽屉式浮层 -->
+            <div class="guide-mask" id="guide-mask" hidden>
+                <div class="guide-drawer" id="guide-drawer"></div>
             </div>
         </section>
 
-        <!-- 视图：进度查询 -->
-        <section class="view" id="view-track">
+        <!-- ========== 任务流：进度查询（屏上键盘） ========== -->
+        <section class="view task" id="view-track">
+            <header class="task-bar">
+                <button class="task-back" data-goto="home">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    返回首页
+                </button>
+                <h2 class="task-title">进度查询</h2>
+                <span class="task-tip">申请单号 SR- 开头 ・ 工单号 WO- 开头</span>
+            </header>
             <div class="track-layout">
-                <div class="panel track-query">
-                    <div class="panel-head"><h2>工单进度查询</h2></div>
-                    <p class="track-tip">输入工单号（WO-）或申请单号（SR-）实时查询办理进度</p>
-                    <div class="track-inputbar">
-                        <input type="text" id="track-no" placeholder="例如：SR-20260830-…" maxlength="64">
-                        <button class="btn btn-send" id="track-go">查询</button>
+                <div class="track-left">
+                    <div class="track-display">
+                        <span class="track-display-label">单号</span>
+                        <span class="track-display-text" id="track-display">SR-</span>
+                        <span class="track-caret"></span>
                     </div>
-                    <div class="track-result" id="track-result"></div>
+                    <div class="track-result" id="track-result">
+                        <div class="track-placeholder">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+                            <p>用右侧键盘输入单号，点击「查询」</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="track-kbd">
+                    <div class="kbd-prefix">
+                        <button class="kbd-chip is-active" data-prefix="SR-">SR- 申请单</button>
+                        <button class="kbd-chip" data-prefix="WO-">WO- 工单</button>
+                    </div>
+                    <div class="kbd-grid" id="kbd-grid">
+                        <button class="kbd-key" data-key="1">1</button>
+                        <button class="kbd-key" data-key="2">2</button>
+                        <button class="kbd-key" data-key="3">3</button>
+                        <button class="kbd-key" data-key="4">4</button>
+                        <button class="kbd-key" data-key="5">5</button>
+                        <button class="kbd-key" data-key="6">6</button>
+                        <button class="kbd-key" data-key="7">7</button>
+                        <button class="kbd-key" data-key="8">8</button>
+                        <button class="kbd-key" data-key="9">9</button>
+                        <button class="kbd-key" data-key="-">-</button>
+                        <button class="kbd-key" data-key="0">0</button>
+                        <button class="kbd-key kbd-back" data-key="back">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/></svg>
+                        </button>
+                    </div>
+                    <div class="kbd-actions">
+                        <button class="kbd-clear" id="track-clear">清空</button>
+                        <button class="kbd-go" id="track-go">查 询</button>
+                    </div>
                 </div>
             </div>
         </section>
 
-        <!-- 视图：数据一览 -->
-        <section class="view" id="view-data">
+        <!-- ========== 任务流：数据一览 ========== -->
+        <section class="view task" id="view-data">
+            <header class="task-bar">
+                <button class="task-back" data-goto="home">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    返回首页
+                </button>
+                <h2 class="task-title">数据一览</h2>
+                <span class="task-tip">平台运营数据实时公开 · 每 15 秒自动刷新</span>
+            </header>
             <div class="grid data-grid">
                 <section class="col">
                     <div class="panel">
@@ -161,7 +271,7 @@
                         <div class="chart" id="chart-trend"></div>
                     </div>
                     <div class="panel">
-                        <div class="panel-head"><h2>服务申请状态分布</h2></div>
+                        <div class="panel-head"><h2>申请状态分布</h2></div>
                         <div class="status-badges" id="request-status"></div>
                     </div>
                 </section>
@@ -190,29 +300,33 @@
         </section>
     </main>
 
-    <!-- ===== 底部导航 ===== -->
-    <nav class="navbar">
-        <button class="nav-item is-active" data-view="home">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-            <span>首页</span>
-        </button>
-        <button class="nav-item" data-view="chat">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-            <span>AI 问答</span>
-        </button>
-        <button class="nav-item" data-view="guide">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-            <span>办事指南</span>
-        </button>
-        <button class="nav-item" data-view="track">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            <span>进度查询</span>
-        </button>
-        <button class="nav-item" data-view="data">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-            <span>数据一览</span>
-        </button>
-    </nav>
+    <!-- ===== 待机吸引屏：无人时全屏轮播，触摸任意处进入 ===== -->
+    <div id="attract">
+        <div class="attract-bg"><i class="blob b1"></i><i class="blob b2"></i><i class="blob b3"></i></div>
+        <div class="attract-center">
+            <div class="attract-brand">
+                <img class="attract-logo" src="/screen/assets/logo-mark.png" alt="logo">
+                <div>
+                    <h1>绵城码上办</h1>
+                    <p>校园自助服务终端 · 创意集市现场服务点</p>
+                </div>
+            </div>
+            <div class="attract-clock" id="attract-clock">--:--:--</div>
+            <div class="attract-date" id="attract-date">--</div>
+            <img class="attract-mascot" src="/screen/assets/mascot-celebrate.jpg" alt="">
+            <div class="attract-hint">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11.5V5a1.5 1.5 0 0 1 3 0v5.5l4.2.8a2 2 0 0 1 1.5 2.4l-.9 4.5a3 3 0 0 1-2.9 2.3H11a4 4 0 0 1-3.2-1.6L4 14.4a1.6 1.6 0 0 1 2.4-2.1L9 14.5z"/></svg>
+                触摸屏幕任意位置 · 开始使用
+            </div>
+        </div>
+        <div class="attract-ticker">
+            <span class="ticker-label light">信息要闻</span>
+            <div class="ticker-clip"><div class="ticker-track" id="attract-ticker"></div></div>
+        </div>
+    </div>
+
+    <!-- 轻提示 -->
+    <div id="toast" hidden></div>
 </div>
 
 <script src="/screen/vendor/echarts.min.js"></script>

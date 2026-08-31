@@ -19,8 +19,11 @@ import com.studenthub.modules.identity.entity.UserEntity;
 import com.studenthub.modules.identity.mapper.UserMapper;
 import com.studenthub.modules.screen.controller.dto.PublicChatResponse;
 import com.studenthub.modules.screen.controller.dto.ScreenCatalogResponse;
+import com.studenthub.modules.screen.controller.dto.ScreenNoticeResponse;
 import com.studenthub.modules.screen.controller.dto.ScreenOrderProgressResponse;
 import com.studenthub.modules.screen.controller.dto.ScreenOverviewResponse;
+import com.studenthub.modules.screen.entity.ScreenNoticeEntity;
+import com.studenthub.modules.screen.mapper.ScreenNoticeMapper;
 import com.studenthub.modules.screen.service.ScreenService;
 import com.studenthub.modules.servicecatalog.entity.ServiceCategoryEntity;
 import com.studenthub.modules.servicecatalog.entity.ServiceItemEntity;
@@ -71,6 +74,7 @@ public class ScreenServiceImpl implements ScreenService {
     private final ServiceCategoryMapper categoryMapper;
     private final ServiceItemMapper itemMapper;
     private final AiChatService aiChatService;
+    private final ScreenNoticeMapper noticeMapper;
 
     private volatile ScreenOverviewResponse cachedOverview;
     private volatile long cachedAt;
@@ -392,6 +396,34 @@ public class ScreenServiceImpl implements ScreenService {
         messages.add(new AiMessage("user", question.trim()));
         AiChatResponse response = aiChatService.chat(messages);
         return new PublicChatResponse(response.content(), response.model());
+    }
+
+    /* ==================== 信息要闻 ==================== */
+
+    @Override
+    public ScreenNoticeResponse notices() {
+        List<ScreenNoticeEntity> list = noticeMapper.selectList(new LambdaQueryWrapper<ScreenNoticeEntity>()
+                .eq(ScreenNoticeEntity::getEnabled, true)
+                .orderByAsc(ScreenNoticeEntity::getSortOrder)
+                .orderByDesc(ScreenNoticeEntity::getPublishDate)
+                .last("LIMIT 20"));
+        List<ScreenNoticeResponse.Notice> notices = list.stream()
+                .map(n -> new ScreenNoticeResponse.Notice(n.getNoticeType(), noticeTypeText(n.getNoticeType()),
+                        n.getTitle(), n.getSummary(),
+                        n.getPublishDate() == null ? null : n.getPublishDate().toString()))
+                .toList();
+        return new ScreenNoticeResponse(notices);
+    }
+
+    private String noticeTypeText(String type) {
+        if (type == null) {
+            return "通知";
+        }
+        return switch (type) {
+            case "NEWS" -> "要闻";
+            case "ACTIVITY" -> "活动";
+            default -> "通知";
+        };
     }
 
     /** 公开问答 system prompt：实时注入公开办事指南（服务目录），强调不编造 */
