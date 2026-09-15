@@ -7,6 +7,9 @@ import com.studenthub.modules.workorder.controller.dto.CompleteWorkOrderRequest;
 import com.studenthub.modules.workorder.controller.dto.WorkOrderDetailResponse;
 import com.studenthub.modules.workorder.controller.dto.WorkOrderPageQuery;
 import com.studenthub.modules.workorder.controller.dto.WorkOrderSummaryResponse;
+import com.studenthub.modules.workorder.controller.dto.WorkOrderPhotoRequest;
+import com.studenthub.modules.workorder.controller.dto.SubmitWorkOrderCompletionRequest;
+import com.studenthub.modules.workorder.controller.dto.RejectWorkOrderCompletionRequest;
 import com.studenthub.modules.workorder.service.WorkOrderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -60,6 +63,41 @@ public class AppWorkOrderController {
     public Result<Void> complete(@PathVariable Long orderId,
                                  @RequestBody @Valid CompleteWorkOrderRequest request) {
         workOrderService.complete(currentUserProvider.requireCurrentUser(), orderId, request.remark());
+        return Result.success();
+    }
+
+    @PostMapping("/{orderId}/arrival-photo")
+    @Operation(summary = "上传现场照片", operationId = "recordWorkOrderArrivalPhoto")
+    @PreAuthorize("hasAuthority('work-order:process')")
+    public Result<Void> arrivalPhoto(@PathVariable Long orderId,
+                                     @RequestBody @Valid WorkOrderPhotoRequest request) {
+        workOrderService.recordArrivalPhoto(currentUserProvider.requireCurrentUser(), orderId, request.fileId());
+        return Result.success();
+    }
+
+    @PostMapping("/{orderId}/completion-photo")
+    @Operation(summary = "上传完工照片并提交报修人确认", operationId = "submitWorkOrderCompletion")
+    @PreAuthorize("hasAuthority('work-order:process')")
+    public Result<Void> completionPhoto(@PathVariable Long orderId,
+                                         @RequestBody @Valid SubmitWorkOrderCompletionRequest request) {
+        workOrderService.submitCompletion(currentUserProvider.requireCurrentUser(), orderId, request);
+        return Result.success();
+    }
+
+    @PostMapping("/{orderId}/confirm")
+    @Operation(summary = "报修人确认工单完成", operationId = "confirmWorkOrderCompletion")
+    @PreAuthorize("hasAuthority('service-request:view:self')")
+    public Result<Void> confirm(@PathVariable Long orderId) {
+        workOrderService.confirmCompletion(currentUserProvider.requireCurrentUser(), orderId);
+        return Result.success();
+    }
+
+    @PostMapping("/{orderId}/reject-confirmation")
+    @Operation(summary = "报修人退回工单确认", operationId = "rejectWorkOrderCompletion")
+    @PreAuthorize("hasAuthority('service-request:view:self')")
+    public Result<Void> rejectConfirmation(@PathVariable Long orderId,
+                                            @RequestBody @Valid RejectWorkOrderCompletionRequest request) {
+        workOrderService.rejectCompletion(currentUserProvider.requireCurrentUser(), orderId, request.reason());
         return Result.success();
     }
 }

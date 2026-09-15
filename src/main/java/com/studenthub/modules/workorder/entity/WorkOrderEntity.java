@@ -28,6 +28,13 @@ public class WorkOrderEntity extends BaseEntity {
     private String status;
     private String priority;
     private String completeRemark;
+    private Boolean photoWorkflowRequired;
+    private Long arrivalPhotoFileId;
+    private Long completionPhotoFileId;
+    private String completionPhotoFileIds;
+    private LocalDateTime completionSubmittedAt;
+    private LocalDateTime confirmedAt;
+    private String confirmationRejectReason;
     private LocalDateTime assignedAt;
     private LocalDateTime startedAt;
     private LocalDateTime completedAt;

@@ -1,6 +1,8 @@
 package com.studenthub.modules.servicerequest.controller.dto;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.studenthub.modules.servicerequest.entity.ServiceRequestEntity;
 import com.studenthub.modules.workorder.controller.dto.WorkOrderSummaryResponse;
 import com.studenthub.modules.evaluation.controller.dto.EvaluationResponse;
@@ -11,6 +13,7 @@ import java.util.List;
 
 @Schema(description = "服务申请详情")
 public record ServiceRequestDetailResponse(
+        @JsonSerialize(using = ToStringSerializer.class)
         @Schema(description = "申请 ID") Long requestId,
         @Schema(description = "申请编号") String requestNo,
         @Schema(description = "申请标题") String title,

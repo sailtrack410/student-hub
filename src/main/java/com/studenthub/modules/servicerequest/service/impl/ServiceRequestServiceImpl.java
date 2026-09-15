@@ -167,7 +167,15 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
         Integer slaHours = item == null ? null : item.getSlaHours();
 
         WorkOrderEntity order = workOrderMapper.findByRequestId(entity.getId());
-        WorkOrderSummaryResponse workOrder = order == null ? null : WorkOrderSummaryResponse.from(order);
+        List<String> completionPhotoUrls = order == null ? List.of() : parsePhotoIds(order.getCompletionPhotoFileIds()).stream()
+                .map(fileStorageService::signViewPath).toList();
+        if (order != null && completionPhotoUrls.isEmpty() && order.getCompletionPhotoFileId() != null) {
+            completionPhotoUrls = List.of(fileStorageService.signViewPath(order.getCompletionPhotoFileId()));
+        }
+        WorkOrderSummaryResponse workOrder = order == null ? null : WorkOrderSummaryResponse.from(order,
+                order.getArrivalPhotoFileId() == null ? null : fileStorageService.signViewPath(order.getArrivalPhotoFileId()),
+                order.getCompletionPhotoFileId() == null ? null : fileStorageService.signViewPath(order.getCompletionPhotoFileId()),
+                completionPhotoUrls);
 
         ServiceEvaluationEntity evaluation = evaluationMapper.selectByRequestId(entity.getId());
         EvaluationResponse evaluationResponse = evaluation == null ? null : EvaluationResponse.from(evaluation);
@@ -207,6 +215,12 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
             log.warn("申请表单数据解析失败, formData 长度={}", formData == null ? 0 : formData.length());
             return null;
         }
+    }
+
+    private List<Long> parsePhotoIds(String value) {
+        if (value == null || value.isBlank()) return List.of();
+        try { return objectMapper.readValue(value, objectMapper.getTypeFactory().constructCollectionType(List.class, Long.class)); }
+        catch (Exception ignored) { return List.of(); }
     }
 
     private ServiceRequestEntity requireOwnedRequest(Long requesterId, Long requestId) {

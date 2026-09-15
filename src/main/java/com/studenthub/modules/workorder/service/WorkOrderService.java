@@ -7,6 +7,7 @@ import com.studenthub.modules.workorder.controller.dto.AssignWorkOrderRequest;
 import com.studenthub.modules.workorder.controller.dto.WorkOrderDetailResponse;
 import com.studenthub.modules.workorder.controller.dto.WorkOrderPageQuery;
 import com.studenthub.modules.workorder.controller.dto.WorkOrderSummaryResponse;
+import com.studenthub.modules.workorder.controller.dto.SubmitWorkOrderCompletionRequest;
 import com.studenthub.modules.workorder.entity.WorkOrderEntity;
 
 public interface WorkOrderService {
@@ -23,6 +24,14 @@ public interface WorkOrderService {
     void start(AuthenticatedUser worker, Long orderId);
 
     void complete(AuthenticatedUser worker, Long orderId, String remark);
+
+    void recordArrivalPhoto(AuthenticatedUser worker, Long orderId, Long fileId);
+
+    void submitCompletion(AuthenticatedUser worker, Long orderId, SubmitWorkOrderCompletionRequest request);
+
+    void confirmCompletion(AuthenticatedUser requester, Long orderId);
+
+    void rejectCompletion(AuthenticatedUser requester, Long orderId, String reason);
 
     /**
      * 申请人撤销申请时联动撤销工单；工单不存在或已终态时静默跳过撤销动作。

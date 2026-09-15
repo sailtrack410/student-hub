@@ -17,12 +17,15 @@ import com.studenthub.modules.servicerequest.entity.ServiceRequestEntity;
 import com.studenthub.modules.servicerequest.mapper.ServiceRequestMapper;
 import com.studenthub.modules.servicerequest.service.RequestLogRecorder;
 import com.studenthub.modules.servicerequest.statemachine.RequestTransitions;
+import com.studenthub.modules.servicecatalog.entity.ServiceItemEntity;
 import com.studenthub.modules.workorder.controller.dto.AssignWorkOrderRequest;
 import com.studenthub.modules.workorder.controller.dto.WorkOrderDetailResponse;
 import com.studenthub.modules.workorder.controller.dto.WorkOrderPageQuery;
 import com.studenthub.modules.workorder.controller.dto.WorkOrderSummaryResponse;
+import com.studenthub.modules.workorder.controller.dto.SubmitWorkOrderCompletionRequest;
 import com.studenthub.modules.workorder.entity.WorkOrderEntity;
 import com.studenthub.modules.workorder.mapper.WorkOrderMapper;
+import com.studenthub.modules.file.mapper.FileStorageMapper;
 import com.studenthub.modules.workorder.service.WorkOrderService;
 import com.studenthub.modules.workorder.statemachine.WorkOrderTransitions;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +37,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.ArrayList;
 
 @Slf4j
 @Service
@@ -54,6 +58,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
     private final NotificationService notificationService;
     private final DispatcherScopeResolver dispatcherScopeResolver;
     private final ObjectMapper objectMapper;
+    private final FileStorageMapper fileStorageMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -67,6 +72,9 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         order.setAssignedOrganizationId(request.getHandlerOrganizationId());
         order.setStatus(WorkOrderTransitions.Status.PENDING_DISPATCH.name());
         order.setPriority(PRIORITY_NORMAL);
+        ServiceItemEntity serviceItem = serviceItemMapper.selectById(request.getItemId());
+        order.setPhotoWorkflowRequired(serviceItem != null && serviceItem.getItemCode() != null
+                && serviceItem.getItemCode().startsWith("REPAIR-"));
         workOrderMapper.insert(order);
 
         WorkOrderEntity orderNoUpdate = new WorkOrderEntity();
@@ -176,6 +184,9 @@ public class WorkOrderServiceImpl implements WorkOrderService {
     public void complete(AuthenticatedUser worker, Long orderId, String remark) {
         WorkOrderEntity order = requireOrder(orderId);
         requireAssignee(order, worker.userId());
+        if (Boolean.TRUE.equals(order.getPhotoWorkflowRequired())) {
+            throw new BusinessException(ErrorCode.ORDER_STATE_INVALID, "报修工单必须完成现场拍照和完工拍照后提交确认");
+        }
         WorkOrderTransitions.Status from = WorkOrderTransitions.parse(order.getStatus());
         WorkOrderTransitions.Status to = WorkOrderTransitions.target(WorkOrderTransitions.Action.COMPLETE, from);
 
@@ -199,6 +210,108 @@ public class WorkOrderServiceImpl implements WorkOrderService {
                     "SERVICE_REQUEST", order.getRequestId()));
         }
         log.info("工单已办结, orderId={}, workerId={}", orderId, worker.userId());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void recordArrivalPhoto(AuthenticatedUser worker, Long orderId, Long fileId) {
+        WorkOrderEntity order = requireOrder(orderId);
+        requireAssignee(order, worker.userId());
+        requirePhotoWorkflow(order);
+        validateOwnedImage(fileId, worker.userId());
+        WorkOrderTransitions.Status from = WorkOrderTransitions.parse(order.getStatus());
+        WorkOrderTransitions.Status to = WorkOrderTransitions.target(
+                WorkOrderTransitions.Action.RECORD_ARRIVAL_PHOTO, from);
+        WorkOrderEntity update = new WorkOrderEntity();
+        update.setId(order.getId());
+        update.setArrivalPhotoFileId(fileId);
+        update.setStatus(to.name());
+        update.setConfirmationRejectReason(null);
+        update.setVersion(order.getVersion());
+        workOrderMapper.updateById(update);
+        recordPhotoLog(order, from, to, worker, RequestTransitions.Action.ARRIVAL_PHOTO, "现场拍照打卡");
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void submitCompletion(AuthenticatedUser worker, Long orderId, SubmitWorkOrderCompletionRequest request) {
+        WorkOrderEntity order = requireOrder(orderId);
+        requireAssignee(order, worker.userId());
+        requirePhotoWorkflow(order);
+        validateOwnedImage(request.fileId(), worker.userId());
+        WorkOrderTransitions.Status from = WorkOrderTransitions.parse(order.getStatus());
+        WorkOrderTransitions.Status to = WorkOrderTransitions.target(
+                WorkOrderTransitions.Action.SUBMIT_COMPLETION, from);
+        WorkOrderEntity update = new WorkOrderEntity();
+        update.setId(order.getId());
+        update.setCompletionPhotoFileId(request.fileId());
+        List<Long> completionPhotoIds = parseIds(order.getCompletionPhotoFileIds());
+        if (!completionPhotoIds.contains(request.fileId())) completionPhotoIds.add(request.fileId());
+        update.setCompletionPhotoFileIds(writeIds(completionPhotoIds));
+        update.setCompleteRemark(request.remark().trim());
+        update.setCompletionSubmittedAt(LocalDateTime.now());
+        update.setStatus(to.name());
+        update.setVersion(order.getVersion());
+        workOrderMapper.updateById(update);
+        recordPhotoLog(order, from, to, worker, RequestTransitions.Action.COMPLETION_PHOTO, request.remark().trim());
+        ServiceRequestEntity serviceRequest = serviceRequestMapper.selectById(order.getRequestId());
+        if (serviceRequest != null) {
+            notificationService.send(new NotificationSendCommand(serviceRequest.getRequesterId(), "REQUEST",
+                    "工单待确认", "工单「" + order.getTitle() + "」已完成，请确认处理结果。",
+                    "SERVICE_REQUEST", serviceRequest.getId()));
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void confirmCompletion(AuthenticatedUser requester, Long orderId) {
+        WorkOrderEntity order = requireOrder(orderId);
+        requireRequester(order, requester.userId());
+        WorkOrderTransitions.Status from = WorkOrderTransitions.parse(order.getStatus());
+        WorkOrderTransitions.Status to = WorkOrderTransitions.target(WorkOrderTransitions.Action.CONFIRM, from);
+        WorkOrderEntity update = new WorkOrderEntity();
+        update.setId(order.getId());
+        update.setStatus(to.name());
+        update.setConfirmedAt(LocalDateTime.now());
+        update.setVersion(order.getVersion());
+        workOrderMapper.updateById(update);
+        ServiceRequestEntity serviceRequest = serviceRequestMapper.selectById(order.getRequestId());
+        if (serviceRequest != null) {
+            transitionRequest(serviceRequest.getId(), RequestTransitions.Action.COMPLETE,
+                    RequestTransitions.Status.COMPLETED);
+            requestLogRecorder.record(serviceRequest.getId(), order.getId(), RequestTransitions.Action.COMPLETE,
+                    RequestTransitions.Status.PROCESSING, RequestTransitions.Status.COMPLETED,
+                    requester.userId(), requester.displayName(), "报修人确认完成");
+        }
+        if (order.getAssigneeId() != null) {
+            notificationService.send(new NotificationSendCommand(order.getAssigneeId(), "WORK_ORDER",
+                    "报修人已确认", "工单「" + order.getTitle() + "」已确认办结。", "WORK_ORDER", order.getId()));
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void rejectCompletion(AuthenticatedUser requester, Long orderId, String reason) {
+        WorkOrderEntity order = requireOrder(orderId);
+        requireRequester(order, requester.userId());
+        WorkOrderTransitions.Status from = WorkOrderTransitions.parse(order.getStatus());
+        WorkOrderTransitions.Status to = WorkOrderTransitions.target(
+                WorkOrderTransitions.Action.REOPEN_CONFIRMATION, from);
+        WorkOrderEntity update = new WorkOrderEntity();
+        update.setId(order.getId());
+        update.setStatus(to.name());
+        update.setCompletionSubmittedAt(null);
+        update.setConfirmationRejectReason(reason.trim());
+        update.setVersion(order.getVersion());
+        workOrderMapper.updateById(update);
+        requestLogRecorder.record(order.getRequestId(), order.getId(), RequestTransitions.Action.REOPEN,
+                RequestTransitions.Status.PROCESSING, RequestTransitions.Status.PROCESSING,
+                requester.userId(), requester.displayName(), "报修人退回：" + reason.trim());
+        if (order.getAssigneeId() != null) {
+            notificationService.send(new NotificationSendCommand(order.getAssigneeId(), "WORK_ORDER",
+                    "工单需重新拍照", "工单「" + order.getTitle() + "」被退回，请重新上传完工照片。",
+                    "WORK_ORDER", order.getId()));
+        }
     }
 
     @Override
@@ -250,9 +363,14 @@ public class WorkOrderServiceImpl implements WorkOrderService {
     @Override
     public PageResult<WorkOrderSummaryResponse> pageAssigned(AuthenticatedUser worker, WorkOrderPageQuery query) {
         WorkOrderTransitions.Status status = parseOptionalStatus(query.status());
+        boolean processingGroup = status == WorkOrderTransitions.Status.PROCESSING;
         LambdaQueryWrapper<WorkOrderEntity> wrapper = new LambdaQueryWrapper<WorkOrderEntity>()
                 .eq(WorkOrderEntity::getAssigneeId, worker.userId())
-                .eq(status != null, WorkOrderEntity::getStatus, status == null ? null : status.name())
+                .eq(status != null && !processingGroup, WorkOrderEntity::getStatus, status == null ? null : status.name())
+                .in(processingGroup, WorkOrderEntity::getStatus,
+                        WorkOrderTransitions.Status.PROCESSING.name(),
+                        WorkOrderTransitions.Status.ONSITE_PHOTO_RECORDED.name(),
+                        WorkOrderTransitions.Status.PENDING_CONFIRMATION.name())
                 .orderByDesc(WorkOrderEntity::getUpdatedAt);
         Page<WorkOrderEntity> page = workOrderMapper.selectPage(
                 new Page<>(query.pageNumOrDefault(), query.pageSizeOrDefault()), wrapper);
@@ -284,18 +402,92 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         ServiceRequestEntity request = serviceRequestMapper.selectById(order.getRequestId());
         String requestNo = request == null ? null : request.getRequestNo();
         String requesterName = null;
+        String requesterPhone = null;
         JsonNode formDataNode = null;
         if (request != null) {
             UserEntity requester = userMapper.selectById(request.getRequesterId());
             requesterName = requester == null ? null : requester.getDisplayName();
+            requesterPhone = requester == null ? null : requester.getPhone();
             JsonNode formData = parseFormData(request.getFormData());
             formData = enrichImageUrls(order, formData);
             formDataNode = formData;
         }
+        ServiceItemEntity item = serviceItemMapper.selectById(order.getItemId());
+        JsonNode schemaNode = parseSchema(item == null ? null : item.getFormSchema());
+        String repairAddress = formDataNode == null ? null : textValue(formDataNode, "address", "location");
+        String arrivalPhotoUrl = signPhoto(order.getArrivalPhotoFileId());
+        String completionPhotoUrl = signPhoto(order.getCompletionPhotoFileId());
+        List<String> completionPhotoUrls = parseIds(order.getCompletionPhotoFileIds()).stream()
+                .map(this::signPhoto).filter(java.util.Objects::nonNull).toList();
+        if (completionPhotoUrls.isEmpty() && completionPhotoUrl != null) completionPhotoUrls = List.of(completionPhotoUrl);
         return new WorkOrderDetailResponse(order.getId(), order.getOrderNo(), order.getRequestId(), requestNo,
                 order.getTitle(), order.getStatus(), order.getPriority(), order.getAssigneeName(),
-                requesterName, formDataNode, order.getCreatedAt(), order.getAssignedAt(), order.getStartedAt(),
-                order.getCompletedAt(), order.getCompleteRemark());
+                requesterName, requesterPhone, repairAddress, formDataNode, schemaNode,
+                Boolean.TRUE.equals(order.getPhotoWorkflowRequired()), arrivalPhotoUrl, completionPhotoUrl,
+                completionPhotoUrls,
+                order.getCompletionSubmittedAt(), order.getConfirmedAt(), order.getConfirmationRejectReason(),
+                order.getCreatedAt(), order.getAssignedAt(), order.getStartedAt(), order.getCompletedAt(),
+                order.getCompleteRemark());
+    }
+
+    private JsonNode parseSchema(String schema) {
+        if (schema == null || schema.isBlank()) return objectMapper.createArrayNode();
+        try { return objectMapper.readTree(schema); }
+        catch (Exception ignored) { return objectMapper.createArrayNode(); }
+    }
+
+    private String textValue(JsonNode node, String... keys) {
+        for (String key : keys) {
+            JsonNode value = node.get(key);
+            if (value != null && !value.isNull() && !value.asText().isBlank()) return value.asText();
+        }
+        return null;
+    }
+
+    private String signPhoto(Long fileId) {
+        return fileId == null ? null : fileStorageService.signViewPath(fileId);
+    }
+
+    private List<Long> parseIds(String value) {
+        if (value == null || value.isBlank()) return new ArrayList<>();
+        try { return objectMapper.readValue(value, objectMapper.getTypeFactory().constructCollectionType(List.class, Long.class)); }
+        catch (Exception ignored) { return new ArrayList<>(); }
+    }
+
+    private String writeIds(List<Long> ids) {
+        try { return objectMapper.writeValueAsString(ids); }
+        catch (Exception exception) { throw new IllegalStateException("工单照片信息序列化失败", exception); }
+    }
+
+    private void requirePhotoWorkflow(WorkOrderEntity order) {
+        if (!Boolean.TRUE.equals(order.getPhotoWorkflowRequired())) {
+            throw new BusinessException(ErrorCode.ORDER_STATE_INVALID, "该工单不需要拍照确认");
+        }
+    }
+
+    private void validateOwnedImage(Long fileId, Long userId) {
+        var file = fileStorageMapper.selectById(fileId);
+        if (file == null || !userId.equals(file.getUploaderId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "只能使用自己上传的图片");
+        }
+        if (file.getContentType() == null || !file.getContentType().startsWith("image/")) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "工单打卡必须上传图片");
+        }
+    }
+
+    private void requireRequester(WorkOrderEntity order, Long userId) {
+        ServiceRequestEntity request = serviceRequestMapper.selectById(order.getRequestId());
+        if (request == null || !userId.equals(request.getRequesterId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "只有报修人可以确认该工单");
+        }
+    }
+
+    private void recordPhotoLog(WorkOrderEntity order, WorkOrderTransitions.Status from,
+                                WorkOrderTransitions.Status to, AuthenticatedUser worker,
+                                RequestTransitions.Action action, String comment) {
+        requestLogRecorder.record(order.getRequestId(), order.getId(), action,
+                RequestTransitions.Status.PROCESSING, RequestTransitions.Status.PROCESSING,
+                worker.userId(), worker.displayName(), comment);
     }
 
     /** 图片字段值替换为短时签名访问路径 */

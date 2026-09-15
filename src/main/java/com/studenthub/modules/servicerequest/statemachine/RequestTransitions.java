@@ -17,17 +17,21 @@ public final class RequestTransitions {
     }
 
     public enum Action {
-        SUBMIT, DISPATCH, START, COMPLETE, REJECT, CANCEL, EVALUATE
+        SUBMIT, DISPATCH, START, ARRIVAL_PHOTO, COMPLETION_PHOTO, COMPLETE, CONFIRM, REOPEN, REJECT, CANCEL, EVALUATE
     }
 
-    private static final Map<Action, Set<Status>> ALLOWED_FROM = Map.of(
-            Action.SUBMIT, Set.of(),
-            Action.DISPATCH, Set.of(Status.SUBMITTED),
-            Action.START, Set.of(Status.PROCESSING),
-            Action.COMPLETE, Set.of(Status.PROCESSING),
-            Action.REJECT, Set.of(Status.SUBMITTED, Status.PROCESSING),
-            Action.CANCEL, Set.of(Status.SUBMITTED, Status.PROCESSING),
-            Action.EVALUATE, Set.of(Status.COMPLETED));
+    private static final Map<Action, Set<Status>> ALLOWED_FROM = Map.ofEntries(
+            Map.entry(Action.SUBMIT, Set.of()),
+            Map.entry(Action.DISPATCH, Set.of(Status.SUBMITTED)),
+            Map.entry(Action.START, Set.of(Status.PROCESSING)),
+            Map.entry(Action.ARRIVAL_PHOTO, Set.of(Status.PROCESSING)),
+            Map.entry(Action.COMPLETION_PHOTO, Set.of(Status.PROCESSING)),
+            Map.entry(Action.COMPLETE, Set.of(Status.PROCESSING)),
+            Map.entry(Action.CONFIRM, Set.of(Status.PROCESSING)),
+            Map.entry(Action.REOPEN, Set.of(Status.PROCESSING)),
+            Map.entry(Action.REJECT, Set.of(Status.SUBMITTED, Status.PROCESSING)),
+            Map.entry(Action.CANCEL, Set.of(Status.SUBMITTED, Status.PROCESSING)),
+            Map.entry(Action.EVALUATE, Set.of(Status.COMPLETED)));
 
     private RequestTransitions() {
     }
@@ -42,7 +46,7 @@ public final class RequestTransitions {
         Set<Status> allowed = ALLOWED_FROM.get(action);
         if (allowed.contains(current)) {
             return switch (action) {
-                case DISPATCH, START -> Status.PROCESSING;
+                case DISPATCH, START, ARRIVAL_PHOTO, COMPLETION_PHOTO, CONFIRM, REOPEN -> Status.PROCESSING;
                 case COMPLETE -> Status.COMPLETED;
                 case REJECT -> Status.REJECTED;
                 case CANCEL -> Status.CANCELLED;
