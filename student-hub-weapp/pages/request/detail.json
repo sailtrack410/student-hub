@@ -1,7 +1,6 @@
 {
   "navigationBarTitleText": "申请详情",
   "usingComponents": {
-    "status-tag": "/components/status-tag/index",
-    "timeline": "/components/timeline/index"
+    "status-tag": "/components/status-tag/index"
   }
 }

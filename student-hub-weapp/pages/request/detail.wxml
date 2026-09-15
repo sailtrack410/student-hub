@@ -6,7 +6,7 @@
       <view class="hero-title">{{detail.title}}</view>
       <view class="hero-no">{{detail.requestNo}}</view>
     </view>
-    <image class="hero-img" src="/assets/mascot/mascot-celebrate.jpg" mode="aspectFit" />
+    <image class="hero-img" src="https://student.sailtrack.cn/student-hub/static/assets/mascot/mascot-celebrate.jpg" mode="aspectFit" />
   </view>
 
   <!-- 表单内容 -->
@@ -35,6 +35,26 @@
     </block>
   </view>
 
+  <!-- 办理进度：申请记录与工单状态合并为一组节点 -->
+  <view class="card section" wx:if="{{detail.processNodes.length}}">
+    <view class="section-title">办理进度</view>
+    <view class="kv progress-current">
+      <text class="kv-key">当前状态</text>
+      <text class="kv-value">{{detail.workOrder ? detail.workOrder.statusText : detail.statusText}}</text>
+    </view>
+    <view class="progress-nodes">
+      <view wx:for="{{detail.processNodes}}" wx:key="key" class="order-progress {{item.done || item.current ? 'order-progress-on' : ''}} {{item.current ? 'order-progress-current' : ''}}">
+        <view class="order-progress-dot"></view>
+        <view class="order-progress-body">
+          <text>{{item.title}}</text>
+          <text wx:if="{{item.timeText}}" class="order-progress-time">{{item.timeText}}</text>
+          <text wx:if="{{item.operatorName}}" class="order-progress-meta">{{item.operatorName}}</text>
+          <text wx:if="{{item.comment}}" class="order-progress-comment">{{item.comment}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
   <!-- 工单信息 -->
   <view class="card section" wx:if="{{detail.workOrder}}">
     <view class="section-title">处理信息</view>
@@ -42,6 +62,15 @@
       <text class="kv-key">工单号</text>
       <text class="kv-value">{{detail.workOrder.orderNo}}</text>
     </view>
+    <view wx:if="{{detail.workOrder.arrivalPhotoUrl}}" class="kv kv-images">
+      <text class="kv-key">现场照片</text>
+      <image class="kv-thumb" src="{{detail.workOrder.arrivalPhotoUrl}}" mode="aspectFill" />
+    </view>
+    <view wx:if="{{detail.workOrder.completionPhotoUrls.length || detail.workOrder.completionPhotoUrl}}" class="kv kv-images">
+      <text class="kv-key">完工照片</text>
+      <view class="kv-thumbs"><image wx:for="{{detail.workOrder.completionPhotoUrls}}" wx:key="*this" class="kv-thumb" src="{{item}}" mode="aspectFill" /><image wx:if="{{!detail.workOrder.completionPhotoUrls.length && detail.workOrder.completionPhotoUrl}}" class="kv-thumb" src="{{detail.workOrder.completionPhotoUrl}}" mode="aspectFill" /></view>
+    </view>
+    <view wx:if="{{detail.workOrder.confirmationRejectReason}}" class="reason">需要继续处理：{{detail.workOrder.confirmationRejectReason}}</view>
     <view class="kv" wx:if="{{detail.workOrder.assigneeName}}">
       <text class="kv-key">服务人员</text>
       <text class="kv-value">{{detail.workOrder.assigneeName}}</text>
@@ -50,6 +79,11 @@
       <text class="kv-key">结果说明</text>
       <text class="kv-value">{{detail.workOrder.completeRemark}}</text>
     </view>
+  </view>
+
+  <view wx:if="{{detail.canConfirmWorkOrder}}" class="confirm-actions safe-bottom">
+    <button class="btn-ghost action-btn" disabled="{{confirming}}" bindtap="rejectWorkOrder">需要继续处理</button>
+    <button class="btn-primary action-btn" disabled="{{confirming}}" bindtap="confirmWorkOrder">确认完成</button>
   </view>
 
   <view class="card section" wx:if="{{detail.rejectReason}}">
@@ -64,12 +98,6 @@
       <text wx:for="{{[1,2,3,4,5]}}" wx:key="*this" class="star {{item <= detail.evaluation.rating ? 'star-on' : ''}}">★</text>
     </view>
     <view class="eval-comment" wx:if="{{detail.evaluation.comment}}">{{detail.evaluation.comment}}</view>
-  </view>
-
-  <!-- 时间线 -->
-  <view class="card section">
-    <view class="section-title">办理进度</view>
-    <timeline logs="{{detail.timeline}}" />
   </view>
 
   <!-- 操作 -->

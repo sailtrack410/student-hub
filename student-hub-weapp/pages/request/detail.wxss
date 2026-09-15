@@ -98,6 +98,23 @@
   background: var(--bg-page);
 }
 
+.progress-current {
+  padding-top: 0;
+}
+
+.progress-nodes {
+  margin-top: 8rpx;
+}
+
+.order-progress { display: flex; align-items: center; gap: 16rpx; padding: 15rpx 0; color: var(--text-3); font-size: 25rpx; }
+.order-progress-dot { width: 18rpx; height: 18rpx; border: 3rpx solid var(--border); border-radius: 50%; background: #fff; box-sizing: border-box; }
+.order-progress-on { color: var(--brand); font-weight: 600; }.order-progress-on .order-progress-dot { border-color: var(--brand); background: var(--brand); }
+.order-progress-body { display: flex; flex-direction: column; gap: 4rpx; }
+.order-progress-time, .order-progress-meta { font-size: 22rpx; font-weight: 400; color: var(--text-3); }
+.order-progress-comment { font-size: 23rpx; font-weight: 400; color: var(--text-2); line-height: 1.45; }
+.order-progress-current .order-progress-time, .order-progress-current .order-progress-meta { color: var(--brand); }
+.confirm-actions { position: relative; z-index: 20; display: flex; gap: 16rpx; margin-top: 30rpx; pointer-events: auto; }.confirm-actions .action-btn { flex: 1; height: 76rpx; line-height: 76rpx; padding: 0; }
+
 .reason {
   font-size: 26rpx;
   color: var(--danger);

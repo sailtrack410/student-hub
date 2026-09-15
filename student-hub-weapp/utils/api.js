@@ -95,7 +95,16 @@ module.exports = {
 
   // 我的工单（服务人员角色）
   pageAssignedOrders: (query) => request({ url: '/api/app/work-orders/assigned', data: query }),
+  getWorkOrderDetail: (orderId) => request({ url: `/api/app/work-orders/${orderId}` }),
   startWorkOrder: (orderId) => request({ url: `/api/app/work-orders/${orderId}/start`, method: 'POST' }),
   completeWorkOrder: (orderId, remark) =>
-    request({ url: `/api/app/work-orders/${orderId}/complete`, method: 'POST', data: { remark } })
+    request({ url: `/api/app/work-orders/${orderId}/complete`, method: 'POST', data: { remark } }),
+  recordWorkOrderArrivalPhoto: (orderId, fileId) =>
+    request({ url: `/api/app/work-orders/${orderId}/arrival-photo`, method: 'POST', data: { fileId } }),
+  submitWorkOrderCompletion: (orderId, fileId, remark) =>
+    request({ url: `/api/app/work-orders/${orderId}/completion-photo`, method: 'POST', data: { fileId, remark } }),
+  confirmWorkOrder: (orderId) =>
+    request({ url: `/api/app/work-orders/${orderId}/confirm`, method: 'POST' }),
+  rejectWorkOrderConfirmation: (orderId, reason) =>
+    request({ url: `/api/app/work-orders/${orderId}/reject-confirmation`, method: 'POST', data: { reason } })
 };

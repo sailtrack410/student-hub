@@ -3,7 +3,7 @@ const format = require('../../utils/format');
 
 const FILTERS = [
   { key: '', label: '全部' },
-  { key: 'ASSIGNED', label: '待处理' },
+  { key: 'ASSIGNED', label: '待接单' },
   { key: 'PROCESSING', label: '进行中' },
   { key: 'COMPLETED', label: '已办结' }
 ];
@@ -14,6 +14,13 @@ Page({
     activeStatus: '',
     records: [],
     loaded: false
+  },
+
+  onLoad(options) {
+    const status = options && options.status;
+    if (status && FILTERS.some((item) => item.key === status)) {
+      this.setData({ activeStatus: status });
+    }
   },
 
   onShow() {
@@ -43,6 +50,11 @@ Page({
 
   pickFilter(event) {
     this.setData({ activeStatus: event.currentTarget.dataset.key }, () => this.reload());
+  },
+
+  openDetail(event) {
+    const orderId = event.currentTarget.dataset.id;
+    if (orderId) wx.navigateTo({ url: `/pages/order/detail?id=${orderId}` });
   },
 
   onStart(event) {

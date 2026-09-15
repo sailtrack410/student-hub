@@ -54,16 +54,4 @@
   color: var(--text-3);
 }
 
-.item-actions {
-  margin-top: 20rpx;
-  display: flex;
-  justify-content: flex-end;
-  gap: 16rpx;
-}
-
-.action-btn {
-  height: 64rpx;
-  line-height: 64rpx;
-  padding: 0 34rpx;
-  font-size: 25rpx;
-}
+.item-hint { margin-top: 20rpx; color: var(--brand); font-size: 23rpx; }

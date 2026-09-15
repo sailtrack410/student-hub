@@ -55,19 +55,22 @@ Page({
     if (item.unread) {
       try {
         await api.markNotificationRead(item.notificationId);
-        app.globalData.unreadCount = Math.max(0, (app.globalData.unreadCount || 1) - 1);
+        app.refreshCommunityUnread();
       } catch (error) {
         // 静默
       }
     }
     if (item.relatedType === 'SERVICE_REQUEST' && item.relatedId) {
       wx.navigateTo({ url: `/pages/request/detail?id=${item.relatedId}` });
+    } else if (item.relatedType === 'WORK_ORDER' && item.relatedId) {
+      wx.navigateTo({ url: `/pages/order/detail?id=${item.relatedId}` });
     }
   },
 
   async markAll() {
     try {
       await api.markAllNotificationsRead();
+      app.refreshCommunityUnread();
       wx.showToast({ title: '已全部标记', icon: 'success' });
       this.reload();
     } catch (error) {
