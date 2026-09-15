@@ -18,6 +18,6 @@ public record AiModelImportRequest(
     public record AiModelImportItem(
             @Schema(description = "供应商模型 ID") @NotBlank @Size(max = 128) String providerModelId,
             @Schema(description = "模型类型：CHAT/VISION/ASR，默认 CHAT", nullable = true)
-            @Pattern(regexp = "^(CHAT|VISION|ASR)$", message = "模型类型仅支持 CHAT/VISION/ASR") String modelType) {
+            @Pattern(regexp = "^(CHAT|VISION|ASR|EMBEDDING)$", message = "模型类型仅支持 CHAT/VISION/ASR/EMBEDDING") String modelType) {
     }
 }

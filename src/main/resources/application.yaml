@@ -64,6 +64,15 @@ studenthub:
     hourly-message-limit: ${AI_CHAT_HOURLY_MESSAGE_LIMIT:20}
     history-window: ${AI_CHAT_HISTORY_WINDOW:10}
     max-message-characters: ${AI_CHAT_MAX_MESSAGE_CHARACTERS:2000}
+  rag:
+    enabled: ${RAG_ENABLED:false}
+    jdbc-url: ${RAG_DB_URL:jdbc:postgresql://localhost:5435/postgres}
+    username: ${RAG_DB_USERNAME:}
+    password: ${RAG_DB_PASSWORD:}
+    max-document-size-mb: ${RAG_MAX_DOCUMENT_SIZE_MB:30}
+    max-parsed-characters: ${RAG_MAX_PARSED_CHARACTERS:2000000}
+    embedding-batch-size: ${RAG_EMBEDDING_BATCH_SIZE:16}
+    retrieval-candidate-limit: ${RAG_RETRIEVAL_CANDIDATE_LIMIT:40}
   wechat:
     mode: ${WECHAT_MODE:real}
     app-id: ${WECHAT_APP_ID:}

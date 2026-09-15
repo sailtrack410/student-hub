@@ -26,6 +26,8 @@ studenthub:
     default-campus-id: 1
   ai:
     enabled: false
+  rag:
+    enabled: false
   file:
     storage: local
     storage-dir: target/test-files

@@ -20,6 +20,7 @@ public record AiRuntimeSnapshot(
         AiModelBinding chat,
         AiModelBinding vision,
         AiModelBinding asr,
+        AiModelBinding embedding,
         int connectTimeoutSeconds,
         int readTimeoutSeconds,
         int maxInputCharacters,

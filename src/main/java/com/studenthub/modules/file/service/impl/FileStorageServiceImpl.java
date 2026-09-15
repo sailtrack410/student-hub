@@ -41,6 +41,10 @@ public class FileStorageServiceImpl implements FileStorageService {
             "audio/mpeg", "audio/mp3", "audio/aac", "audio/mp4",
             "audio/x-m4a", "audio/wav", "audio/x-wav", "audio/wave",
             "audio/ogg", "audio/opus", "audio/x-caf");
+    private static final Set<String> ALLOWED_DOCUMENT_EXTENSIONS = Set.of("pdf", "docx", "txt", "md");
+    private static final Set<String> ALLOWED_DOCUMENT_CONTENT_TYPES = Set.of(
+            "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "text/plain", "text/markdown", "application/octet-stream");
     /** 语音音频大小上限（MB），识别模型通常 25MB 以内 */
     private static final int AUDIO_MAX_SIZE_MB = 20;
     private static final String SIGN_ALGORITHM = "HmacSHA256";
@@ -130,6 +134,51 @@ public class FileStorageServiceImpl implements FileStorageService {
 
         log.info("音频上传成功, fileId={}, size={}, uploaderId={}", entity.getId(), content.length, uploaderId);
         return new StoredFile(entity.getId(), signViewPath(entity.getId()), entity.getOriginalName());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public StoredFile storeKnowledgeDocument(byte[] content, String originalName, String contentType,
+                                             Long uploaderId, int maxSizeMb) {
+        if (content == null || content.length == 0) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "上传文档不能为空");
+        }
+        if (content.length > maxSizeMb * 1024L * 1024L) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "文档不能超过 " + maxSizeMb + "MB");
+        }
+        String extension = resolveExtension(originalName);
+        if (!ALLOWED_DOCUMENT_EXTENSIONS.contains(extension)) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "知识库仅支持 PDF、DOCX、TXT、MD 文档");
+        }
+        String normalizedType = contentType == null || contentType.isBlank()
+                ? documentContentType(extension) : contentType.toLowerCase(Locale.ROOT);
+        if (!ALLOWED_DOCUMENT_CONTENT_TYPES.contains(normalizedType)) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "文档 MIME 类型不受支持");
+        }
+        if (("pdf".equals(extension) && !(content.length >= 5 && new String(content, 0, 5, StandardCharsets.US_ASCII).equals("%PDF-")))
+                || ("docx".equals(extension) && !(content.length >= 4 && content[0] == 'P' && content[1] == 'K'))) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "文档内容与扩展名不匹配");
+        }
+        String storageKey = UUID.randomUUID().toString().replace("-", "") + "." + extension;
+        String objectKey = objectKeyOf(Instant.now(), storageKey);
+        binaryStorage.put(objectKey, content, normalizedType);
+        FileStorageEntity entity = new FileStorageEntity();
+        entity.setStorageKey(storageKey);
+        entity.setOriginalName(sanitizeName(originalName, extension));
+        entity.setContentType(normalizedType);
+        entity.setFileSize((long) content.length);
+        entity.setUploaderId(uploaderId);
+        fileStorageMapper.insert(entity);
+        return new StoredFile(entity.getId(), signViewPath(entity.getId()), entity.getOriginalName());
+    }
+
+    private String documentContentType(String extension) {
+        return switch (extension) {
+            case "pdf" -> "application/pdf";
+            case "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            case "md" -> "text/markdown";
+            default -> "text/plain";
+        };
     }
 
     @Override

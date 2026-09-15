@@ -41,7 +41,7 @@
                         { skipUnauthorized: true })
                     .then(function (data) {
                         var perms = (data.user && data.user.permissions) || [];
-                        var allowed = ['workorders', 'users', 'ai'].filter(function (route) {
+                        var allowed = ['workorders', 'users', 'ai', 'knowledge'].filter(function (route) {
                             return window.AdminApp.routePermission[route].some(function (p) {
                                 return perms.indexOf(p) >= 0;
                             });

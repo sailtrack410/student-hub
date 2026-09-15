@@ -16,6 +16,10 @@ public interface FileStorageService {
      */
     StoredFile storeAudio(byte[] content, String originalName, String contentType, Long uploaderId);
 
+    /** 保存经严格扩展名、MIME 与大小校验的知识库文档。 */
+    StoredFile storeKnowledgeDocument(byte[] content, String originalName, String contentType, Long uploaderId,
+                                      int maxSizeMb);
+
     /**
      * 读取已存储文件；仅校验签名，签名 URL 本身即访问凭证。
      */

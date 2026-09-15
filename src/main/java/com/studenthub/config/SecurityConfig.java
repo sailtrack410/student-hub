@@ -51,6 +51,7 @@ public class SecurityConfig {
                                 "/api/common/files/view/**",
                                 "/api/common/assets/**",
                                 "/api/public/screen/**",
+                                "/api/public/knowledge-bases/**",
                                 "/ws/**",
                                 "/admin",
                                 "/admin/**",

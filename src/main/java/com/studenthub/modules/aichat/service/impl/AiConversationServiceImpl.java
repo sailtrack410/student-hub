@@ -34,9 +34,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import org.springframework.beans.factory.ObjectProvider;
 
 @Slf4j
 @Service
@@ -57,6 +61,7 @@ public class AiConversationServiceImpl implements AiConversationService {
     private final AiIntentClassifier intentClassifier;
     private final AiAssistantDataService assistantDataService;
     private final FileStorageService fileStorageService;
+    private final ObjectProvider<com.studenthub.modules.rag.service.KnowledgeBaseService> knowledgeBaseService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -128,26 +133,36 @@ public class AiConversationServiceImpl implements AiConversationService {
         Integer tokenUsage = null;
         String errorCode = null;
         String actionsJson = assistantDataService.serializeActions(resolved == null ? null : resolved.actions());
-        try {
-            List<AiMessage> prompt = buildPrompt(content, conversation.getId(),
-                    resolved == null ? null : resolved.contextText(), imageDataUrls, userMessage.getId());
-            AiChatResponse response = imageIds.isEmpty()
-                    ? aiChatService.chat(prompt)
-                    : aiChatService.chatVision(prompt);
-            reply = response.content();
-            model = response.model();
-            Integer promptTokens = response.promptTokens();
-            Integer completionTokens = response.completionTokens();
-            tokenUsage = promptTokens == null && completionTokens == null
-                    ? null : (promptTokens == null ? 0 : promptTokens) + (completionTokens == null ? 0 : completionTokens);
-        } catch (BusinessException exception) {
-            log.warn("AI 调用失败, conversationId={}, code={}", conversation.getId(), exception.getCode());
-            // 查到确定性数据/入口时优先给本地兜底回复；否则退回统一降级文案
-            if (resolved != null && resolved.actions() != null && !resolved.actions().isEmpty()) {
-                reply = localFallbackReply(intent, resolved);
-            } else {
-                reply = CampusAssistantPrompts.DEGRADED_REPLY;
-                errorCode = exception.getCode();
+        String directTimeReply = currentTimeReply(content);
+        if (directTimeReply != null) {
+            reply = directTimeReply;
+            model = "system";
+        } else {
+            try {
+                var ragService = imageIds.isEmpty() ? knowledgeBaseService.getIfAvailable() : null;
+                String ragContext = ragService == null ? null : ragService.assistantContext(content);
+                String mergedContext = resolved == null ? ragContext : resolved.contextText();
+                if (resolved != null && ragContext != null) mergedContext = resolved.contextText() + "\n\n【公共知识库资料】\n" + ragContext;
+                List<AiMessage> prompt = buildPrompt(content, conversation.getId(),
+                        mergedContext, imageDataUrls, userMessage.getId());
+                AiChatResponse response = imageIds.isEmpty()
+                        ? aiChatService.chat(prompt)
+                        : aiChatService.chatVision(prompt);
+                reply = response.content();
+                model = response.model();
+                Integer promptTokens = response.promptTokens();
+                Integer completionTokens = response.completionTokens();
+                tokenUsage = promptTokens == null && completionTokens == null
+                        ? null : (promptTokens == null ? 0 : promptTokens) + (completionTokens == null ? 0 : completionTokens);
+            } catch (BusinessException exception) {
+                log.warn("AI 调用失败, conversationId={}, code={}", conversation.getId(), exception.getCode());
+                // 查到确定性数据/入口时优先给本地兜底回复；否则退回统一降级文案
+                if (resolved != null && resolved.actions() != null && !resolved.actions().isEmpty()) {
+                    reply = localFallbackReply(intent, resolved);
+                } else {
+                    reply = CampusAssistantPrompts.DEGRADED_REPLY;
+                    errorCode = exception.getCode();
+                }
             }
         }
 
@@ -166,6 +181,21 @@ public class AiConversationServiceImpl implements AiConversationService {
 
         touchConversation(conversation);
         return AiMessageResponse.from(assistantMessage);
+    }
+
+    private String currentTimeReply(String content) {
+        String text = content == null ? "" : content.trim();
+        if (text.isEmpty() || text.contains("课") || text.contains("课程")) {
+            return null;
+        }
+        boolean asksTime = text.contains("现在几点") || text.contains("几点了")
+                || text.contains("当前时间") || text.contains("现在时间")
+                || text.contains("北京时间");
+        if (!asksTime) {
+            return null;
+        }
+        ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Asia/Shanghai"));
+        return "现在是北京时间 " + now.format(DateTimeFormatter.ofPattern("yyyy年M月d日 HH:mm")) + "。";
     }
 
     @Override

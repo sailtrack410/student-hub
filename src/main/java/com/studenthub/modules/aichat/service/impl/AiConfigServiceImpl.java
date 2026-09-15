@@ -39,6 +39,7 @@ public class AiConfigServiceImpl implements AiConfigService {
     public static final String TYPE_CHAT = "CHAT";
     public static final String TYPE_VISION = "VISION";
     public static final String TYPE_ASR = "ASR";
+    public static final String TYPE_EMBEDDING = "EMBEDDING";
 
     private static final Long SINGLETON_ID = 1L;
 
@@ -90,6 +91,7 @@ public class AiConfigServiceImpl implements AiConfigService {
                 resolveBinding(TYPE_CHAT),
                 resolveBinding(TYPE_VISION),
                 resolveBinding(TYPE_ASR),
+                resolveBinding(TYPE_EMBEDDING),
                 config.getConnectTimeoutSeconds(),
                 config.getReadTimeoutSeconds(),
                 config.getMaxInputCharacters(),

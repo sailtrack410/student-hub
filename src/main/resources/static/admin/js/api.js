@@ -84,6 +84,19 @@
         request: request,
         get: function (path, options) { return request('GET', path, undefined, options); },
         post: function (path, body, options) { return request('POST', path, body, options); },
+        upload: function (path, file, options) {
+            options = options || {};
+            var headers = {}, token = getToken();
+            if (token) headers.Authorization = 'Bearer ' + token;
+            var form = new FormData(); form.append('file', file);
+            return fetch(path, { method: 'POST', headers: headers, body: form }).then(function (res) {
+                return res.json().catch(function () { return null; }).then(function (payload) {
+                    if (res.status === 401) { if (!options.skipUnauthorized) handleUnauthorized(); throw new ApiError('登录已过期，请重新登录','AUTH_401',401); }
+                    if (!res.ok || !payload || payload.success === false) throw new ApiError((payload && payload.message) || ('请求失败（HTTP '+res.status+'）'), payload && payload.code, res.status);
+                    return payload.data;
+                });
+            });
+        },
         put: function (path, body, options) { return request('PUT', path, body, options); },
         delete: function (path, options) { return request('DELETE', path, undefined, options); },
         getToken: getToken,

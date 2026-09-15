@@ -7,5 +7,5 @@ import jakarta.validation.constraints.Pattern;
 public record AiModelUpdateRequest(
         @Schema(description = "是否启用", nullable = true) Boolean enabled,
         @Schema(description = "模型类型：CHAT/VISION/ASR", nullable = true)
-        @Pattern(regexp = "^(CHAT|VISION|ASR)$", message = "模型类型仅支持 CHAT/VISION/ASR") String modelType) {
+        @Pattern(regexp = "^(CHAT|VISION|ASR|EMBEDDING)$", message = "模型类型仅支持 CHAT/VISION/ASR/EMBEDDING") String modelType) {
 }

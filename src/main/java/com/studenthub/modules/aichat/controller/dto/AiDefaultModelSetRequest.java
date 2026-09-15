@@ -7,5 +7,5 @@ import jakarta.validation.constraints.Pattern;
 public record AiDefaultModelSetRequest(
         @Schema(description = "模型 ID，为空清除默认", nullable = true) Long modelId,
         @Schema(description = "模型类型：CHAT/VISION/ASR")
-        @Pattern(regexp = "^(CHAT|VISION|ASR)$", message = "模型类型仅支持 CHAT/VISION/ASR") String typeCode) {
+        @Pattern(regexp = "^(CHAT|VISION|ASR|EMBEDDING)$", message = "模型类型仅支持 CHAT/VISION/ASR/EMBEDDING") String typeCode) {
 }

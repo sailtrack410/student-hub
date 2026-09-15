@@ -10,12 +10,14 @@
         workorders: ['work-order:dispatch'],
         users: ['system:user:manage'],
         ai: ['ai:manage']
+        ,knowledge: ['ai:manage']
     };
 
     var ROUTE_TITLES = {
         workorders: '工单调度',
         users: '用户管理',
         ai: 'AI 配置'
+        ,knowledge: '知识库'
     };
 
     window.AdminApp = {
@@ -83,6 +85,7 @@
                 workorders: ElementPlusIconsVue.Promotion,
                 users: ElementPlusIconsVue.User,
                 ai: ElementPlusIconsVue.MagicStick
+                ,knowledge: ElementPlusIconsVue.Collection
             };
 
             var menuItems = Vue.computed(function () {
@@ -92,7 +95,7 @@
             });
 
             var pageComponent = Vue.computed(function () {
-                var mapping = { workorders: 'WorkOrdersPage', users: 'UsersPage', ai: 'AiConfigPage' };
+                var mapping = { workorders: 'WorkOrdersPage', users: 'UsersPage', ai: 'AiConfigPage', knowledge: 'KnowledgeBasePage' };
                 return mapping[route.value] || 'LoginPage';
             });
 
@@ -223,6 +226,7 @@
     app.component('AiProvidersPage', window.AdminPages.AiProvidersPage);
     app.component('AiModelsPage', window.AdminPages.AiModelsPage);
     app.component('AiDefaultsPage', window.AdminPages.AiDefaultsPage);
+    app.component('KnowledgeBasePage', window.AdminPages.KnowledgeBasePage);
     for (var name in window.ElementPlusIconsVue) {
         if (Object.prototype.hasOwnProperty.call(window.ElementPlusIconsVue, name)) {
             app.component(name, window.ElementPlusIconsVue[name]);

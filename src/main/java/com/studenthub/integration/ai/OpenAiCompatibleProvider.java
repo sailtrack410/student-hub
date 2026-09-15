@@ -97,6 +97,50 @@ public class OpenAiCompatibleProvider implements AiProvider {
         }
     }
 
+    @Override
+    public AiEmbeddingResponse embed(AiEmbeddingRequest request) {
+        AiEmbeddingBatchResponse batch = embedBatch(new AiEmbeddingBatchRequest(request.model(), List.of(request.input())));
+        if (batch.vectors() == null || batch.vectors().isEmpty()) {
+            throw new BusinessException(ErrorCode.AI_PROVIDER_ERROR, "Embedding 返回为空");
+        }
+        return new AiEmbeddingResponse(batch.vectors().get(0), batch.model(), batch.tokenUsage());
+    }
+
+    @Override
+    public AiEmbeddingBatchResponse embedBatch(AiEmbeddingBatchRequest request) {
+        AiRuntimeSnapshot snapshot = AiRuntimeConfig.current();
+        AiModelBinding binding = snapshot == null ? null : snapshot.embedding();
+        if (binding == null || !StringUtils.hasText(binding.apiKey())) {
+            throw new BusinessException(ErrorCode.AI_NOT_CONFIGURED, "Embedding 模型尚未配置");
+        }
+        try {
+            RestClient client = clientFor(binding, snapshot.connectTimeoutSeconds(), snapshot.readTimeoutSeconds(), snapshot.version());
+            Map<String, Object> payload = Map.of("model", request.model(), "input", request.input());
+            String body = client.post().uri("/embeddings").contentType(MediaType.APPLICATION_JSON)
+                    .header("Authorization", "Bearer " + binding.apiKey()).body(payload)
+                    .retrieve().body(String.class);
+            JsonNode root = objectMapper.readTree(body);
+            JsonNode data = root.path("data");
+            if (!data.isArray() || data.isEmpty()) throw new BusinessException(ErrorCode.AI_PROVIDER_ERROR, "Embedding 返回为空");
+            List<JsonNode> items = new java.util.ArrayList<>();
+            data.forEach(items::add);
+            // OpenAI responses include an index; stable sort also preserves providers
+            // that omit it while ensuring batched vectors map back to their chunks.
+            items.sort(java.util.Comparator.comparingInt(item -> item.path("index").asInt(Integer.MAX_VALUE)));
+            List<List<Double>> vectors = new java.util.ArrayList<>();
+            for (JsonNode item : items) {
+                JsonNode vector = item.path("embedding");
+                if (!vector.isArray() || vector.isEmpty()) throw new BusinessException(ErrorCode.AI_PROVIDER_ERROR, "Embedding 返回向量为空");
+                List<Double> values = new java.util.ArrayList<>();
+                vector.forEach(n -> values.add(n.asDouble()));
+                vectors.add(values);
+            }
+            return new AiEmbeddingBatchResponse(vectors, root.path("model").asText(request.model()),
+                    root.path("usage").path("total_tokens").isInt() ? root.path("usage").path("total_tokens").asInt() : null);
+        } catch (BusinessException e) { throw e; }
+        catch (Exception e) { log.error("Embedding 调用失败, model={}", request.model(), e); throw new BusinessException(ErrorCode.AI_PROVIDER_ERROR, "Embedding 服务暂时不可用"); }
+    }
+
     /**
      * 将内部消息转为 OpenAI 兼容结构：
      * user 消息携带图片时 content 为 [{type:text},{type:image_url}] 数组，否则为纯文本。

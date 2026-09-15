@@ -53,6 +53,7 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
     private static final String TYPE_CHAT = "CHAT";
     private static final String TYPE_VISION = "VISION";
     private static final String TYPE_ASR = "ASR";
+    private static final String TYPE_EMBEDDING = "EMBEDDING";
     private static final Pattern VALID_PROVIDER_CODE = Pattern.compile("^[a-z0-9][a-z0-9-]{0,62}$");
     private static final Duration CHECK_CONNECT_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration CHECK_READ_TIMEOUT = Duration.ofSeconds(15);
@@ -270,7 +271,7 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
                         AiDefaultModelEntity::getModelId));
         Map<Long, String> providerNames = providerNameMap();
         List<AiDefaultModelResponse> result = new ArrayList<>();
-        for (String typeCode : List.of(TYPE_CHAT, TYPE_VISION, TYPE_ASR)) {
+        for (String typeCode : List.of(TYPE_CHAT, TYPE_VISION, TYPE_ASR, TYPE_EMBEDDING)) {
             Long modelId = defaults.get(typeCode);
             AiModelEntity model = modelId == null ? null : modelMap.get(modelId);
             result.add(new AiDefaultModelResponse(typeCode, typeName(typeCode),
@@ -412,6 +413,7 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
         return switch (typeCode) {
             case TYPE_VISION -> "图片识别";
             case TYPE_ASR -> "语音识别";
+            case TYPE_EMBEDDING -> "向量模型";
             default -> "聊天模型";
         };
     }
