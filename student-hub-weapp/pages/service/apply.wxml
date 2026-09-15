@@ -1,6 +1,6 @@
 <view class="apply">
   <view class="head card">
-    <image class="head-icon" src="/assets/category/{{item.icon || 'cat-affair'}}.png" mode="aspectFit" />
+    <image class="head-icon" src="/assets/icons/category/{{item.icon || 'cat-affair'}}.png" mode="aspectFit" />
     <view class="head-body">
       <view class="head-name">{{item.itemName}}</view>
       <view wx:if="{{item.slaHours}}" class="head-sla">预计 {{item.slaHours}} 小时内办结</view>
@@ -13,7 +13,7 @@
   </view>
 
   <view wx:if="{{submitted}}" class="card success">
-    <image class="success-img" src="/assets/success/success-submit.jpg" mode="aspectFit" />
+    <image class="success-img" src="https://student.sailtrack.cn/student-hub/static/assets/success/success-submit.jpg" mode="aspectFit" />
     <view class="success-title">提交成功！</view>
     <view class="success-no">申请编号 {{submitted.requestNo}}</view>
     <view class="success-actions">

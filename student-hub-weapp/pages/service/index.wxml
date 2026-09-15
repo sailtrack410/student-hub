@@ -20,7 +20,7 @@
   <view class="groups">
     <view wx:for="{{groups}}" wx:key="categoryId" wx:for-item="group" class="group">
       <view class="group-head">
-        <image class="group-icon" src="/assets/category/{{group.icon || 'cat-affair'}}.png" mode="aspectFit" />
+        <image class="group-icon" src="/assets/icons/category/{{group.icon || 'cat-affair'}}.png" mode="aspectFit" />
         <text class="group-name">{{group.categoryName}}</text>
         <text class="group-count">{{group.items.length}} 项</text>
       </view>
@@ -35,7 +35,7 @@
           data-code="{{item.itemCode}}"
           data-id="{{item.itemId}}"
         >
-          <image class="item-icon" src="/assets/category/{{item.icon || 'cat-affair'}}.png" mode="aspectFit" />
+        <image class="item-icon" src="/assets/icons/category/{{item.icon || 'cat-affair'}}.png" mode="aspectFit" />
           <view class="item-body">
             <view class="item-name">{{item.itemName}}</view>
             <view class="item-summary">{{item.summary}}</view>
@@ -47,7 +47,7 @@
 
     <empty-state
       wx:if="{{loaded && !groups.length}}"
-      image="/assets/empty/empty-search.jpg"
+      image="https://student.sailtrack.cn/student-hub/static/assets/empty/empty-search.jpg"
       title="没有找到相关服务"
       subtitle="换个关键词试试"
     />

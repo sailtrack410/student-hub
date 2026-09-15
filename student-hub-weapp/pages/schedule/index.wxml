@@ -69,7 +69,7 @@
 
   <block wx:elif="{{loaded}}">
     <empty-state
-      image="/assets/empty/empty-search.jpg"
+      image="https://student.sailtrack.cn/student-hub/static/assets/empty/empty-search.jpg"
       title="还没有导入课表"
       subtitle="同步教务系统，每周课程一目了然"
     />

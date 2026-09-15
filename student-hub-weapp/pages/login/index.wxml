@@ -1,12 +1,12 @@
 <view class="login">
   <view class="hero">
-    <image class="hero-img" src="/assets/banner/login-hero.jpg" mode="aspectFill" />
+    <image class="hero-img" src="https://student.sailtrack.cn/student-hub/static/assets/banner/login-hero.jpg" mode="aspectFill" />
     <view class="hero-shade"></view>
   </view>
 
   <view class="sheet">
     <view class="brand">
-      <image class="brand-logo" src="/assets/brand/logo-mark.png" mode="aspectFit" />
+      <image class="brand-logo" src="/assets/icons/brand/logo-mark.png" mode="aspectFit" />
       <view class="brand-text">
         <text class="brand-name">Student Hub</text>
         <text class="brand-slogan">你的校园服务小管家</text>
@@ -15,15 +15,15 @@
 
     <view class="features">
       <view class="feature">
-        <view class="feature-icon"><image src="/assets/category/cat-repair.png" mode="aspectFit" /></view>
+        <view class="feature-icon"><image src="/assets/icons/category/cat-repair.png" mode="aspectFit" /></view>
         <text class="feature-label">一键报修</text>
       </view>
       <view class="feature">
-        <view class="feature-icon feature-icon-teal"><image src="/assets/category/cat-certificate.png" mode="aspectFit" /></view>
+        <view class="feature-icon feature-icon-teal"><image src="/assets/icons/category/cat-certificate.png" mode="aspectFit" /></view>
         <text class="feature-label">证明办理</text>
       </view>
       <view class="feature">
-        <view class="feature-icon feature-icon-mascot"><image src="/assets/mascot/mascot-avatar.jpg" mode="aspectFill" /></view>
+        <view class="feature-icon feature-icon-mascot"><image src="https://student.sailtrack.cn/student-hub/static/assets/mascot/mascot-avatar.jpg" mode="aspectFill" /></view>
         <text class="feature-label">AI 智能答疑</text>
       </view>
     </view>

@@ -1,6 +1,6 @@
 <view class="eval">
   <view class="card">
-    <image class="mascot" src="/assets/mascot/mascot-celebrate.jpg" mode="aspectFit" />
+    <image class="mascot" src="https://student.sailtrack.cn/student-hub/static/assets/mascot/mascot-celebrate.jpg" mode="aspectFit" />
     <view class="title">这次服务体验如何？</view>
 
     <view class="stars">

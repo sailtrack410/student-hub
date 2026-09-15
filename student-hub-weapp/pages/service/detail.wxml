@@ -1,6 +1,6 @@
 <view class="detail">
   <view class="head card">
-    <image class="head-icon" src="/assets/category/{{item.icon || 'cat-affair'}}.png" mode="aspectFit" />
+    <image class="head-icon" src="/assets/icons/category/{{item.icon || 'cat-affair'}}.png" mode="aspectFit" />
     <view class="head-body">
       <view class="head-name">{{item.itemName}}</view>
       <view class="head-summary">{{item.summary}}</view>

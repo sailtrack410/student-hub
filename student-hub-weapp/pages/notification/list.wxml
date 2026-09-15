@@ -23,7 +23,7 @@
 
   <empty-state
     wx:if="{{loaded && !records.length}}"
-    image="/assets/empty/empty-notifications.jpg"
+    image="https://student.sailtrack.cn/student-hub/static/assets/empty/empty-notifications.jpg"
     title="暂时没有消息"
     subtitle="申请进度通知会出现在这里"
   />

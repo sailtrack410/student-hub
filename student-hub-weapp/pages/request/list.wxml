@@ -32,7 +32,7 @@
 
   <empty-state
     wx:if="{{loaded && !records.length}}"
-    image="/assets/empty/empty-requests.jpg"
+    image="https://student.sailtrack.cn/student-hub/static/assets/empty/empty-requests.jpg"
     title="这里空空如也"
     subtitle="去服务大厅发起你的第一个申请吧"
   />
