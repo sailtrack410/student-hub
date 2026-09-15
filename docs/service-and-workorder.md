@@ -6,6 +6,10 @@
 学生提交申请 → 自动创建待派工单 → 调度员派单/驳回 → 服务人员开始 → 办结
      │                                                            │
      └── 随时可撤销（未办结前）                        学生评价 ←────┘
+
+报修类工单（item_code 以 REPAIR- 开头）走拍照确认闭环：
+派单 → 接单 → 现场拍照 → 完工拍照并提交确认 → 报修人确认办结
+                                      └── 报修人退回 → 重新上传完工照片
 ```
 
 每个动作写入 `service_request_log`，申请详情页时间线按时间正序展示。
@@ -17,6 +21,10 @@
 | SUBMIT | 无 | `SUBMITTED` |
 | DISPATCH（派单） | `SUBMITTED` | `PROCESSING` |
 | START（开始处理） | `PROCESSING` | `PROCESSING`（仅记录） |
+| ARRIVAL_PHOTO（现场拍照） | `PROCESSING` | `PROCESSING`（仅记录） |
+| COMPLETION_PHOTO（完工拍照） | `PROCESSING` | `PROCESSING`（仅记录） |
+| CONFIRM（报修人确认） | `PROCESSING` | `PROCESSING`（仅记录） |
+| REOPEN（退回重新处理） | `PROCESSING` | `PROCESSING`（仅记录） |
 | COMPLETE（办结） | `PROCESSING` | `COMPLETED` |
 | REJECT（驳回） | `SUBMITTED` / `PROCESSING` | `REJECTED` |
 | CANCEL（撤销） | `SUBMITTED` / `PROCESSING` | `CANCELLED` |
@@ -28,15 +36,22 @@
 |---|---|---|
 | ASSIGN（派单/改派） | `PENDING_DISPATCH` / `ASSIGNED` | `ASSIGNED` |
 | START | `ASSIGNED` | `PROCESSING` |
-| COMPLETE | `PROCESSING` | `COMPLETED` |
+| RECORD_ARRIVAL_PHOTO（现场拍照） | `PROCESSING` | `ONSITE_PHOTO_RECORDED` |
+| SUBMIT_COMPLETION（完工拍照并提交） | `ONSITE_PHOTO_RECORDED` | `PENDING_CONFIRMATION` |
+| CONFIRM（报修人确认） | `PENDING_CONFIRMATION` | `COMPLETED` |
+| REOPEN_CONFIRMATION（报修人退回） | `PENDING_CONFIRMATION` | `ONSITE_PHOTO_RECORDED` |
+| COMPLETE（非报修类直接办结） | `PROCESSING` | `COMPLETED` |
 | REJECT（调度驳回） | `PENDING_DISPATCH` / `ASSIGNED` | `REJECTED` |
-| CANCEL（随申请撤销） | `PENDING_DISPATCH` / `ASSIGNED` / `PROCESSING` | `CANCELLED` |
+| CANCEL（随申请撤销） | `PENDING_DISPATCH` / `ASSIGNED` / `PROCESSING` / `ONSITE_PHOTO_RECORDED` / `PENDING_CONFIRMATION` | `CANCELLED` |
 
 规则：
 
 - 派单对象必须持有启用状态的 `WORKER` 角色并处于启用账号。
 - 每张申请对应唯一工单（`uk_work_order_request`）；申请提交后在同一事务内创建待派工单。
 - 首次派单将申请从 `SUBMITTED` 推进到 `PROCESSING`，改派不重复推进。
+- 报修类工单（服务项 `item_code` 以 `REPAIR-` 开头）`photo_workflow_required=1`，不允许直接 `COMPLETE`，必须先现场拍照、再上传完工照片并提交确认。
+- 完工照片支持多张（`completion_photo_file_ids` 保留历史，`completion_photo_file_id` 为最新一张）；现场与完工照片均校验上传者本人才可使用。
+- 报修人退回时记录 `confirmation_reject_reason` 并通知服务人员重新拍照；工单列表按 `PROCESSING` 筛选时同时覆盖 `ONSITE_PHOTO_RECORDED` 与 `PENDING_CONFIRMATION`。
 
 ## 权限与数据范围
 
@@ -45,6 +60,8 @@
 | 提交/查看/撤销本人申请 | `service-request:create` / `service-request:view:self` | 仅本人（资源归属校验） |
 | 调度队列、派单、驳回 | `work-order:dispatch` | 角色绑定组织的 `ORGANIZATION_AND_CHILDREN` 子树，`ALL` 放开 |
 | 查看/处理被指派工单 | `work-order:view:assigned` / `work-order:process` | 仅被指派人 |
+| 现场/完工拍照 | `work-order:process` | 仅被指派人，且照片必须本人上传 |
+| 报修人确认/退回 | `service-request:view:self` | 仅该申请本人 |
 | 提交评价 | `evaluation:create` | 仅申请本人，仅 `COMPLETED`，一次 |
 | AI 会话 | `ai:chat` | 仅本人会话 |
 
@@ -61,6 +78,9 @@
 | 提交成功 | 申请人 |
 | 派单 | 被指派服务人员；首次派单同时通知申请人 |
 | 开始处理 | 申请人 |
+| 提交完工照片待确认 | 申请人（引导确认） |
+| 报修人确认办结 | 被指派服务人员 |
+| 报修人退回 | 被指派服务人员（引导重新拍照） |
 | 办结 | 申请人（引导评价） |
 | 驳回 | 申请人 |
 | 撤销 | 被指派服务人员（如已派单） |

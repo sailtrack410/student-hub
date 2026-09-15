@@ -12,9 +12,12 @@
 - Knife4j 接口调试：`/doc.html`；Swagger UI：`/api`
 - 健康检查：`GET /api/common/system/health`
 - 服务目录、服务申请、工单、评价、通知、AI 会话等业务模块与申请-派单-办结-评价闭环
+- 报修类工单拍照确认闭环：现场拍照 → 完工拍照 → 报修人确认（或退回重新处理）
+- RAG 知识库（`modules/rag`）：PDF/DOCX/TXT/MD 解析分块、向量化与检索测试，检索结果注入 AI 助手上下文；默认关闭，需 `RAG_ENABLED=true`
 - 校园社区：失物招领、二手交易、学习咨询、校友杂谈分区，支持发帖、图片和评论
+- 公开数据大屏与现场服务终端：`/screen/`（免登录终端）、`GET /api/public/screen/overview`
 - 雪花 ID 全局序列化为字符串，避免小程序端精度丢失
-- 外部模型 API 的 `AiProvider` 抽象和 OpenAI-compatible 适配器
+- 外部模型 API 的 `AiProvider` 抽象和 OpenAI-compatible 适配器（聊天 / 图片识别 / 语音识别 / 向量模型）
 - AI 默认关闭；配置 `AI_ENABLED=true` 后才允许调用外部模型
 - 微信小程序学生端正式版（`student-hub-weapp/`），UI 素材由 gpt-image-2 管线生成
 
@@ -56,7 +59,27 @@ AI_API_KEY=your-key
 AI_MODEL=deepseek-chat
 ```
 
-当前提供 Provider 和 Service 基础抽象；Prompt 版本管理、AI 工具调用及正式校园身份适配将在明确外部系统契约后接入。
+当前提供 Provider 和 Service 基础抽象；模型类型分 CHAT / VISION / ASR / EMBEDDING 四类，各自在管理端「AI 配置」中指定默认模型。
+
+## RAG 知识库配置
+
+知识库默认关闭。开启后需额外提供 PostgreSQL 连接（向量表 `ai_knowledge_chunk` 在应用启动时就绪）：
+
+```bash
+RAG_ENABLED=true
+RAG_DB_URL=jdbc:postgresql://localhost:5435/postgres
+RAG_DB_USERNAME=your-user
+RAG_DB_PASSWORD=your-password
+```
+
+| 环境变量 | 默认值 | 说明 |
+|---|---|---|
+| `RAG_MAX_DOCUMENT_SIZE_MB` | `30` | 单篇文档大小上限（MB） |
+| `RAG_MAX_PARSED_CHARACTERS` | `2000000` | 单篇文档解析字符上限 |
+| `RAG_EMBEDDING_BATCH_SIZE` | `16` | 向量化批大小 |
+| `RAG_RETRIEVAL_CANDIDATE_LIMIT` | `40` | 召回候选分块数 |
+
+未安装 pgvector 时使用精确余弦相似度 + PostgreSQL 全文检索兜底，安装后可无缝升级 ANN 索引。检索测试与管理入口：管理端「知识库」页。
 
 ## 开发认证
 
@@ -155,8 +178,11 @@ WECHAT_APP_SECRET=你的小程序AppSecret
 | 认证 | `POST /api/common/auth/login`（仅 dev/test）、`POST /api/common/auth/wechat-login`、`GET /api/common/auth/me`、`POST /api/common/auth/logout` |
 | 服务目录 | `GET /api/app/services`、`GET /api/app/services/{itemId}`；管理端 `POST /api/admin/catalog/*` |
 | 服务申请 | `POST /api/app/service-requests`（支持 `Idempotency-Key` 幂等）、`GET /api/app/service-requests`、`GET /api/app/service-requests/{id}`、`POST /api/app/service-requests/{id}/cancel` |
-| 工单（服务人员） | `GET /api/app/work-orders/assigned`、`GET /api/app/work-orders/{id}`、`POST /api/app/work-orders/{id}/start`、`POST /api/app/work-orders/{id}/complete` |
+| 工单（服务人员） | `GET /api/app/work-orders/assigned`、`GET /api/app/work-orders/{id}`、`POST /api/app/work-orders/{id}/start`、`POST /api/app/work-orders/{id}/arrival-photo`、`POST /api/app/work-orders/{id}/completion-photo`、`POST /api/app/work-orders/{id}/complete` |
+| 工单确认（报修人） | `POST /api/app/work-orders/{id}/confirm`、`POST /api/app/work-orders/{id}/reject-confirmation` |
 | 工单（调度端） | `GET /api/admin/work-orders`、`GET /api/admin/work-orders/{id}`、`POST /api/admin/work-orders/{id}/assign`、`POST /api/admin/work-orders/{id}/reject` |
+| 知识库（管理端） | `GET/POST /api/admin/knowledge-bases`、`PUT/DELETE /api/admin/knowledge-bases/{id}`、`GET/POST /api/admin/knowledge-bases/{id}/documents`、`POST /api/admin/knowledge-bases/{id}/documents/{docId}/reindex`、`POST /api/admin/knowledge-bases/{id}/test` |
+| 知识库（公开） | `POST /api/public/knowledge-bases/{id}/query`（仅 PUBLIC 且启用的知识库） |
 | 评价 | `POST /api/app/service-requests/{id}/evaluation` |
 | 通知 | `GET /api/app/notifications`、`GET /api/app/notifications/unread-count`、`POST /api/app/notifications/{id}/read`、`POST /api/app/notifications/read-all` |
 | AI 助手 | `POST /api/app/ai/conversations`、`GET /api/app/ai/conversations`、`GET /api/app/ai/conversations/{id}/messages`、`POST /api/app/ai/conversations/{id}/messages` |
@@ -166,11 +192,13 @@ WECHAT_APP_SECRET=你的小程序AppSecret
 
 学生端正式版位于 `student-hub-weapp/`，用微信开发者工具导入该目录即可运行。
 
-- 四个 Tab：首页、服务大厅、AI 助手、我的；另有登录、服务详情、申请表单、申请列表/详情、评价、消息、服务人员工单等页面
-- 统一请求层 `utils/request.js`：自动携带 Token、解包 `Result<T>`、401 自动跳转登录
-- 动态申请表单由服务项 `formSchema` 驱动（`components/form-renderer`）
+- 四个 Tab：首页、服务大厅、AI 助手、我的；另有登录、服务详情、申请表单、申请列表/详情、评价、消息、服务人员工单列表与工单详情等页面
+- 统一请求层 `utils/request.js`：自动携带 Token、解包 `Result<T>`、401 自动跳转登录，并过滤 `undefined` 查询参数
+- 资源地址统一走 `utils/resource.js`（`resourceUrl`/`thumbnailUrl`），兼容后端绝对对象地址与本地 API 相对路径
+- 动态申请表单由服务项 `formSchema` 驱动（`components/form-renderer`），schema 重建时保留已填值
+- 后勤身份（`identityType=LOGISTICS` 或持有 `WORKER` 角色）隐藏学生专属入口：课表、我的申请、请假/场地/在读证明等服务项，视图规则收敛在 `utils/directory.js`
 - 真机调试时把 `utils/config.js` 的 `baseUrl` 改为电脑局域网 IP，并在开发者工具勾选“不校验合法域名”
-- 使用 `worker` 开发账号登录可在“我的 → 我的工单”体验服务人员处理流程
+- 使用 `worker` 开发账号登录可在“我的 → 我的工单”体验服务人员接单、现场拍照、完工拍照与提交确认流程
 
 ## 文件上传与存储
 

@@ -7,3 +7,5 @@ logs/
 .DS_Store
 student-hub-weapp/project.private.config.json
 data/
+.zcode/
+.mimosa/
