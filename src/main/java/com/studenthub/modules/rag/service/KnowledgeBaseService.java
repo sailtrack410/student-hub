@@ -35,6 +35,7 @@ public class KnowledgeBaseService {
     private final FileStorageService fileStorageService;
     private final KnowledgeDocumentParser parser;
     private final EmbeddingService embeddingService;
+    private final RetrievalService retrievalService;
     private final AiChatService aiChatService;
     private final RagProperties properties;
     private final ObjectMapper objectMapper;
@@ -80,7 +81,8 @@ public class KnowledgeBaseService {
             List<EmbeddingService.EmbeddingResult> embeddings=embeddingService.embedBatch(batch.stream().map(Chunk::content).toList());
             for (int i=0;i<batch.size();i++) {
                 Chunk c=batch.get(i); EmbeddingService.EmbeddingResult emb=embeddings.get(i); String vector=arrayLiteral(emb.vector()); String metadata; try{metadata=objectMapper.writeValueAsString(Map.of("page",c.page()==null?0:c.page(),"titlePath",c.titlePath()==null?"":c.titlePath(),"ordinal",ordinal));}catch(Exception e){metadata="{}";}
-                vectorJdbc.update("INSERT INTO ai_knowledge_chunk(knowledge_base_id,document_id,ordinal,title_path,content,content_hash,metadata,embedding) VALUES(?,?,?,?,?,?,?::jsonb,?::double precision[])",base.getId(),doc.getId(),ordinal,c.titlePath(),c.content(),sha256(c.content().getBytes(StandardCharsets.UTF_8)),metadata,vector); ordinal++;
+                // 记录向量模型与维度：换模型后可据此识别历史分块并提示重建，避免余弦静默算错
+                vectorJdbc.update("INSERT INTO ai_knowledge_chunk(knowledge_base_id,document_id,ordinal,title_path,content,content_hash,metadata,embedding,embedding_model,embedding_dim) VALUES(?,?,?,?,?,?,?::jsonb,?::double precision[],?,?) ON CONFLICT (knowledge_base_id, content_hash) DO NOTHING",base.getId(),doc.getId(),ordinal,c.titlePath(),c.content(),sha256(c.content().getBytes(StandardCharsets.UTF_8)),metadata,vector,emb.model(),emb.vector().size()); ordinal++;
             }
         }
         doc.setChunkCount(ordinal);
@@ -88,30 +90,18 @@ public class KnowledgeBaseService {
     private List<Chunk> chunk(List<KnowledgeDocumentParser.Section> sections,int size,int overlap){List<Chunk> out=new ArrayList<>();for(var s:sections){String text=s.text();int start=0;while(start<text.length()){int end=Math.min(text.length(),start+size);if(end<text.length()){int cut=Math.max(text.lastIndexOf('\n',end),text.lastIndexOf('。',end));if(cut>start+size/2)end=cut+1;}String c=text.substring(start,end).trim();if(!c.isBlank())out.add(new Chunk(s.titlePath(),s.page(),c));if(end>=text.length())break;start=Math.max(start+1,end-overlap);}}return out;}
     private String arrayLiteral(List<Double> v){return "{"+v.stream().map(x->Double.toString(x==null?0:x)).collect(Collectors.joining(","))+"}";}
     public RagTestResponse test(Long baseId,String question,boolean generate){long t=System.currentTimeMillis();KnowledgeBaseEntity b=requireBase(baseId); List<RagTestResponse.RagHit> hits=retrieve(List.of(baseId),question,b.getTopK(),b.getScoreThreshold()); long rt=System.currentTimeMillis()-t;String answer=null;long gt=0; if(generate&&!hits.isEmpty()){long s=System.currentTimeMillis();String context=hits.stream().map(h->"["+h.fileName()+" 第"+(h.page()==null?"-":h.page())+"页]\n"+h.content()).collect(Collectors.joining("\n\n"));String prompt="仅依据下列知识库资料回答问题；资料没有答案时明确说未找到，不要编造。回答末尾列出引用文件名和页码。\n\n资料：\n"+context+"\n\n问题："+question;try{AiChatResponse r=aiChatService.chat(List.of(new AiMessage("system",b.getSystemPrompt()==null?"你是校园知识库助手。":b.getSystemPrompt()),new AiMessage("user",prompt)));answer=r.content();}catch(Exception e){answer="知识库已召回相关资料，但回答模型暂不可用。";}gt=System.currentTimeMillis()-s;}var snapshot=AiRuntimeConfig.current();String model=snapshot!=null&&snapshot.embedding()!=null?snapshot.embedding().model():null;return new RagTestResponse(answer,hits,rt,gt,model);}
+
+    /**
+     * 混合检索：向量与词法各自独立召回后用 RRF 融合，检索逻辑见 {@link RetrievalService}。
+     * 查询向量生成失败时降级为纯词法召回，不再让整次检索失败。
+     */
     public List<RagTestResponse.RagHit> retrieve(List<Long> baseIds,String question,int topK,java.math.BigDecimal threshold){
         if (baseIds==null || baseIds.isEmpty() || question==null || question.isBlank()) return List.of();
-        EmbeddingService.EmbeddingResult q;try{q=embeddingService.embed(question);}catch(Exception e){log.warn("知识库查询向量生成失败，将仅使用关键词召回: {}",e.getMessage());q=null;}
-        String marks=baseIds.stream().map(x->"?").collect(Collectors.joining(","));
-        int limit=Math.max(topK, properties.getRetrievalCandidateLimit());
-        List<Map<String,Object>> rows;
-        String fullTextSql="SELECT id,document_id,ordinal,title_path,content,metadata,embedding,ts_rank_cd(search_vector, plainto_tsquery('simple', ?)) AS fulltext_score FROM ai_knowledge_chunk WHERE knowledge_base_id IN ("+marks+") AND search_vector @@ plainto_tsquery('simple', ?) ORDER BY fulltext_score DESC LIMIT "+limit;
-        List<Object> fullParams=new ArrayList<>(); fullParams.add(question); fullParams.addAll(baseIds); fullParams.add(question);
-        try { rows=vectorJdbc.queryForList(fullTextSql, fullParams.toArray()); }
-        catch(Exception e) { log.debug("全文检索不可用，回退向量扫描",e); rows=List.of(); }
-        if (rows.isEmpty()) {
-            String fallbackSql="SELECT id,document_id,ordinal,title_path,content,metadata,embedding,0.0 AS fulltext_score FROM ai_knowledge_chunk WHERE knowledge_base_id IN ("+marks+") LIMIT "+limit;
-            rows=vectorJdbc.queryForList(fallbackSql, baseIds.toArray());
-        }
-        Map<Long,String> names=documentMapper.selectList(new LambdaQueryWrapper<KnowledgeDocumentEntity>().in(KnowledgeDocumentEntity::getKnowledgeBaseId,baseIds)).stream().collect(Collectors.toMap(KnowledgeDocumentEntity::getId,KnowledgeDocumentEntity::getFileName));
-        List<RagTestResponse.RagHit> hits=new ArrayList<>();
-        for(Map<String,Object> row:rows){String text=String.valueOf(row.get("content"));double lexical=Math.max(ngramSimilarity(question,text), number(row.get("fulltext_score")));double vector=cosine(q==null?null:q.vector(),parseArray(row.get("embedding")));double score=.70*vector+.30*lexical;if(score>=threshold.doubleValue())hits.add(new RagTestResponse.RagHit(((Number)row.get("id")).longValue(),((Number)row.get("document_id")).longValue(),names.getOrDefault(((Number)row.get("document_id")).longValue(),"未知文档"),((Number)row.get("ordinal")).intValue(),metadataPage(row.get("metadata")),(String)row.get("title_path"),text,score,vector,lexical));}
-        hits.sort(Comparator.comparingDouble(RagTestResponse.RagHit::score).reversed());return hits.stream().limit(topK).toList();
+        List<Double> queryVector=null;
+        try { queryVector=embeddingService.embed(question).vector(); }
+        catch(Exception e){ log.warn("知识库查询向量生成失败，本轮降级为纯词法召回: {}",e.getMessage()); }
+        return retrievalService.retrieve(baseIds,question,queryVector,topK,threshold);
     }
-    private double number(Object value){return value instanceof Number n ? Math.max(0,n.doubleValue()) : 0;}
-    private double ngramSimilarity(String question,String content){String q=question.replaceAll("\\s+","").toLowerCase(Locale.ROOT),c=content.replaceAll("\\s+","").toLowerCase(Locale.ROOT);if(q.length()<2)return c.contains(q)?1:0;Set<String> grams=new HashSet<>();for(int i=0;i<q.length()-1;i++)grams.add(q.substring(i,i+2));long matched=grams.stream().filter(c::contains).count();return grams.isEmpty()?0:(double)matched/grams.size();}
-    private Integer metadataPage(Object value){try{int page=objectMapper.readTree(String.valueOf(value)).path("page").asInt(0);return page>0?page:null;}catch(Exception e){return null;}}
-    private List<Double> parseArray(Object o){if(o==null)return null;String s=o.toString().replace("{","").replace("}","");if(s.isBlank())return null;return Arrays.stream(s.split(",")).map(Double::valueOf).toList();}
-    private double cosine(List<Double>a,List<Double>b){if(a==null||b==null||a.size()!=b.size())return 0;double dot=0,na=0,nb=0;for(int i=0;i<a.size();i++){double x=a.get(i),y=b.get(i);dot+=x*y;na+=x*x;nb+=y*y;}return na==0||nb==0?0:dot/Math.sqrt(na*nb);}
     private String sha256(byte[] b){try{byte[] h=MessageDigest.getInstance("SHA-256").digest(b);return java.util.HexFormat.of().formatHex(h);}catch(Exception e){return "";}}
     private String trim(String s,int n){return s==null?"":s.length()>n?s.substring(0,n):s;}
     private record Chunk(String titlePath,Integer page,String content){}

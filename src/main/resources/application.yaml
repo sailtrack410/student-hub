@@ -72,7 +72,10 @@ studenthub:
     max-document-size-mb: ${RAG_MAX_DOCUMENT_SIZE_MB:30}
     max-parsed-characters: ${RAG_MAX_PARSED_CHARACTERS:2000000}
     embedding-batch-size: ${RAG_EMBEDDING_BATCH_SIZE:16}
-    retrieval-candidate-limit: ${RAG_RETRIEVAL_CANDIDATE_LIMIT:40}
+    lexical-candidate-limit: ${RAG_LEXICAL_CANDIDATE_LIMIT:40}
+    vector-candidate-limit: ${RAG_VECTOR_CANDIDATE_LIMIT:40}
+    lexical-min-similarity: ${RAG_LEXICAL_MIN_SIMILARITY:0.05}
+    rrf-k: ${RAG_RRF_K:60}
   wechat:
     mode: ${WECHAT_MODE:real}
     app-id: ${WECHAT_APP_ID:}

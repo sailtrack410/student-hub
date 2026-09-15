@@ -77,9 +77,12 @@ RAG_DB_PASSWORD=your-password
 | `RAG_MAX_DOCUMENT_SIZE_MB` | `30` | 单篇文档大小上限（MB） |
 | `RAG_MAX_PARSED_CHARACTERS` | `2000000` | 单篇文档解析字符上限 |
 | `RAG_EMBEDDING_BATCH_SIZE` | `16` | 向量化批大小 |
-| `RAG_RETRIEVAL_CANDIDATE_LIMIT` | `40` | 召回候选分块数 |
+| `RAG_LEXICAL_CANDIDATE_LIMIT` | `40` | 词法通道召回候选数 |
+| `RAG_VECTOR_CANDIDATE_LIMIT` | `40` | 向量通道召回候选数 |
+| `RAG_LEXICAL_MIN_SIMILARITY` | `0.05` | 词法预过滤下界（过低放大候选，过高漏召回） |
+| `RAG_RRF_K` | `60` | RRF 融合常数，越小越强调头部排名 |
 
-未安装 pgvector 时使用精确余弦相似度 + PostgreSQL 全文检索兜底，安装后可无缝升级 ANN 索引。检索测试与管理入口：管理端「知识库」页。
+检索采用**混合召回 + RRF 融合**：向量通道（精确余弦）与词法通道（`pg_trgm` 三元组，支持中文）各自独立取候选，再按排名融合排序，因此任一路都不会被另一路截断。未安装 pgvector 时向量走 SQL 侧精确扫描；`pg_trgm` 不可用时会退化为词法全表扫描并告警。换向量模型后，维度不一致的历史分块会被自动跳过并提示重建索引。检索测试与管理入口：管理端「知识库」页。
 
 ## 开发认证
 
