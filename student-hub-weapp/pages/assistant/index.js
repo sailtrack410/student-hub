@@ -1,5 +1,6 @@
 const api = require('../../utils/api');
 const { uploadImage, uploadAudio } = require('../../utils/request');
+const { resourceUrl } = require('../../utils/resource');
 const app = getApp();
 const { markdownToHtml } = require('../../utils/markdown');
 
@@ -24,6 +25,7 @@ Page({
   conversationId: null,
   recorder: null,
   voiceStartTs: 0,
+  voiceTouchActive: false,
 
   onShow() {
     if (!app.ensureLogin()) {
@@ -36,6 +38,10 @@ Page({
 
   onUnload() {
     this.stopRecorder();
+    if (this.audioContext) {
+      this.audioContext.destroy();
+      this.audioContext = null;
+    }
   },
 
   async createConversation() {
@@ -80,7 +86,7 @@ Page({
           const uploaded = [];
           for (const file of files) {
             const stored = await uploadImage(file.tempFilePath);
-            uploaded.push({ fileId: stored.fileId, path: stored.viewPath });
+            uploaded.push({ fileId: String(stored.fileId), path: resourceUrl(stored.viewPath) });
           }
           this.setData({ pendingImages: this.data.pendingImages.concat(uploaded) });
         } catch (error) {
@@ -100,49 +106,69 @@ Page({
   },
 
   onVoiceStart() {
-    if (this.data.thinking) {
+    if (this.data.thinking || this.data.recording || this.voiceTouchActive) {
       return;
     }
-    this.voiceStartTs = Date.now();
+    this.voiceTouchActive = true;
+    const start = () => {
+      if (!this.voiceTouchActive || this.data.thinking || this.data.recording) return;
+      this.voiceStartTs = Date.now();
+      const recorder = this.getRecorder();
+      recorder.start({
+        duration: 60000,
+        sampleRate: 16000,
+        numberOfChannels: 1,
+        encodeBitRate: 48000,
+        format: 'mp3'
+      });
+      this.setData({ recording: true });
+    };
+    wx.authorize({
+      scope: 'scope.record',
+      success: start,
+      fail: () => {
+        this.voiceTouchActive = false;
+        wx.showToast({ title: '请允许使用麦克风', icon: 'none' });
+      }
+    });
+  },
+
+  getRecorder() {
+    if (this.recorder) return this.recorder;
     const recorder = wx.getRecorderManager();
-    this.recorder = recorder;
     recorder.onStop((res) => this.handleVoiceStop(res));
     recorder.onError(() => {
-      this.setData({ recording: false });
+      this.voiceTouchActive = false;
+      this.setData({ recording: false, thinking: false });
       wx.showToast({ title: '录音失败，请重试', icon: 'none' });
     });
-    recorder.start({
-      duration: 60000,
-      sampleRate: 16000,
-      numberOfChannels: 1,
-      encodeBitRate: 48000,
-      format: 'mp3'
-    });
-    this.setData({ recording: true });
+    this.recorder = recorder;
+    return recorder;
   },
 
   onVoiceEnd() {
-    if (!this.recorder) {
-      return;
-    }
+    this.voiceTouchActive = false;
+    if (!this.data.recording || !this.recorder) return;
     const duration = Date.now() - this.voiceStartTs;
+    this.voiceDurationMs = duration;
     const recorder = this.recorder;
-    this.recorder = null;
     this.setData({ recording: false });
-    recorder.stop();
+    try { recorder.stop(); } catch (error) { /* ignore */ }
     if (duration < MIN_VOICE_MS) {
       wx.showToast({ title: '说话时间太短', icon: 'none' });
     }
   },
 
   onVoiceCancel() {
+    this.voiceTouchActive = false;
     this.stopRecorder();
   },
 
   stopRecorder() {
+    this.voiceTouchActive = false;
     if (this.recorder) {
       try {
-        this.recorder.stop();
+        if (this.data.recording) this.recorder.stop();
       } catch (error) {
         // ignore
       }
@@ -160,19 +186,29 @@ Page({
     }
     wx.showLoading({ title: '识别中…', mask: true });
     this.setData({ thinking: true });
+    let submitted = false;
     try {
       const stored = await uploadAudio(res.tempFilePath);
+      const durationMs = Number(res.duration) || this.voiceDurationMs || 0;
+      const audio = {
+        url: resourceUrl(stored.viewPath),
+        durationText: formatVoiceDuration(durationMs)
+      };
+      this.appendMessage('USER', ' ', false, null, [], audio);
+      this.setData({ scrollInto: `msg-${this.data.messages.length - 1}` });
       const text = await api.transcribeAudio(stored.fileId);
       if (!text || !text.trim()) {
         wx.showToast({ title: '没有听清，请再说一次', icon: 'none' });
+        this.appendMessage('ASSISTANT', '这条语音没有识别清楚，请再试一次。', true);
         return;
       }
-      this.submitMessage(text.trim(), []);
+      this.requestReply(text.trim(), []);
+      submitted = true;
     } catch (error) {
       wx.showToast({ title: error && error.message ? error.message : '语音识别失败', icon: 'none' });
     } finally {
       wx.hideLoading();
-      this.setData({ thinking: false });
+      if (!submitted) this.setData({ thinking: false });
     }
   },
 
@@ -196,7 +232,7 @@ Page({
     this.requestReply(content, images.map((item) => item.fileId));
   },
 
-  appendMessage(role, content, degraded = false, actions = null, images = []) {
+  appendMessage(role, content, degraded = false, actions = null, images = [], audio = null) {
     messageSeq += 1;
     const messages = this.data.messages.concat([
       {
@@ -206,6 +242,7 @@ Page({
         degraded,
         actions,
         images,
+        audio,
         html: role === 'ASSISTANT' ? markdownToHtml(content) : ''
       }
     ]);
@@ -231,6 +268,20 @@ Page({
     wx.previewImage({ current: url, urls: [url] });
   },
 
+  playAudio(event) {
+    const url = event.currentTarget.dataset.url;
+    if (!url) return;
+    if (this.audioContext) {
+      this.audioContext.stop();
+      this.audioContext.destroy();
+    }
+    const context = wx.createInnerAudioContext();
+    context.src = url;
+    context.autoplay = true;
+    context.onError(() => wx.showToast({ title: '语音播放失败', icon: 'none' }));
+    this.audioContext = context;
+  },
+
   async requestReply(content, images) {
     try {
       if (!this.conversationId) {
@@ -248,3 +299,8 @@ Page({
     }
   }
 });
+
+function formatVoiceDuration(durationMs) {
+  const seconds = Math.max(1, Math.round(Number(durationMs || 0) / 1000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}

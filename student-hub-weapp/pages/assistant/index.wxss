@@ -133,6 +133,35 @@
   border-radius: 28rpx 6rpx 28rpx 28rpx;
 }
 
+.audio-message {
+  min-width: 250rpx;
+  min-height: 76rpx;
+  padding: 0 20rpx;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  background: var(--grad-brand);
+  color: #fff;
+  border-radius: 28rpx 6rpx 28rpx 28rpx;
+  box-sizing: border-box;
+}
+
+.audio-message-icon {
+  width: 34rpx;
+  height: 34rpx;
+  filter: brightness(0) invert(1);
+}
+
+.audio-message-label {
+  flex: 1;
+  font-size: 26rpx;
+}
+
+.audio-message-duration {
+  font-size: 23rpx;
+  opacity: 0.86;
+}
+
 .bubble-degraded {
   background: var(--warning-soft);
   color: var(--text-2);
@@ -226,20 +255,28 @@
 /* 输入区 */
 .input-bar {
   display: flex;
-  gap: 16rpx;
-  padding: 18rpx 30rpx;
-  background: var(--bg-card);
+  gap: 8rpx;
+  margin: 12rpx 24rpx 18rpx;
+  padding: 10rpx 14rpx;
+  background: #F7F8FA;
+  border: 1rpx solid #E5E7EB;
+  border-radius: 999rpx;
   align-items: center;
-  box-shadow: 0 -6rpx 24rpx rgba(15, 23, 42, 0.05);
+  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.06);
 }
 
-/* 左侧文字/语音切换按钮 */
+/* 语音模式下切回键盘 */
 .mode-btn {
-  width: 80rpx;
+  width: 72rpx;
+  min-width: 72rpx;
+  max-width: 72rpx;
   height: 72rpx;
+  flex: 0 0 72rpx;
+  box-sizing: border-box;
   padding: 0;
   margin: 0;
-  background: transparent;
+  background: #E9EDF2;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -251,17 +288,13 @@
   border: none;
 }
 
-.mode-icon {
-  font-size: 28rpx;
-  color: var(--brand);
-  font-weight: 600;
-}
-
 .input {
   flex: 1;
-  background: var(--bg-page);
-  border-radius: 999rpx;
-  padding: 20rpx 30rpx;
+  height: 72rpx;
+  line-height: 72rpx;
+  background: transparent;
+  border-radius: 0;
+  padding: 0 10rpx;
   font-size: 28rpx;
 }
 
@@ -269,13 +302,19 @@
   color: var(--text-3);
 }
 
-/* 图片按钮 */
-.tool-btn {
+/* 微信式加号入口 */
+.add-btn,
+.voice-switch-btn {
+  width: 72rpx;
+  min-width: 72rpx;
+  max-width: 72rpx;
   height: 72rpx;
+  flex: 0 0 72rpx;
+  box-sizing: border-box;
   padding: 0;
   margin: 0;
-  background: var(--bg-page);
-  border-radius: 999rpx;
+  background: #E9EDF2;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -283,51 +322,29 @@
   flex-shrink: 0;
 }
 
-.tool-btn::after {
+.add-btn::after,
+.voice-switch-btn::after,
+.mode-btn::after {
   border: none;
 }
 
-.tool-btn-image {
-  padding: 0 22rpx;
-  font-size: 26rpx;
-  color: var(--text-1);
+.add-btn[disabled],
+.voice-switch-btn[disabled],
+.mode-btn[disabled] {
+  opacity: 0.45;
 }
 
-.tool-btn[disabled] {
-  opacity: 0.4;
+.input-icon {
+  width: 42rpx;
+  height: 42rpx;
 }
 
-.send-btn {
-  background: var(--grad-brand);
-  color: #fff;
-  font-size: 26rpx;
-  font-weight: 600;
-  border-radius: 999rpx;
-  padding: 0 36rpx;
-  height: 72rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-.send-btn::after {
-  border: none;
-}
-
-.send-btn[disabled] {
-  opacity: 0.5;
-  color: #fff;
-  background: var(--grad-brand);
-}
-
-/* 按住说话按钮 */
+/* 按住说话区域 */
 .voice-btn {
   flex: 1;
   height: 72rpx;
   margin: 0;
-  background: var(--bg-page);
+  background: transparent;
   color: var(--text-1);
   font-size: 28rpx;
   border-radius: 999rpx;
