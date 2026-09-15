@@ -34,12 +34,32 @@ Component({
 
   methods: {
     buildFields(schema) {
-      this.value = {};
+      if (!schema || !schema.length) {
+        this.value = {};
+        this.setData({ fields: [] });
+        this.emitChange();
+        return;
+      }
+      const previousValue = this.value || {};
+      const previousFields = this.data.fields || [];
+      this.value = Object.assign({}, previousValue);
       const fields = schema.map((field) => {
+        const previous = previousFields.find((item) => item.key === field.key);
+        const savedValue = previousValue[field.key];
         if (field.type === 'image') {
-          return Object.assign({}, field, { display: '', urls: [], value: [] });
+          const value = Array.isArray(savedValue)
+            ? savedValue.slice()
+            : (previous && Array.isArray(previous.value) ? previous.value.slice() : []);
+          return Object.assign({}, field, {
+            display: '',
+            urls: previous && Array.isArray(previous.urls) ? previous.urls.slice() : [],
+            value
+          });
         }
-        return Object.assign({}, field, { display: '' });
+        const display = previous && previous.display !== undefined
+          ? previous.display
+          : (savedValue === undefined || savedValue === null ? '' : String(savedValue));
+        return Object.assign({}, field, { display });
       });
       this.setData({ fields });
       this.emitChange();

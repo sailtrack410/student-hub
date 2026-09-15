@@ -22,6 +22,20 @@ function clearSession() {
   wx.removeStorageSync(USER_KEY);
 }
 
+// 微信会把对象中的 undefined 查询值序列化成字符串 "undefined"，导致后端枚举参数解析失败。
+function cleanRequestData(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return data;
+  }
+  const cleaned = {};
+  Object.keys(data).forEach((key) => {
+    if (data[key] !== undefined) {
+      cleaned[key] = data[key];
+    }
+  });
+  return cleaned;
+}
+
 function ensureLogin() {
   if (getToken()) {
     return true;
@@ -41,7 +55,7 @@ function request(options) {
     wx.request({
       url: `${config.baseUrl}${url}`,
       method,
-      data,
+      data: cleanRequestData(data),
       timeout,
       header: Object.assign(
         { 'Content-Type': 'application/json' },

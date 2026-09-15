@@ -21,13 +21,14 @@ Page({
       return;
     }
     this.itemId = itemId;
+    this.itemLoaded = false;
   },
 
   onShow() {
     if (!app.ensureLogin()) {
       return;
     }
-    if (!this.itemId || this.data.submitted) {
+    if (!this.itemId || this.data.submitted || this.itemLoaded) {
       return;
     }
     this.loadItem();
@@ -37,6 +38,7 @@ Page({
     try {
       const item = await api.getServiceItem(this.itemId);
       this.setData({ item, schema: item.formSchema || [] });
+      this.itemLoaded = true;
     } catch (error) {
       // 请求层已提示
     }
@@ -88,6 +90,7 @@ Page({
 
   again() {
     this.formData = {};
+    this.itemLoaded = false;
     this.setData({ submitted: null, formData: {}, schema: [] });
     this.loadItem();
   }
