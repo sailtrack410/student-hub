@@ -20,7 +20,7 @@
   </view>
 
   <!-- 统计 -->
-  <view class="stats card" wx:if="{{user}}">
+  <view class="stats card" wx:if="{{user && !isLogistics}}">
     <view class="stat" bindtap="goRequests">
       <text class="stat-num">{{processingCount}}</text>
       <text class="stat-label">进行中</text>
@@ -58,7 +58,7 @@
 
   <!-- 菜单 -->
   <view class="card section">
-    <view class="menu" bindtap="goRequests">
+    <view wx:if="{{!isLogistics}}" class="menu" bindtap="goRequests">
       <image class="menu-icon" src="/assets/icons/category/cat-affair.png" mode="aspectFit" />
       <text class="menu-text">我的申请</text>
       <text class="menu-arrow">›</text>

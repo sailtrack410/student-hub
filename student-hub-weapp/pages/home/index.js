@@ -10,22 +10,31 @@ Page({
     latestRequest: null,
     hotItems: [],
     quickServices: [],
-    scheduleBrief: ''
+    scheduleBrief: '',
+    isLogistics: false
   },
 
   onShow() {
     const loggedIn = app.isLoggedIn();
+    const user = app.globalData.user;
+    const isLogistics = Boolean(user && (user.identityType === 'LOGISTICS'
+      || (user.roles || []).indexOf('WORKER') >= 0));
     this.setData({
       loggedIn,
-      userName: loggedIn && app.globalData.user ? app.globalData.user.displayName : '同学'
+      userName: loggedIn && user ? user.displayName : '同学',
+      isLogistics
     });
     if (!loggedIn) {
       this.setData({ latestRequest: null, scheduleBrief: '' });
       return;
     }
-    this.loadLatestRequest();
     this.loadServices();
-    this.loadScheduleBrief();
+    if (isLogistics) {
+      this.setData({ latestRequest: null, scheduleBrief: '' });
+    } else {
+      this.loadLatestRequest();
+      this.loadScheduleBrief();
+    }
     this.refreshUnread();
   },
 

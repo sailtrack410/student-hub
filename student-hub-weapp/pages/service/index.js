@@ -22,8 +22,14 @@ Page({
     if (!app.ensureLogin()) {
       return;
     }
+    const isLogistics = directory.isLogisticsUser();
+    this.setData({ isLogistics });
     this.loadCatalog();
-    this.loadScheduleSummary();
+    if (!isLogistics) {
+      this.loadScheduleSummary();
+    } else {
+      this.setData({ scheduleCount: 0, scheduleSemesterName: '' });
+    }
   },
 
   /** 课表摘要：供顶部"我的课表"分组展示 */
@@ -45,8 +51,9 @@ Page({
   async loadCatalog() {
     try {
       const catalog = await directory.ensureCatalog();
-      const allItems = directory.flatten(catalog);
-      this.setData({ categories: catalog, allItems, loaded: true });
+      const visibleCatalog = directory.filterCatalogForUser(catalog);
+      const allItems = directory.flatten(visibleCatalog);
+      this.setData({ categories: visibleCatalog, allItems, loaded: true });
       this.rebuild();
     } catch (error) {
       this.setData({ loaded: true });
@@ -103,6 +110,9 @@ Page({
     const itemCode = event.currentTarget.dataset.code;
     const itemId = event.currentTarget.dataset.id;
     if (itemCode === 'SCHEDULE-VIEW') {
+      if (directory.isLogisticsUser()) {
+        return;
+      }
       if (!app.ensureLogin()) {
         return;
       }

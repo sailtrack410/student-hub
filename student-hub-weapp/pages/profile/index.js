@@ -21,6 +21,7 @@ const IDENTITY = {
 Page({
   data: {
     user: null,
+    isLogistics: false,
     identityText: '未认证',
     identityIcon: 'icon-student',
     avatarUrl: '',
@@ -37,12 +38,22 @@ Page({
     const user = app.isLoggedIn() ? app.globalData.user : null;
     if (user) {
       this.applyUser(user);
-      this.loadStats();
-      this.loadJwStatus();
+      const isLogistics = user.identityType === 'LOGISTICS' || (user.roles || []).indexOf('WORKER') >= 0;
+      if (isLogistics) {
+        this.setData({ processingCount: 0, completedCount: 0, unreadCount: app.globalData.unreadCount || 0 });
+      } else {
+        this.loadStats();
+      }
+      if (isLogistics) {
+        this.setData({ jwStatusText: '后勤账号', profileInfo: '' });
+      } else {
+        this.loadJwStatus();
+      }
       this.loadCommunityUnread();
     } else {
       this.setData({
         user: null,
+        isLogistics: false,
         processingCount: 0,
         completedCount: 0,
         unreadCount: app.globalData.unreadCount || 0,
@@ -67,6 +78,7 @@ Page({
     const identity = IDENTITY[user.identityType] || { text: '同学', icon: 'icon-student' };
     this.setData({
       user,
+      isLogistics: user.identityType === 'LOGISTICS' || (user.roles || []).indexOf('WORKER') >= 0,
       identityText: identity.text,
       identityIcon: identity.icon,
       isWorker: (user.roles || []).indexOf('WORKER') >= 0

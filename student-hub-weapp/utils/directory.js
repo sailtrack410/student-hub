@@ -9,6 +9,18 @@ const app = getApp();
 const PINNED_CODES = ['REPAIR-DORM', 'AFFAIR-LEAVE', 'CERT-ENROLL', 'AFFAIR-VENUE', 'GUIDE-CONSULT', 'REPAIR-PUBLIC'];
 // 首页常用服务展示的服务编码
 const HOT_CODES = ['REPAIR-DORM', 'AFFAIR-LEAVE', 'CERT-ENROLL', 'AFFAIR-VENUE'];
+const LOGISTICS_HIDDEN_CODES = ['AFFAIR-LEAVE', 'AFFAIR-VENUE', 'CERT-ENROLL', 'SCHEDULE-VIEW'];
+
+function isLogisticsUser() {
+  const user = app.globalData.user;
+  return Boolean(user && (user.identityType === 'LOGISTICS'
+    || (user.roles || []).indexOf('WORKER') >= 0));
+}
+
+function visibleItemsForUser(items) {
+  if (!isLogisticsUser()) return items;
+  return (items || []).filter((item) => LOGISTICS_HIDDEN_CODES.indexOf(item.itemCode) < 0);
+}
 
 /** 获取目录（带缓存），失败时抛出由调用方处理 */
 async function ensureCatalog() {
@@ -38,14 +50,14 @@ async function findItemByCode(code) {
 /** 首页快捷入口：按固定编码顺序返回目录中的服务项 */
 async function pinnedServices() {
   const catalog = await ensureCatalog();
-  const items = flatten(catalog);
+  const items = visibleItemsForUser(flatten(catalog));
   return PINNED_CODES.map((code) => items.find((item) => item.itemCode === code)).filter(Boolean);
 }
 
 /** 首页常用服务 */
 async function hotServices() {
   const catalog = await ensureCatalog();
-  const items = flatten(catalog);
+  const items = visibleItemsForUser(flatten(catalog));
   return HOT_CODES.map((code) => items.find((item) => item.itemCode === code)).filter(Boolean);
 }
 
@@ -66,4 +78,22 @@ function toHall() {
   wx.switchTab({ url: '/pages/service/index' });
 }
 
-module.exports = { ensureCatalog, flatten, findItemByCode, pinnedServices, hotServices, toItemDetail, toItemApply, toHall };
+function filterCatalogForUser(catalog) {
+  if (!isLogisticsUser()) return catalog || [];
+  return (catalog || []).map((category) => Object.assign({}, category, {
+    items: visibleItemsForUser(category.items || [])
+  })).filter((category) => category.items.length);
+}
+
+module.exports = {
+  ensureCatalog,
+  flatten,
+  findItemByCode,
+  pinnedServices,
+  hotServices,
+  filterCatalogForUser,
+  isLogisticsUser,
+  toItemDetail,
+  toItemApply,
+  toHall
+};

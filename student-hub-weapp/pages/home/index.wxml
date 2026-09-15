@@ -10,7 +10,7 @@
 
   <!-- 快捷入口：课表 + 六个服务 + 更多（数据与大厅同源） -->
   <view class="quick card">
-    <view class="quick-item" bindtap="goSchedule">
+    <view wx:if="{{!isLogistics}}" class="quick-item" bindtap="goSchedule">
       <view class="quick-icon quick-icon-schedule">
         <image src="/assets/icons/identity/icon-schedule.png" mode="aspectFit" />
       </view>
@@ -50,7 +50,7 @@
   </view>
 
   <!-- 我的申请进展 -->
-  <view class="section">
+  <view wx:if="{{!isLogistics}}" class="section">
     <view class="section-head">
       <text class="section-title">我的申请</text>
       <text class="section-more" bindtap="goRequestList">全部 ›</text>
