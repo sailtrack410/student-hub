@@ -12,6 +12,7 @@ import com.studenthub.modules.identity.mapper.UserMapper;
 import com.studenthub.modules.identity.mapper.UserRoleMapper;
 import com.studenthub.modules.identity.security.CurrentUserProvider;
 import com.studenthub.modules.identity.security.SecurityProperties;
+import com.studenthub.modules.identity.security.SessionClientPolicy;
 import com.studenthub.modules.identity.security.SessionStore;
 import com.studenthub.modules.identity.security.SessionToken;
 import com.studenthub.modules.identity.service.impl.IdentityAuthServiceImpl;
@@ -50,6 +51,8 @@ class IdentityAuthServiceImplTest {
     private SessionStore sessionStore;
     @Mock
     private SecurityProperties securityProperties;
+    @Mock
+    private SessionClientPolicy sessionClientPolicy;
     @Mock
     private CurrentUserProvider currentUserProvider;
     @Mock
