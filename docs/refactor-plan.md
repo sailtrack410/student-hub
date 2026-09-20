@@ -1,0 +1,89 @@
+# student-hub 未上线重构计划清单
+
+> 依据：[codebase-degradation-audit.md](./codebase-degradation-audit.md)（2026-10-17）
+> 前提：未上线，不留兼容期、不保留旧路径、删干净不挂账；每刀一刀切完，编译+测试+模块级提交。
+> 边界：不碰并行开发中的未提交文件（community/identity/admin 静态资源等交叠项列入刀 6 单独确认）；提交禁 `add -A`。
+
+---
+
+## 刀 1：状态机收权（F-01 + F-03 枚举 + F-05 局部）
+
+| # | 问题 | 动作 | 验收标准 |
+|---|---|---|---|
+| 1.1 | 管理端 review 绕过状态机手写 if/else（`AdminServiceRequestService.java:53-67`） | review 改调 `RequestTransitions.target()`，删手写迁移 | 全仓 grep `Status.valueOf` 只存在于状态机 parse 内；非法迁移抛 `REQUEST_STATE_INVALID` |
+| 1.2 | workorder 跨模块直改对方实体（`WorkOrderServiceImpl.java:553-579`） | 上移为 `ServiceRequestTransitionService.apply()`，workorder 只调用不直改 | WorkOrderServiceImpl 不再注入 `ServiceRequestMapper`/`RequestLogRecorder` |
+| 1.3 | 两条流转路径都不检查 updateById 返回行数，version 冲突静默 0 行仍记日志 | 统一只带变更字段实体 + 返回行数校验 | 构造 version 冲突验证：抛并发冲突异常、不记日志 |
+| 1.4 | 工单状态字符串/文案 3 处各写一份（dashboard/screen/文案 Map） | `WorkOrderTransitions.Status` 挂 `display` + `inProgressSet()`，三处全部引用枚举 | grep 无裸状态字符串数组；新增状态只改枚举一处 |
+| 1.5 | servicerequest Admin DTO 时间 String 降级（文件均未提交；执行前确认归属归属） | `AdminServiceRequestSummaryResponse` 时间字段改 `LocalDateTime` | 字段类型 LocalDateTime，无 `toString()` 降级 |
+| 1.6 | dashboard/screen 聚合口径分裂：近 7 天趋势一处循环 7×2 条 count、一处拉全量内存分桶；AI 会话统计按会话表当日 count vs 按消息内存过滤；dashboard 两处占位（`todayNewUsers=0`、`pendingLeavesDelta` 绝对值当增量）；复核新发现 `pendingLeaves` 统计 `status='PENDING'` 而 `RequestTransitions.Status` 无此值（疑似恒 0）；latestOrders 假时区转换 | 抽共用趋势聚合组件（或对齐 SQL 口径），AI 会话统计统一按会话表；删两处占位与假时区转换；pendingLeaves 口径对齐状态机（执行时先查 service_request 实际状态分布再定值） | dashboard 与 screen 同指标数字一致（刀 7 冒烟前提）；grep 无占位硬编码 |
+
+## 刀 2：AI 域收权（F-02 + F-08 枚举 + F-07 泄漏 + F-12）
+
+| # | 问题 | 动作 | 验收标准 |
+|---|---|---|---|
+| 2.1 | 绑定解析两套规则，controller 直连 mapper（`AdminAiStreamController.java:190-213`） | `resolveBinding` 下沉 `AiConfigService` 两个重载，**两种错误语义分开保留**：显式指定供应商=抛异常（NOT_FOUND/AI_NOT_CONFIGURED），按类型码走 default-model 表=返回 null 静默降级；删 controller 私有方法与 mapper 注入 | AdminAiStreamController 无 mapper 字段；streaming 兜底全仓仅 1 处 |
+| 2.2 | `chatStream` 旧 default 方法 + 4 参兼容构造器 | grep 全部调用点迁移后直接删除 | 全仓无旧调用点与兼容构造器；`mvn compile` 过 |
+| 2.3 | 模型类型三口径（2 正则 + 2 组常量） | 新建 `AiModelType` 枚举（6 值 + `runtimeSupported()`），正则与常量全删 | DTO 校验走枚举；两处常量消失 |
+| 2.4 | `httpClientCache` 换版本不清空（内存泄漏），与 `clientCache` 双缓存并存 | 合并为单一 RestClient 缓存（key=providerId:version），HttpClient 在 computeIfAbsent 内构建；embed 路径已借 `JdkClientHttpRequestFactory(httpClientFor(...))` 复用 NO_PROXY HttpClient，无需另改 | OpenAiCompatibleProvider 只剩一个缓存字段 |
+| 2.5 | NO_PROXY 直连逻辑 3 处重复；AI 路径超时来自运行时快照（动态），固定超时 bean 不适用 | `HttpClientConfig` 提供 `directHttpClientBuilder()` 工厂（内置 NO_PROXY）：AI 供应商路径用快照动态超时，admin 探活/语音上传两处用固定超时 | 两处固定超时调用点引用同一工厂；AI 路径超时仍随快照变化 |
+
+## 刀 3：API 按端分组（doc.html 分类）
+
+| # | 问题 | 动作 | 验收标准 |
+|---|---|---|---|
+| 3.1 | `/api/admin/ai-config` 与 `/api/admin/ai` 双前缀 | ai-config controller 并入 `/api/admin/ai/**`，前端同仓一次改完 | grep 无 `ai-config` 路径；admin 前端调用同步更新 |
+| 3.2 | OpenApiConfig 只建 admin/app/common 三组，`/api/public/**` 与 `/api/dev/**` 不在 doc.html 出现 | 补 public 分组；dev 分组仅非 prod profile 注册 | 启动后各 `/v3/api-docs` 分组 200；doc.html 分组齐全（prod 下无 dev） |
+| 3.3 | controller 无分组 tag，doc.html 归属不清 | 各 controller 补一行 `@Tag` 中文备注，按端归类 | doc.html 每个接口有中文 tag 且归属正确分组，无游离 default |
+
+现状基线（2026-10-17 扫描）：35 个 controller 已按五前缀归位——admin 12、app 10、common 7（含 auth×4）、public 2、dev 3。
+
+## 刀 4：OAuth 基类（F-04，趁 qq 未提交）
+
+| # | 问题 | 动作 | 验收标准 |
+|---|---|---|---|
+| 4.1 | qq 逐行照抄 wechat（qq 目录 untracked） | 抽 `AbstractOAuthIdentityProvider` 模板方法，子类只留 baseUrl/端点/JSONP 差异 | 两 Provider 各 ≤60 行且无重复 HTTP/SHA 逻辑；qq 随基类首次一起提交 |
+| 4.2 | SHA-256-hex 4 份复制；`SecureTokenSupport` 在 identity 包且包私有，integration 引用会反向依赖 | 新建 `common/util/Digests.sha256Hex()`，`SecureTokenSupport.hash` 转调它，4 处全部指向 common | 全仓 SHA-256-hex 实现仅 Digests 一处；integration 无 identity 包导入 |
+| 4.3 | 异常收敛模板 6 处同形 | 抽 `IntegrationExceptions.wrap()` | 6 处改单行调用 |
+
+## 刀 5：common 收尾（F-06/F-09/F-10/F-11 + 零散）
+
+| # | 问题 | 动作 | 验收标准 |
+|---|---|---|---|
+| 5.1 | 分页默认值 8 份复制；7 个 DTO 全是 record 不能继承类 | `common/persistence/PageQuery` **接口 + default 方法**（`pageNumOrDefault()/pageSizeOrDefault()`），record 组件访问器自动实现，7 个 DTO 加 `implements PageQuery` 并删自有方法 | 7 DTO 无各自 `xxxOrDefault` 方法；`mvn compile` 过 |
+| 5.2 | 工具函数复制群（parseIds×5 等） | 收敛 `JsonIds`/`PhoneNumbers`/`OrderNoGenerator` | 对应私有方法删除 |
+| 5.3 | 6 处冗余 `@JsonSerialize` 与 JacksonConfig 全局配置重复 | 直接删 | Long 全局序列化为 String 验证通过 |
+| 5.4 | `WorkOrderDetailResponse` 无 from()，26 参手拼 | 补 `from()`，service 改调 | service 无 26 参构造调用 |
+| 5.5 | `WechatPhoneNumberClient` 硬编码超时与域名 | 改用 `properties` 配置 | grep 无硬编码 `api.weixin.qq.com` |
+| 5.6 | `UserRoleEntity` 手写审计字段绕过 BaseEntity；`sys_user_role` 表（V1）只有 created_at/created_by，BaseEntity 另有 updatedAt/updatedBy/deleted/@Version version 四映射字段，直接继承会 SQL 报错 | **前置**：新增 Flyway 迁移为 sys_user_role 补 updated_at/updated_by/deleted/version 四列（NOT NULL 给默认值）；实体改继承 BaseEntity | 迁移已应用；user_role 增删改走通；审计字段自动填充生效 |
+
+## 刀 6：交叠项（与并行开发未提交改动重叠，动手前单独确认）
+
+- community/evaluation 两个 Admin DTO 时间 String→LocalDateTime（交叠 community 改动）
+- 注：ai-config 前端路径联动已并入 3.1 一条执行，此处不再单列
+
+## 刀 7：终验与提交
+
+- 全量 `mvn compile` + 测试
+- 冒烟：管理端 review 一单走状态机、工单流转、AI 管理流测试流、dashboard/screen 同指标对数
+- 提交按刀分批，只含本清单改动的文件
+
+---
+
+## 明确不做（判定为可接受重复，勿再建议）
+
+- SessionStore（identity）与 JwSessionStore（jwauth）不合并——键型/加密/续期/索引全不同
+- RequestTransitions 与 WorkOrderTransitions 两张状态表不合并——表内容不同，仅修调用纪律
+- ProtocolCodec 不抽——3 种协议集中在一个类是可接受临时态，挂账等第 4 种协议出现
+- devtool 三个 `/api/dev/*` 端点保留本体，仅做 profile 隔离
+
+## 进度
+
+- [ ] 刀 1 状态机收权（含 1.6 聚合口径）
+- [ ] 刀 2 AI 域收权
+- [ ] 刀 3 API 按端分组（含 ai-config 前端联动）
+- [ ] 刀 4 OAuth 基类
+- [ ] 刀 5 common 收尾
+- [ ] 刀 6 交叠项（待确认，已并入 3.1 的除外）
+- [ ] 刀 7 终验与提交
+
+> 修订记录：2026-10-17 按代码复核并入六项修正——5.1 改 record 可实现的接口方案（R-1）；5.6 补 Flyway 迁移前置（R-2）；2.5 固定 bean 改 builder 工厂，2.4 注明 embed 已借 NO_PROXY HttpClient 无需另改、仅合并双缓存（R-3 二次核验半否决「embed 漏代理」：RestClient 经 `JdkClientHttpRequestFactory(httpClientFor(...))` 构建，底层已直连）；4.2 改 common/util/Digests 保依赖方向（R-4）；ai-config 前端联动并入 3.1（R-5）；补 1.6 聚合口径统一（R-6）。复核另确认：分页 7 DTO 全为 record、sys_user_role 仅 4 审计列、dashboard pendingLeaves 查询的 `PENDING` 状态在 RequestTransitions.Status 中不存在（列入 1.6）。
