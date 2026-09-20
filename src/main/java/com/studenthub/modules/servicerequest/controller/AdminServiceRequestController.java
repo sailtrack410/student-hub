@@ -1,0 +1,45 @@
+package com.studenthub.modules.servicerequest.controller;
+
+import com.studenthub.common.PageResult;
+import com.studenthub.common.Result;
+import com.studenthub.modules.identity.security.CurrentUserProvider;
+import com.studenthub.modules.servicerequest.controller.dto.AdminReviewRequest;
+import com.studenthub.modules.servicerequest.controller.dto.AdminServiceRequestPageQuery;
+import com.studenthub.modules.servicerequest.controller.dto.AdminServiceRequestSummaryResponse;
+import com.studenthub.modules.servicerequest.service.AdminServiceRequestService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/api/admin/service-requests")
+@Tag(name = "管理端-服务申请审批")
+@RequiredArgsConstructor
+@PreAuthorize("hasAuthority('platform:all') or hasAuthority('catalog:manage') or hasAuthority('work-order:dispatch')")
+public class AdminServiceRequestController {
+
+    private final AdminServiceRequestService adminServiceRequestService;
+    private final CurrentUserProvider currentUserProvider;
+
+    @GetMapping
+    @Operation(summary = "分页查询服务申请", description = "全平台数据范围，可按状态过滤。", operationId = "pageAdminServiceRequests")
+    public Result<PageResult<AdminServiceRequestSummaryResponse>> page(AdminServiceRequestPageQuery query) {
+        return Result.success(adminServiceRequestService.page(query));
+    }
+
+    @PostMapping("/{requestId}/review")
+    @Operation(summary = "审批服务申请", description = "action=APPROVE 通过（转处理中）；action=REJECT 驳回（comment 为驳回原因）。",
+            operationId = "reviewAdminServiceRequest")
+    public Result<Void> review(@PathVariable Long requestId, @RequestBody @Valid AdminReviewRequest request) {
+        adminServiceRequestService.review(currentUserProvider.requireCurrentUser(), requestId, request);
+        return Result.success();
+    }
+}
