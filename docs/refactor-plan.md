@@ -78,7 +78,7 @@
 
 ## 进度
 
-- [ ] 刀 1 状态机收权（含 1.6 聚合口径）
+- [x] 刀 1 状态机收权（含 1.6 聚合口径）——2026-10-17 完成，提交 538deb7 / b923044 / de29401；1.6 附注：①service_request status 实际分布因数据库连接被掐未验证，待跑 `SELECT status, COUNT(*) FROM service_request WHERE deleted=0 GROUP BY status` 复核；②V17 迁移脚本 H2 不兼容致集成测试 ServiceRequestFlowIntegrationTest 无法启动（存量问题，与刀 1 无关，建议归入刀 7 前置修复）；③evaluation 假时区转换按边界留给刀 6
 - [ ] 刀 2 AI 域收权
 - [ ] 刀 3 API 按端分组（含 ai-config 前端联动）
 - [ ] 刀 4 OAuth 基类

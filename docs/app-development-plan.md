@@ -17,13 +17,13 @@
 - [x] **P1.5 控制器**：`POST /api/common/auth/qq-login`，body `{ accessToken, openId }`（openId 仅做一致性比对用），返回复用 `LoginResponse`。
 - [x] **P1.6 配套**：`SecurityConfig` 白名单加 `/api/common/auth/qq-login`；`ErrorCode` 加 `QQ_LOGIN_FAILED` / `QQ_NOT_CONFIGURED`。
 - [x] **P1.7 验收**：`.env` 不配 QQ mode → mock 生效；curl 两次调用第二次 `isNewUser=false`、token 可访问 `/api/common/auth/me`。
-  - ⚠️ P1 产物（`integration/qq/`、V39、SecurityConfig/ErrorCode 等）截至 2026-10-17 仍未提交 git——P2.1 第②步落袋。
+  - ✅ P1 产物已落袋（2026-10-17，提交 e53703a feat / b2be25a 提审材料），刀 4 窗口期前提已关闭。
 
 ## P2 App 工程删除重建（SmartCampus/app）
 
 > 用户决策：现有 App 项目全部删除。删除前按项目惯例先 git 落袋，防误删不可回退。
 
-- [ ] **P2.1 落袋（两侧）**：①SmartCampus 仓库当前未提交改动先提交，确认 `app/` 已在 git 历史里；②student-hub 侧 P1 产物分批提交（`integration/qq/`、`V39__add_qq_identity_fields.sql`、SecurityConfig/ErrorCode/IdentityAuth 等改动现全为 untracked/未提交混在工作区）——此步同时关闭重构计划刀 4 的窗口期前提（先落袋再动刀 4）。
+- [x] **P2.1 落袋（两侧）**（2026-10-17 完成）：①SmartCampus 侧 app/ Flutter 过渡态已提交（66a10f9，uni-app 归档至 `app-uniapp-legacy/` 含玻璃配方 README，`app/` 已在 git 历史可回退）；②student-hub 侧 P1 产物已分批提交（e53703a QQ 后端 / b2be25a 提审材料）——刀 4 前提已解除。
 - [ ] **P2.2 删除 `SmartCampus/app/`**，保留参考物：`README.md`（玻璃导航配方 v2 记录）、`docs/`。
 - [ ] **P2.3 重建**：`flutter create --platforms android studenthub_app`（仅 Android）。⚠️ 默认产出 `com.example.studenthub_app`，`--org` 也只能钉前两段（如 `com.studenthub` → `com.studenthub.studenthub_app`）——最终 applicationId 须手改三处：`build.gradle` 的 `applicationId` 与 `namespace`、Kotlin 包路径（`MainActivity` 所在目录）。**applicationId 目标值见 P6.1（`com.studenthub.app` 或核实后的包名，与平台信息核对一致）**。
 - [ ] **P2.4 基础件移植**（从 git 历史抄，不重写）：`theme/glass.dart` 液态玻璃配方、`widgets/glass_nav.dart` 底部玻璃导航、`widgets/frosted_panel.dart`、API 客户端骨架（token 自动带 Bearer + 401 处理，但**接口路径按 student-hub 重写**）。
