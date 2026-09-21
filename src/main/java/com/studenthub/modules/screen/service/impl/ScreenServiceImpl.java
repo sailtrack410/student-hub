@@ -35,6 +35,7 @@ import com.studenthub.modules.servicerequest.mapper.ServiceRequestLogMapper;
 import com.studenthub.modules.servicerequest.mapper.ServiceRequestMapper;
 import com.studenthub.modules.workorder.entity.WorkOrderEntity;
 import com.studenthub.modules.workorder.mapper.WorkOrderMapper;
+import com.studenthub.modules.workorder.statemachine.WorkOrderTransitions;
 import com.studenthub.service.AiChatService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -101,14 +102,13 @@ public class ScreenServiceImpl implements ScreenService {
 
     private ScreenOverviewResponse buildOverview() {
         LocalDateTime todayStart = LocalDate.now().atStartOfDay();
-        LocalDateTime weekStart = todayStart.minusDays(6);
 
         return new ScreenOverviewResponse(
                 LocalDateTime.now().format(DT),
                 userStats(todayStart),
                 requestStats(todayStart),
                 orderStats(todayStart),
-                weeklyTrend(weekStart, todayStart),
+                weeklyTrend(todayStart),
                 topServices(),
                 communityStats(),
                 aiStats(todayStart),
@@ -156,44 +156,26 @@ public class ScreenServiceImpl implements ScreenService {
                 if (order.getCompletedAt() != null && order.getCompletedAt().isAfter(todayStart)) {
                     completedToday++;
                 }
-            } else if ("PENDING_DISPATCH".equals(status) || "ASSIGNED".equals(status)
-                    || "PROCESSING".equals(status) || "ONSITE_PHOTO_RECORDED".equals(status)
-                    || "PENDING_CONFIRMATION".equals(status)) {
+            } else if (WorkOrderTransitions.inProgressSet().contains(status)) {
                 processing++;
             }
         }
         return new ScreenOverviewResponse.OrderStats(orders.size(), completed, processing, completedToday);
     }
 
-    private List<ScreenOverviewResponse.TrendPoint> weeklyTrend(LocalDateTime weekStart, LocalDateTime todayStart) {
-        List<ServiceRequestEntity> requests = requestMapper.selectList(new LambdaQueryWrapper<ServiceRequestEntity>()
-                .select(ServiceRequestEntity::getId, ServiceRequestEntity::getSubmittedAt,
-                        ServiceRequestEntity::getCreatedAt)
-                .ge(ServiceRequestEntity::getCreatedAt, weekStart));
-        List<WorkOrderEntity> orders = workOrderMapper.selectList(new LambdaQueryWrapper<WorkOrderEntity>()
-                .select(WorkOrderEntity::getId, WorkOrderEntity::getCompletedAt)
-                .ge(WorkOrderEntity::getCompletedAt, weekStart));
-
-        Map<LocalDate, long[]> byDay = new HashMap<>();
-        for (ServiceRequestEntity request : requests) {
-            LocalDateTime mark = request.getSubmittedAt() != null
-                    ? request.getSubmittedAt() : request.getCreatedAt();
-            if (mark != null && !mark.isBefore(weekStart)) {
-                byDay.computeIfAbsent(mark.toLocalDate(), key -> new long[2])[0]++;
-            }
-        }
-        for (WorkOrderEntity order : orders) {
-            if (order.getCompletedAt() != null && !order.getCompletedAt().isBefore(weekStart)) {
-                byDay.computeIfAbsent(order.getCompletedAt().toLocalDate(), key -> new long[2])[1]++;
-            }
-        }
-
+    /** 近 7 天趋势：与 DashboardService 同口径（按日 count SQL 循环，工作台/大屏数字一致） */
+    private List<ScreenOverviewResponse.TrendPoint> weeklyTrend(LocalDateTime todayStart) {
         List<ScreenOverviewResponse.TrendPoint> trend = new ArrayList<>();
-        for (int i = 0; i < 7; i++) {
-            LocalDate date = weekStart.toLocalDate().plusDays(i);
-            long[] counts = byDay.getOrDefault(date, new long[2]);
-            trend.add(new ScreenOverviewResponse.TrendPoint(date.format(DAY),
-                    WEEKDAYS[date.getDayOfWeek().getValue() - 1], counts[0], counts[1]));
+        for (int i = 6; i >= 0; i--) {
+            LocalDate day = todayStart.toLocalDate().minusDays(i);
+            LocalDateTime start = day.atStartOfDay();
+            LocalDateTime end = start.plusDays(1);
+            long created = requestMapper.selectCount(new LambdaQueryWrapper<ServiceRequestEntity>()
+                    .ge(ServiceRequestEntity::getCreatedAt, start).lt(ServiceRequestEntity::getCreatedAt, end));
+            long resolved = workOrderMapper.selectCount(new LambdaQueryWrapper<WorkOrderEntity>()
+                    .ge(WorkOrderEntity::getCompletedAt, start).lt(WorkOrderEntity::getCompletedAt, end));
+            trend.add(new ScreenOverviewResponse.TrendPoint(day.format(DAY),
+                    WEEKDAYS[day.getDayOfWeek().getValue() - 1], created, resolved));
         }
         return trend;
     }
@@ -368,17 +350,12 @@ public class ScreenServiceImpl implements ScreenService {
         if (status == null) {
             return "未知";
         }
-        return switch (status) {
-            case "PENDING_DISPATCH" -> "待派单";
-            case "ASSIGNED" -> "已派单";
-            case "PROCESSING" -> "处理中";
-            case "ONSITE_PHOTO_RECORDED" -> "现场处理中";
-            case "PENDING_CONFIRMATION" -> "待确认";
-            case "COMPLETED" -> "已完成";
-            case "REJECTED" -> "未受理";
-            case "CANCELLED" -> "已撤销";
-            default -> status;
-        };
+        try {
+            return WorkOrderTransitions.parse(status).getDisplay();
+        } catch (BusinessException unknownStatus) {
+            // 库中存在状态机未覆盖的历史值时退回原文案
+            return status;
+        }
     }
 
     @Override

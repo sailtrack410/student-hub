@@ -16,6 +16,7 @@ import com.studenthub.modules.notification.service.dto.NotificationSendCommand;
 import com.studenthub.modules.servicerequest.entity.ServiceRequestEntity;
 import com.studenthub.modules.servicerequest.mapper.ServiceRequestMapper;
 import com.studenthub.modules.servicerequest.service.RequestLogRecorder;
+import com.studenthub.modules.servicerequest.service.ServiceRequestTransitionService;
 import com.studenthub.modules.servicerequest.statemachine.RequestTransitions;
 import com.studenthub.modules.servicecatalog.entity.ServiceItemEntity;
 import com.studenthub.modules.workorder.controller.dto.AssignWorkOrderRequest;
@@ -55,6 +56,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
     private final com.studenthub.modules.servicecatalog.mapper.ServiceItemMapper serviceItemMapper;
     private final com.studenthub.modules.file.service.FileStorageService fileStorageService;
     private final RequestLogRecorder requestLogRecorder;
+    private final ServiceRequestTransitionService requestTransitionService;
     private final NotificationService notificationService;
     private final DispatcherScopeResolver dispatcherScopeResolver;
     private final ObjectMapper objectMapper;
@@ -107,8 +109,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         update.setVersion(order.getVersion());
         workOrderMapper.updateById(update);
 
-        TransitionResult transition = transitionRequest(order.getRequestId(),
-                RequestTransitions.Action.DISPATCH, RequestTransitions.Status.PROCESSING);
+        TransitionResult transition = toResult(requestTransitionService.apply(order.getRequestId(),
+                RequestTransitions.Action.DISPATCH, null, null));
 
         requestLogRecorder.record(order.getRequestId(), order.getId(), RequestTransitions.Action.DISPATCH,
                 transition.from(), transition.to(), operator.userId(), operator.displayName(), request.comment());
@@ -138,8 +140,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         update.setVersion(order.getVersion());
         workOrderMapper.updateById(update);
 
-        TransitionResult transition = transitionRequest(order.getRequestId(),
-                RequestTransitions.Action.REJECT, RequestTransitions.Status.REJECTED, reason, null);
+        TransitionResult transition = toResult(requestTransitionService.apply(order.getRequestId(),
+                RequestTransitions.Action.REJECT, reason, null));
 
         requestLogRecorder.record(order.getRequestId(), order.getId(), RequestTransitions.Action.REJECT,
                 transition.from(), transition.to(), operator.userId(), operator.displayName(), reason);
@@ -198,8 +200,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         update.setVersion(order.getVersion());
         workOrderMapper.updateById(update);
 
-        TransitionResult transition = transitionRequest(order.getRequestId(),
-                RequestTransitions.Action.COMPLETE, RequestTransitions.Status.COMPLETED, null, LocalDateTime.now());
+        TransitionResult transition = toResult(requestTransitionService.apply(order.getRequestId(),
+                RequestTransitions.Action.COMPLETE, null, LocalDateTime.now()));
 
         requestLogRecorder.record(order.getRequestId(), order.getId(), RequestTransitions.Action.COMPLETE,
                 transition.from(), transition.to(), worker.userId(), worker.displayName(), remark);
@@ -277,8 +279,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         workOrderMapper.updateById(update);
         ServiceRequestEntity serviceRequest = serviceRequestMapper.selectById(order.getRequestId());
         if (serviceRequest != null) {
-            transitionRequest(serviceRequest.getId(), RequestTransitions.Action.COMPLETE,
-                    RequestTransitions.Status.COMPLETED);
+            requestTransitionService.apply(serviceRequest.getId(), RequestTransitions.Action.COMPLETE,
+                    null, LocalDateTime.now());
             requestLogRecorder.record(serviceRequest.getId(), order.getId(), RequestTransitions.Action.COMPLETE,
                     RequestTransitions.Status.PROCESSING, RequestTransitions.Status.COMPLETED,
                     requester.userId(), requester.displayName(), "报修人确认完成");
@@ -550,32 +552,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
     /**
      * 校验并推进关联申请状态；changed=false 表示状态未变化（如重复派单）。
      */
-    private TransitionResult transitionRequest(Long requestId, RequestTransitions.Action action,
-                                               RequestTransitions.Status target, String reason,
-                                               LocalDateTime completedAt) {
-        ServiceRequestEntity request = serviceRequestMapper.selectById(requestId);
-        if (request == null) {
-            return new TransitionResult(null, null, target, false);
-        }
-        RequestTransitions.Status from = RequestTransitions.parse(request.getStatus());
-        if (from == target) {
-            // 重复派单等幂等场景：状态未变化，仅记录时间线
-            return new TransitionResult(request, from, target, false);
-        }
-        RequestTransitions.Status to = RequestTransitions.target(action, from);
-        ServiceRequestEntity update = new ServiceRequestEntity();
-        update.setId(request.getId());
-        update.setStatus(to.name());
-        update.setRejectReason(reason);
-        update.setCompletedAt(completedAt);
-        update.setVersion(request.getVersion());
-        serviceRequestMapper.updateById(update);
-        return new TransitionResult(request, from, to, true);
-    }
-
-    private TransitionResult transitionRequest(Long requestId, RequestTransitions.Action action,
-                                               RequestTransitions.Status target) {
-        return transitionRequest(requestId, action, target, null, null);
+    private TransitionResult toResult(ServiceRequestTransitionService.TransitionResult result) {
+        return new TransitionResult(result.request(), result.from(), result.to(), result.changed());
     }
 
     private record TransitionResult(ServiceRequestEntity request, RequestTransitions.Status from,
