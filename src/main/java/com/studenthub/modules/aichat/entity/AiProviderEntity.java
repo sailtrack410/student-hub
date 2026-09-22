@@ -16,7 +16,18 @@ public class AiProviderEntity {
 
     private String providerCode;
     private String providerName;
+
+    /** 供应商图标标识（lobe-icons 名，如 openai / anthropic / deepseek） */
+    private String icon;
+
     private String baseUrl;
+
+    /** 调用协议：OPENAI_CHAT / ANTHROPIC_MESSAGES / OPENAI_RESPONSES */
+    private String protocol;
+
+    /** 支持流式输出（SSE） */
+    private Boolean streaming;
+
     private String apiKey;
     private Boolean enabled;
     private LocalDateTime lastCheckAt;
