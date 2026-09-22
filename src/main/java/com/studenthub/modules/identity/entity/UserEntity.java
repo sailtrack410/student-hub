@@ -28,6 +28,8 @@ public class UserEntity extends BaseEntity {
     private String gender;
     private String status;
     private String wechatOpenId;
+    private String qqOpenId;
+    private String qqUnionId;
     private String identityType;
     private String authorizationStatus;
     private LocalDateTime lastLoginAt;

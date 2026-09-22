@@ -14,6 +14,9 @@ public interface UserMapper extends BaseMapper<UserEntity> {
     @Select("SELECT * FROM sys_user WHERE wechat_open_id = #{wechatOpenId} AND deleted = 0 LIMIT 1")
     UserEntity findByWechatOpenId(@Param("wechatOpenId") String wechatOpenId);
 
+    @Select("SELECT * FROM sys_user WHERE qq_open_id = #{qqOpenId} AND deleted = 0 LIMIT 1")
+    UserEntity findByQqOpenId(@Param("qqOpenId") String qqOpenId);
+
     @Select("""
             SELECT DISTINCT u.id AS userId, u.username, u.display_name AS displayName, u.phone
               FROM sys_user u
