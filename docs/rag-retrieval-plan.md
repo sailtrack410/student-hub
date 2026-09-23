@@ -4,13 +4,15 @@
 
 ## 〇、实测确认的环境约束（2026-09-15，已据此调整方案）
 
-在真实 RAG 库（`***REDACTED-HOST***:5435`，PostgreSQL 18.6 Alpine 容器）实测：
+在真实 RAG 库（`***REDACTED-HOST***:5435`，PostgreSQL 18.6 Alpine 容器）实测，并 SSH 查证容器层：
 
-| 扩展 | 可用性 | 影响 |
+| 扩展 | 当前可用性 | 影响 |
 |---|---|---|
-| `pgvector` | ❌ **不可用**（`pg_available_extensions` 无此项，扩展二进制未随镜像提供） | **无法使用 ANN/HNSW 向量索引**，向量只能精确扫描 |
-| `pg_bigm` | ❌ 不可用 | 中文词法改用 `pg_trgm` 三元组 |
+| `pgvector` |  **当前未安装**——容器用的是官方 `postgres:18.6-alpine` 镜像，该镜像**本身不含 pgvector**，需换 `pgvector/pgvector:pg18` 类镜像或自行编译安装 | 暂**无法使用 ANN/HNSW 索引**，向量走精确扫描；装上后可切换 |
+| `pg_bigm` | ❌ 未安装（同样属第三方扩展） | 中文词法改用 `pg_trgm` 三元组 |
 | `pg_trgm` | ✅ 可用（已创建并建 GIN 索引，`EXPLAIN` 确认走 `Bitmap Index Scan`） | 中文子串匹配可走索引 |
+
+> 注意区分：**"装不上"与"还没装"是两回事**。pgvector 在本环境是可安装的（用户具备超级权限），只是官方镜像不带、需要另行安装。同一台服务器上 `keyhunter-postgres-1`（`postgres:16-alpine`，仅监听 127.0.0.1:5432）同样未装。
 
 **并且现有召回的病根已被实测复现**：`ai_knowledge_chunk.search_vector` 是 `to_tsvector('simple', content)` 生成列，41 道评测题**命中 0 行**，候选池实际退化为无排序的任意 N 条。
 
