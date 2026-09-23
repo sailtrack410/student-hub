@@ -3,6 +3,7 @@ package com.studenthub.modules.community.controller;
 import com.studenthub.common.PageResult;
 import com.studenthub.common.Result;
 import com.studenthub.modules.community.controller.dto.*;
+import com.studenthub.modules.community.service.CommunityModerationService;
 import com.studenthub.modules.community.service.CommunityService;
 import com.studenthub.modules.community.service.DirectMessageService;
 import com.studenthub.modules.notification.service.NotificationService;
@@ -21,6 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AppCommunityController {
     private final CommunityService communityService;
+    private final CommunityModerationService communityModerationService;
     private final CurrentUserProvider currentUserProvider;
     private final DirectMessageService directMessageService;
     private final NotificationService notificationService;
@@ -88,6 +90,13 @@ public class AppCommunityController {
     @Operation(summary = "删除自己的评论", operationId = "deleteCommunityComment")
     public Result<Void> deleteComment(@PathVariable Long commentId) {
         communityService.deleteComment(currentUserProvider.requireCurrentUser(), commentId);
+        return Result.success(null);
+    }
+
+    @PostMapping("/reports")
+    @Operation(summary = "举报社区内容或用户", description = "支持举报帖子、评论、私信与用户；同一对象重复举报与每日次数超限会被拦截，举报时服务端保存内容快照以便追溯。", operationId = "createCommunityReport")
+    public Result<Void> report(@RequestBody @Valid CreateCommunityReportRequest request) {
+        communityModerationService.submitReport(currentUserProvider.requireCurrentUser(), request);
         return Result.success(null);
     }
 

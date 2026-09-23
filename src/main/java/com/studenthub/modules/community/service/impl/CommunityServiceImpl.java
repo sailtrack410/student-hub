@@ -21,6 +21,7 @@ import com.studenthub.modules.community.mapper.CommunityCommentLikeMapper;
 import com.studenthub.modules.community.entity.CommunityTopicEntity;
 import com.studenthub.modules.community.entity.CommunityPostLikeEntity;
 import com.studenthub.modules.community.entity.CommunityCommentLikeEntity;
+import com.studenthub.modules.community.service.CommunityModerationService;
 import com.studenthub.modules.community.service.CommunityService;
 import com.studenthub.modules.file.entity.FileStorageEntity;
 import com.studenthub.modules.file.mapper.FileStorageMapper;
@@ -58,6 +59,7 @@ public class CommunityServiceImpl implements CommunityService {
     private final ObjectMapper objectMapper;
     private final JwBindingMapper jwBindingMapper;
     private final NotificationService notificationService;
+    private final CommunityModerationService communityModerationService;
 
     @Override
     public List<CommunitySectionResponse> sections(Long campusId) {
@@ -114,6 +116,7 @@ public class CommunityServiceImpl implements CommunityService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public CommunityPostResponse publish(AuthenticatedUser user, CreateCommunityPostRequest request) {
+        communityModerationService.requireNotMuted(user.userId());
         CommunitySectionEntity section = sectionMapper.selectOne(new LambdaQueryWrapper<CommunitySectionEntity>()
                 .eq(CommunitySectionEntity::getId, request.sectionId())
                 .eq(CommunitySectionEntity::getCampusId, user.campusId())
@@ -144,6 +147,7 @@ public class CommunityServiceImpl implements CommunityService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public CommunityCommentResponse comment(AuthenticatedUser user, Long postId, CreateCommunityCommentRequest request) {
+        communityModerationService.requireNotMuted(user.userId());
         CommunityPostEntity post = requirePost(user, postId);
         if (request.parentCommentId() != null) {
             CommunityCommentEntity parent = commentMapper.selectById(request.parentCommentId());
