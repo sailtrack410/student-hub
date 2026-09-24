@@ -457,8 +457,8 @@ public class CommunityModerationServiceImpl implements CommunityModerationServic
                 report.getStatus(),
                 report.getHandleNote(),
                 report.getHandledBy(),
-                report.getHandledAt() == null ? null : report.getHandledAt().toString(),
-                report.getCreatedAt() == null ? null : report.getCreatedAt().toString());
+                report.getHandledAt(),
+                report.getCreatedAt());
     }
 
     private TargetBrief resolveTargetBrief(CommunityReportEntity report) {
