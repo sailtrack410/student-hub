@@ -3,6 +3,7 @@ package com.studenthub.integration.wechat;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studenthub.common.ErrorCode;
+import com.studenthub.common.util.IntegrationExceptions;
 import com.studenthub.exception.BusinessException;
 import com.studenthub.integration.wechat.WechatProperties;
 import lombok.extern.slf4j.Slf4j;
@@ -27,9 +28,7 @@ public class WechatPhoneNumberClient {
 
     private final WechatProperties properties;
     private final ObjectMapper objectMapper;
-    private final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(5))
-            .build();
+    private final HttpClient httpClient;
 
     private volatile String cachedAccessToken;
     private volatile Instant tokenExpiresAt = Instant.EPOCH;
@@ -37,14 +36,17 @@ public class WechatPhoneNumberClient {
     public WechatPhoneNumberClient(WechatProperties properties, ObjectMapper objectMapper) {
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(properties.getConnectTimeoutSeconds()))
+                .build();
     }
 
     /** 用 getPhoneNumber 事件 code 换取用户绑定手机号 */
     public String fetchPhone(String jsCode) {
-        try {
+        return IntegrationExceptions.wrap(() -> {
             String accessToken = accessToken();
             HttpRequest request = HttpRequest.newBuilder(URI.create(
-                            "https://api.weixin.qq.com/wa_business/getPhoneNumber?access_token=" + accessToken))
+                            properties.getApiBaseUrl() + "/wa_business/getPhoneNumber?access_token=" + accessToken))
                     .timeout(Duration.ofSeconds(properties.getReadTimeoutSeconds()))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString("{\"code\":\"" + jsCode + "\"}"))
@@ -61,22 +63,17 @@ public class WechatPhoneNumberClient {
                 throw new BusinessException(ErrorCode.PHONE_EXCHANGE_FAILED);
             }
             return phone;
-        } catch (BusinessException exception) {
-            throw exception;
-        } catch (Exception exception) {
-            log.error("微信手机号接口异常", exception);
-            throw new BusinessException(ErrorCode.PHONE_EXCHANGE_FAILED);
-        }
+        }, ErrorCode.PHONE_EXCHANGE_FAILED, "微信手机号接口异常");
     }
 
     private String accessToken() {
         if (cachedAccessToken != null && Instant.now().isBefore(tokenExpiresAt)) {
             return cachedAccessToken;
         }
-        try {
+        return IntegrationExceptions.wrap(() -> {
             HttpResponse<String> response = httpClient.send(
                     HttpRequest.newBuilder(URI.create(
-                                    "https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential"
+                                    properties.getApiBaseUrl() + "/cgi-bin/token?grant_type=client_credential"
                                             + "&appid=" + properties.getAppId()
                                             + "&secret=" + properties.getAppSecret()))
                             .timeout(Duration.ofSeconds(properties.getReadTimeoutSeconds()))
@@ -92,11 +89,6 @@ public class WechatPhoneNumberClient {
             cachedAccessToken = token;
             tokenExpiresAt = Instant.now().plusSeconds(Math.max(300, body.path("expires_in").asLong(7200) - 300));
             return token;
-        } catch (BusinessException exception) {
-            throw exception;
-        } catch (Exception exception) {
-            log.error("微信 access_token 获取异常", exception);
-            throw new BusinessException(ErrorCode.PHONE_EXCHANGE_FAILED);
-        }
+        }, ErrorCode.PHONE_EXCHANGE_FAILED, "微信 access_token 获取异常");
     }
 }
