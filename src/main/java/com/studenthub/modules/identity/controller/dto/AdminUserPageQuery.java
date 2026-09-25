@@ -1,5 +1,6 @@
 package com.studenthub.modules.identity.controller.dto;
 
+import com.studenthub.common.persistence.PageQuery;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -12,13 +13,5 @@ public record AdminUserPageQuery(
         @Schema(description = "账号状态过滤：ENABLED/DISABLED", nullable = true) String status,
         @Schema(description = "身份类型过滤：STUDENT/TEACHER/LOGISTICS/ADMIN", nullable = true) String identityType,
         @Schema(description = "授权状态过滤：BASIC/PENDING/AUTHORIZED/REJECTED", nullable = true) String authorizationStatus,
-        @Schema(description = "按角色 ID 过滤", nullable = true) Long roleId) {
-
-    public int pageNumOrDefault() {
-        return pageNum == null ? 1 : pageNum;
-    }
-
-    public int pageSizeOrDefault() {
-        return pageSize == null ? 10 : pageSize;
-    }
+        @Schema(description = "按角色 ID 过滤", nullable = true) Long roleId) implements PageQuery {
 }
