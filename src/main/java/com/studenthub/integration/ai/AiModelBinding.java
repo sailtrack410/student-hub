@@ -22,11 +22,6 @@ public record AiModelBinding(
     public static final String PROTOCOL_ANTHROPIC_MESSAGES = "ANTHROPIC_MESSAGES";
     public static final String PROTOCOL_OPENAI_RESPONSES = "OPENAI_RESPONSES";
 
-    /** 兼容旧调用点：默认 OpenAI 兼容协议 + 支持流式 */
-    public AiModelBinding(Long providerId, String baseUrl, String apiKey, String model) {
-        this(providerId, baseUrl, apiKey, model, PROTOCOL_OPENAI_CHAT, true);
-    }
-
     public String protocolOrDefault() {
         return protocol == null ? PROTOCOL_OPENAI_CHAT : protocol;
     }

@@ -26,7 +26,8 @@ public record AiProviderResponse(
                 entity.getIcon(),
                 entity.getBaseUrl(),
                 entity.getProtocol() == null ? "OPENAI_CHAT" : entity.getProtocol(),
-                entity.getStreaming() == null || entity.getStreaming(),
+                // streaming 空值 = 默认开启流式（等价 null→true 兜底；绑定构造的唯一兜底落点在 AiConfigServiceImpl）
+                !Boolean.FALSE.equals(entity.getStreaming()),
                 entity.getApiKey() != null && !entity.getApiKey().isBlank(),
                 Boolean.TRUE.equals(entity.getEnabled()),
                 entity.getLastCheckAt(), entity.getLastCheckOk(), entity.getLastCheckResult(),
