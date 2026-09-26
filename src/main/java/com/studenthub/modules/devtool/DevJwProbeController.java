@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import com.studenthub.modules.identity.security.CurrentUserProvider;
 import com.studenthub.modules.jwauth.config.JwProperties;
 import com.studenthub.modules.jwauth.security.JwSessionStore;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
@@ -39,11 +40,13 @@ public class DevJwProbeController {
     private final JwProperties properties;
 
     @GetMapping("/probe")
+    @Operation(summary = "用托管教务会话探测任意教务相对路径，返回状态/跳转/响应片段")
     public Result<Map<String, Object>> probe(@RequestParam("path") String path) throws Exception {
         return probeInternal(path, null);
     }
 
     @org.springframework.web.bind.annotation.PostMapping("/probe-post")
+    @Operation(summary = "同 probe，POST 方式探测教务相对路径")
     public Result<Map<String, Object>> probePost(
             @RequestParam("path") String path,
             @RequestParam(value = "body", required = false) String body) throws Exception {

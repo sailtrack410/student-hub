@@ -20,8 +20,8 @@ import org.springframework.web.bind.annotation.RestController;
  * AI 全局设置（总开关 + 超时 + 限流）；供应商/模型管理见 AdminAiProviderController。
  */
 @RestController
-@RequestMapping("/api/admin/ai-config")
-@Tag(name = "管理端-AI 全局设置")
+@RequestMapping("/api/admin/ai/config")
+@Tag(name = "管理端-AI 全局设置", description = "AI 总开关、超时与限流配置")
 @RequiredArgsConstructor
 @PreAuthorize("hasAuthority('ai:manage')")
 public class AdminAiConfigController {

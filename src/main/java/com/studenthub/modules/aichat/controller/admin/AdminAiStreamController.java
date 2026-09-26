@@ -35,7 +35,7 @@ import java.util.concurrent.Executors;
  */
 @RestController
 @RequestMapping("/api/admin/ai")
-@Tag(name = "管理端-AI 流式测试")
+@Tag(name = "管理端-AI 流式测试", description = "管理端 SSE 流式对话测试")
 @RequiredArgsConstructor
 @Slf4j
 @PreAuthorize("hasAuthority('platform:all') or hasAuthority('ai:manage')")

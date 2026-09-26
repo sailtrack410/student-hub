@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/common/auth")
-@Tag(name = "会话认证")
+@Tag(name = "通用-会话", description = "当前用户信息查询与登出")
 @RequiredArgsConstructor
 public class SessionController {
 

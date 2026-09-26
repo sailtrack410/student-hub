@@ -19,7 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.List;
 
-@RestController @RequestMapping("/api/admin/knowledge-bases") @Tag(name="管理端-RAG 知识库")
+@RestController @RequestMapping("/api/admin/knowledge-bases") @Tag(name = "管理端-RAG 知识库", description = "知识库、文档索引与检索测试")
 @RequiredArgsConstructor @PreAuthorize("hasAuthority('ai:manage')")
 public class AdminKnowledgeBaseController {
     private final ObjectProvider<KnowledgeBaseService> serviceProvider;
@@ -33,14 +33,22 @@ public class AdminKnowledgeBaseController {
         return service;
     }
 
-    @GetMapping public Result<List<KnowledgeBaseResponse>> list(){return Result.success(service().listBases().stream().map(KnowledgeBaseResponse::from).toList());}
-    @PostMapping public Result<KnowledgeBaseResponse> create(@RequestBody @Valid KnowledgeBaseRequest r){return Result.success(KnowledgeBaseResponse.from(service().create(users.currentUserIdOrSystem(),r)));}
-    @PutMapping("/{id}") public Result<KnowledgeBaseResponse> update(@PathVariable Long id,@RequestBody @Valid KnowledgeBaseRequest r){return Result.success(KnowledgeBaseResponse.from(service().update(id,r)));}
-    @DeleteMapping("/{id}") public Result<Void> delete(@PathVariable Long id){service().delete(id);return Result.success();}
-    @GetMapping("/{id}/documents") public Result<List<KnowledgeDocumentResponse>> documents(@PathVariable Long id){return Result.success(service().documents(id).stream().map(KnowledgeDocumentResponse::from).toList());}
+    @GetMapping @Operation(summary = "知识库列表")
+    public Result<List<KnowledgeBaseResponse>> list(){return Result.success(service().listBases().stream().map(KnowledgeBaseResponse::from).toList());}
+    @PostMapping @Operation(summary = "创建知识库")
+    public Result<KnowledgeBaseResponse> create(@RequestBody @Valid KnowledgeBaseRequest r){return Result.success(KnowledgeBaseResponse.from(service().create(users.currentUserIdOrSystem(),r)));}
+    @PutMapping("/{id}") @Operation(summary = "更新知识库")
+    public Result<KnowledgeBaseResponse> update(@PathVariable Long id,@RequestBody @Valid KnowledgeBaseRequest r){return Result.success(KnowledgeBaseResponse.from(service().update(id,r)));}
+    @DeleteMapping("/{id}") @Operation(summary = "删除知识库")
+    public Result<Void> delete(@PathVariable Long id){service().delete(id);return Result.success();}
+    @GetMapping("/{id}/documents") @Operation(summary = "文档列表")
+    public Result<List<KnowledgeDocumentResponse>> documents(@PathVariable Long id){return Result.success(service().documents(id).stream().map(KnowledgeDocumentResponse::from).toList());}
     @PostMapping(value="/{id}/documents",consumes=MediaType.MULTIPART_FORM_DATA_VALUE) @Operation(summary="上传并索引文档")
     public Result<KnowledgeDocumentResponse> upload(@PathVariable Long id,@RequestPart("file") MultipartFile file) throws IOException {if(file.isEmpty()) throw new IllegalArgumentException("文件不能为空");KnowledgeDocumentEntity d=service().upload(users.currentUserIdOrSystem(),id,file.getBytes(),file.getOriginalFilename(),file.getContentType());return Result.success(KnowledgeDocumentResponse.from(d));}
-    @PostMapping("/{id}/documents/{docId}/reindex") public Result<KnowledgeDocumentResponse> reindex(@PathVariable Long id,@PathVariable Long docId){return Result.success(KnowledgeDocumentResponse.from(service().reindex(id,docId)));}
-    @DeleteMapping("/{id}/documents/{docId}") public Result<Void> deleteDocument(@PathVariable Long id,@PathVariable Long docId){service().deleteDocument(id,docId);return Result.success();}
-    @PostMapping("/{id}/test") public Result<RagTestResponse> test(@PathVariable Long id,@RequestBody @Valid RagTestRequest r){return Result.success(service().test(id,r.question(),r.generateAnswer()==null||r.generateAnswer()));}
+    @PostMapping("/{id}/documents/{docId}/reindex") @Operation(summary = "重建文档索引")
+    public Result<KnowledgeDocumentResponse> reindex(@PathVariable Long id,@PathVariable Long docId){return Result.success(KnowledgeDocumentResponse.from(service().reindex(id,docId)));}
+    @DeleteMapping("/{id}/documents/{docId}") @Operation(summary = "删除文档")
+    public Result<Void> deleteDocument(@PathVariable Long id,@PathVariable Long docId){service().deleteDocument(id,docId);return Result.success();}
+    @PostMapping("/{id}/test") @Operation(summary = "混合检索测试")
+    public Result<RagTestResponse> test(@PathVariable Long id,@RequestBody @Valid RagTestRequest r){return Result.success(service().test(id,r.question(),r.generateAnswer()==null||r.generateAnswer()));}
 }

@@ -8,6 +8,7 @@ import io.swagger.v3.oas.models.security.SecurityScheme;
 import org.springdoc.core.models.GroupedOpenApi;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 
 @Configuration
 public class OpenApiConfig {
@@ -51,6 +52,24 @@ public class OpenApiConfig {
         return GroupedOpenApi.builder()
                 .group("管理端接口")
                 .pathsToMatch("/api/admin/**")
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi publicApi() {
+        return GroupedOpenApi.builder()
+                .group("公开接口")
+                .pathsToMatch("/api/public/**")
+                .build();
+    }
+
+    /** 开发调试分组：仅非 prod profile 注册（devtool 探针/同步端点不对生产环境暴露文档）。 */
+    @Bean
+    @Profile("!prod")
+    public GroupedOpenApi devApi() {
+        return GroupedOpenApi.builder()
+                .group("开发调试接口")
+                .pathsToMatch("/api/dev/**")
                 .build();
     }
 }

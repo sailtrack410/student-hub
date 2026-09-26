@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/common/auth")
-@Tag(name = "开发认证")
+@Tag(name = "通用-密码登录", description = "开发环境密码登录（生产关闭）")
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "studenthub.security", name = "password-login-enabled", havingValue = "true")
 public class PasswordLoginController {

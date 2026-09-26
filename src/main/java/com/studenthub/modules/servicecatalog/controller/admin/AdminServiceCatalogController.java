@@ -27,7 +27,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin/catalog")
-@Tag(name = "管理端-服务目录")
+@Tag(name = "管理端-服务目录", description = "服务分类与服务项管理")
 @RequiredArgsConstructor
 @PreAuthorize("hasAuthority('catalog:manage')")
 public class AdminServiceCatalogController {

@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/app/service-requests")
-@Tag(name = "小程序-服务评价")
+@Tag(name = "小程序-服务评价", description = "申请办结后的服务评价")
 @RequiredArgsConstructor
 public class AppEvaluationController {
 

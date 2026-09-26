@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/app/work-orders")
-@Tag(name = "小程序-我的工单")
+@Tag(name = "小程序-我的工单", description = "服务人员工单处理流转")
 @RequiredArgsConstructor
 public class AppWorkOrderController {
 

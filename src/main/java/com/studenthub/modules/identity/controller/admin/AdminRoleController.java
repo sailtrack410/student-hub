@@ -15,7 +15,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin/roles")
-@Tag(name = "管理端-角色")
+@Tag(name = "管理端-角色", description = "启用角色查询")
 @RequiredArgsConstructor
 @PreAuthorize("hasAuthority('system:user:manage')")
 public class AdminRoleController {

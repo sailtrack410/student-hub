@@ -18,7 +18,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/app/community")
-@Tag(name = "小程序-校园社区")
+@Tag(name = "小程序-校园社区", description = "帖子、评论、点赞、举报与私信")
 @RequiredArgsConstructor
 public class AppCommunityController {
     private final CommunityService communityService;

@@ -9,15 +9,19 @@ import com.studenthub.modules.rag.service.KnowledgeBaseService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.bind.annotation.*;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
 @RequestMapping("/api/public/knowledge-bases")
+@Tag(name = "公开-知识库", description = "公开知识库问答")
 @RequiredArgsConstructor
 public class PublicKnowledgeController {
 
     private final ObjectProvider<KnowledgeBaseService> serviceProvider;
 
     @PostMapping("/{id}/query")
+    @Operation(summary = "查询公开知识库，混合检索并生成回答")
     public Result<RagTestResponse> query(@PathVariable Long id, @RequestBody RagTestRequest request) {
         KnowledgeBaseService service = serviceProvider.getIfAvailable();
         if (service == null) {

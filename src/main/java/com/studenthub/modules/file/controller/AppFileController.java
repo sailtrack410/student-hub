@@ -19,7 +19,7 @@ import java.io.IOException;
 @Slf4j
 @RestController
 @RequestMapping("/api/app/files")
-@Tag(name = "小程序-文件上传")
+@Tag(name = "小程序-文件上传", description = "图片与音频上传及签名访问路径换取")
 @RequiredArgsConstructor
 public class AppFileController {
 

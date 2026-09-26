@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/admin/community")
-@Tag(name = "管理端-社区治理")
+@Tag(name = "管理端-社区治理", description = "举报处理、内容下架与用户处罚")
 @RequiredArgsConstructor
 @PreAuthorize("hasAuthority('platform:all') or hasAuthority('community:moderate')")
 public class AdminCommunityController {
