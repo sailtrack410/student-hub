@@ -2,6 +2,8 @@ package com.studenthub.modules.servicerequest;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.studenthub.modules.file.entity.FileStorageEntity;
+import com.studenthub.modules.file.mapper.FileStorageMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -11,6 +13,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.hasSize;
@@ -37,6 +40,21 @@ class ServiceRequestFlowIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private FileStorageMapper fileStorageMapper;
+
+    /** 报修拍照工作流要求图片行属于 worker 且为 image/*；test 存储为 local，只插 DB 行即可 */
+    private long insertWorkerImage(long workerId, String name) {
+        FileStorageEntity file = new FileStorageEntity();
+        file.setStorageKey("test/" + name + ".png");
+        file.setOriginalName(name + ".png");
+        file.setContentType("image/png");
+        file.setFileSize(1024L);
+        file.setUploaderId(workerId);
+        fileStorageMapper.insert(file);
+        return file.getId();
+    }
+
     @Test
     void fullLoopFromSubmitToEvaluation() throws Exception {
         String requesterToken = login("requester");
@@ -58,7 +76,7 @@ class ServiceRequestFlowIntegrationTest {
                         .header("Idempotency-Key", idempotencyKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"itemId":%d,"formData":{"faultType":"水电维修","description":"台灯不亮","expectDate":"2026-09-05"}}
+                                {"itemId":%d,"formData":{"contactPhone":"13800000001","address":"X栋101","faultType":"水电维修","description":"台灯不亮","expectDate":"2026-09-05"}}
                                 """.formatted(repairItemId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("SUBMITTED"))
@@ -73,7 +91,7 @@ class ServiceRequestFlowIntegrationTest {
                         .header("Idempotency-Key", idempotencyKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"itemId":%d,"formData":{"faultType":"水电维修","description":"台灯不亮"}}
+                                {"itemId":%d,"formData":{"contactPhone":"13800000001","address":"X栋101","faultType":"水电维修","description":"台灯不亮"}}
                                 """.formatted(repairItemId)))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -101,7 +119,7 @@ class ServiceRequestFlowIntegrationTest {
                         .content("{\"assigneeId\":%d,\"comment\":\"请尽快上门\"}".formatted(workerId)))
                 .andExpect(status().isOk());
 
-        // 5. 服务人员开始并办结工单
+        // 5. 服务人员开始工单，走拍照工作流：现场拍照 → 完工拍照提交确认 → 报修人确认
         mockMvc.perform(get("/api/app/work-orders/assigned")
                         .param("status", "ASSIGNED")
                         .header("Authorization", "Bearer " + workerToken))
@@ -112,10 +130,23 @@ class ServiceRequestFlowIntegrationTest {
                         .header("Authorization", "Bearer " + workerToken))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(post("/api/app/work-orders/" + orderId + "/complete")
+        long arrivalPhotoId = insertWorkerImage(workerId, "arrival");
+        mockMvc.perform(post("/api/app/work-orders/" + orderId + "/arrival-photo")
                         .header("Authorization", "Bearer " + workerToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"remark\":\"已更换灯泡，可正常使用\"}"))
+                        .content("{\"fileId\":%d}".formatted(arrivalPhotoId)))
+                .andExpect(status().isOk());
+
+        long completionPhotoId = insertWorkerImage(workerId, "completion");
+        mockMvc.perform(post("/api/app/work-orders/" + orderId + "/completion-photo")
+                        .header("Authorization", "Bearer " + workerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"fileId\":%d,\"remark\":\"已更换灯泡，可正常使用\"}".formatted(completionPhotoId)))
+                .andExpect(status().isOk());
+
+        // 报修人确认后申请才进入 COMPLETED
+        mockMvc.perform(post("/api/app/work-orders/" + orderId + "/confirm")
+                        .header("Authorization", "Bearer " + requesterToken))
                 .andExpect(status().isOk());
 
         // 6. 学生查看详情：已办结、时间线完整
@@ -151,7 +182,7 @@ class ServiceRequestFlowIntegrationTest {
         MvcResult newRequest = mockMvc.perform(post("/api/app/service-requests")
                         .header("Authorization", "Bearer " + requesterToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"itemId\":%d,\"formData\":{\"faultType\":\"门窗维修\",\"description\":\"门锁松动\"}}"
+                        .content("{\"itemId\":%d,\"formData\":{\"contactPhone\":\"13800000001\",\"address\":\"X栋101\",\"faultType\":\"门窗维修\",\"description\":\"门锁松动\"}}"
                                 .formatted(repairItemId)))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -169,7 +200,7 @@ class ServiceRequestFlowIntegrationTest {
                         .header("Authorization", "Bearer " + requesterToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"itemId":1002,"formData":{"location":"教学楼A栋102","faultType":"照明电路","description":"灯管闪烁"}}
+                                {"itemId":1002,"formData":{"contactPhone":"13800000001","address":"教学楼A栋102","faultType":"照明电路","description":"灯管闪烁"}}
                                 """))
                 .andExpect(status().isOk())
                 .andReturn();

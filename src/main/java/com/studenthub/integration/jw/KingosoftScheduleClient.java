@@ -1,6 +1,7 @@
 package com.studenthub.integration.jw;
 
 import com.studenthub.common.ErrorCode;
+import com.studenthub.common.util.IntegrationExceptions;
 import com.studenthub.exception.BusinessException;
 import com.studenthub.modules.jwauth.config.JwProperties;
 import lombok.extern.slf4j.Slf4j;
@@ -52,7 +53,7 @@ public class KingosoftScheduleClient {
      * 拉取个人课表（当前学年学期）。semesterCode 形如 {@code 2025,1}，为空时取当前学期。
      */
     public JwSchedulePage fetchSchedulePage(String cookieHeader, String semesterCode) {
-        try {
+        return IntegrationExceptions.wrap(() -> {
             HttpClient client = buildClient();
 
             // 1. 壳页：校验会话并拿教务当前学期（dqxn/dqxq）
@@ -102,12 +103,7 @@ public class KingosoftScheduleClient {
 
             List<JwCourseEntry> courses = parseGrid(document);
             return new JwSchedulePage(chosen, semesterName, courses);
-        } catch (BusinessException exception) {
-            throw exception;
-        } catch (Exception exception) {
-            log.error("拉取教务课表异常", exception);
-            throw new BusinessException(ErrorCode.JW_SESSION_EXPIRED);
-        }
+        }, ErrorCode.JW_SESSION_EXPIRED, "拉取教务课表异常");
     }
 
     /**
