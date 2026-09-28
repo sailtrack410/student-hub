@@ -230,7 +230,7 @@
 |---|---|---|---|
 | GET `/api/app/community/sections` | 查询社区分区 | 登录 | 无 |
 | GET `/api/app/community/topics/hot` | 查询热门话题 | 登录 | 无 |
-| GET `/api/app/community/posts` | 分页查询帖子 | 登录 | query: sectionId, keyword, pageNum(默认1), pageSize(默认10) |
+| GET `/api/app/community/posts` | 分页查询帖子 | 登录 | query: sectionId, keyword, pageNum(默认1), pageSize(默认10), sort: LATEST(默认)/HOT |
 | GET `/api/app/community/posts/{postId}` | 帖子详情与评论 | 登录 | 无 |
 | POST `/api/app/community/posts` | 发布帖子 | 登录 | body: sectionId, title(≤80), content(≤2000), imageFileIds(≤9), topics(≤8) |
 | POST `/api/app/community/posts/{postId}/comments` | 发表评论（可回复、带图） | 登录 | body: content(≤500), parentCommentId, imageFileIds |
@@ -248,7 +248,7 @@
 
 - `CommunitySectionResponse`：sectionId, sectionCode, sectionName, icon, description, bannerTitle, bannerSubtitle, bannerImage
 - `CommunityTopicResponse`：name, heat
-- `CommunityPostResponse`：postId, sectionId, sectionName, sectionIcon, authorId, authorName, avatarUrl, title, content, imageUrls, thumbnailUrls, topics, commentCount, likeCount, liked, createdAt
+- `CommunityPostResponse`：postId, sectionId, sectionName, sectionIcon, authorId, authorName, avatarUrl, authorLevel(列表场景 null，个人中心 profile 下发), authorBadgeCode(佩戴勋章编码), title, content, imageUrls, thumbnailUrls, topics, commentCount, likeCount, liked, createdAt
 - `CommunityCommentResponse`：commentId, parentCommentId, authorId, authorName, avatarUrl, content, imageUrls, thumbnailUrls, likeCount, liked, pinned, author, createdAt
 - 帖子详情 → `{ post: CommunityPostResponse, comments: CommunityCommentResponse[] }`
 - `CommunityAuthorProfileResponse`：userId, displayName, avatarUrl, college, major, className, gender, posts
@@ -278,6 +278,18 @@
 
 - `AiConversationResponse`：conversationId, title, createdAt
 - `AiMessageResponse`：messageId, role: USER/ASSISTANT, content, images: Long[], degraded(降级标记), actions: [{type: SERVICE_APPLY/REQUEST_DETAIL/REQUEST_LIST/SCHEDULE, label, itemCode, itemId, url}], createdAt
+
+### 成就勋章 `/api/app/achievements`
+
+| 方法 路径 | 说明 | 鉴权 | 请求 |
+|---|---|---|---|
+| GET `/api/app/achievements/profile` | 成长档案：打开即先懒评估，返回等级/累计经验/进度/已获勋章数与最近 3 枚 | 登录 | 无 |
+| GET `/api/app/achievements/badges` | 勋章墙：全部 19 枚 + 是否解锁 + 进度（未获得也返回）；响应含 badgeVersion 供客户端字典热更新判断 | 登录 | 无 |
+| POST `/api/app/achievements/wear` | 佩戴/卸下勋章（badgeCode=null 卸下；佩戴须已解锁） | 登录 | body: badgeCode(可空) |
+
+- `AchievementProfileResponse`：level, levelName, totalExp, nextLevel, nextLevelName, nextLevelExp, expToNext, progressPercent, badgeCount, totalBadgeCount, wornBadgeCode, recentBadges: [{badgeCode, badgeName, obtainedAt}]
+- `AchievementBadgeItem`：badgeCode, badgeName, category(COMMUNITY/SERVICE/WORKER/JW/GROWTH), rarity(COMMON/RARE/EPIC/LEGENDARY), description, metricThreshold, rewardExp, unlocked, unlockedAt, currentProgress
+- 图标随包本地匹配 `assets/badges/$badgeCode.png`，接口不下发图标 URL
 
 ### 课表 `/api/app/schedule`
 

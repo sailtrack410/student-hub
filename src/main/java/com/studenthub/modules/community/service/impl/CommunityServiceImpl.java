@@ -39,6 +39,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -78,12 +81,13 @@ public class CommunityServiceImpl implements CommunityService {
 
     @Override
     public PageResult<CommunityPostResponse> pagePosts(AuthenticatedUser user, Long sectionId, String keyword,
-                                                        long pageNum, long pageSize) {
+                                                        long pageNum, long pageSize, String sort) {
         long safePage = Math.max(1, pageNum);
         long safeSize = Math.min(Math.max(1, pageSize), 20);
         String normalizedKeyword = keyword == null ? null : keyword.trim();
         final String search = normalizedKeyword != null && normalizedKeyword.startsWith("#")
                 ? normalizedKeyword.substring(1) : normalizedKeyword;
+        boolean hot = "HOT".equalsIgnoreCase(sort);
         LambdaQueryWrapper<CommunityPostEntity> wrapper = new LambdaQueryWrapper<CommunityPostEntity>()
                 .eq(CommunityPostEntity::getCampusId, user.campusId())
                 .eq(CommunityPostEntity::getStatus, ENABLED)
@@ -91,11 +95,17 @@ public class CommunityServiceImpl implements CommunityService {
                 .and(search != null && !search.isBlank(), query -> query
                         .like(CommunityPostEntity::getTitle, search)
                         .or().like(CommunityPostEntity::getContent, search)
-                        .or().like(CommunityPostEntity::getTopics, search))
-                .orderByDesc(CommunityPostEntity::getCreatedAt);
+                        .or().like(CommunityPostEntity::getTopics, search));
+        if (hot) {
+            wrapper.orderByDesc(CommunityPostEntity::getLikeCount)
+                    .orderByDesc(CommunityPostEntity::getCommentCount)
+                    .orderByDesc(CommunityPostEntity::getCreatedAt);
+        } else {
+            wrapper.orderByDesc(CommunityPostEntity::getCreatedAt);
+        }
         Page<CommunityPostEntity> page = postMapper.selectPage(new Page<>(safePage, safeSize), wrapper);
-        return PageResult.of(page.getCurrent(), page.getSize(), page.getTotal(),
-                page.getRecords().stream().map(post -> toPostResponse(post, user.userId())).toList());
+        List<CommunityPostResponse> posts = assemblePosts(page.getRecords(), user.userId());
+        return PageResult.of(page.getCurrent(), page.getSize(), page.getTotal(), posts);
     }
 
     @Override
@@ -106,8 +116,18 @@ public class CommunityServiceImpl implements CommunityService {
                 .eq(CommunityCommentEntity::getStatus, ENABLED)
                 .orderByAsc(CommunityCommentEntity::getCreatedAt)
                 .last("LIMIT 100"));
-        return new CommunityPostDetailResponse(toPostResponse(post, user.userId()), comments.stream()
-                .map(comment -> toCommentResponse(comment, user.userId(), post.getAuthorId())).toList());
+        // 批量组装评论（一屏最多 100 条 → 3 条 SQL），作者标记在 Map 重建时补
+        Map<Long, CommunityCommentResponse> byId = assembleComments(comments, user.userId());
+        List<CommunityCommentResponse> commentResponses = comments.stream()
+                .map(comment -> {
+                    CommunityCommentResponse base = byId.get(comment.getId());
+                    boolean isPostAuthor = post.getAuthorId() != null && post.getAuthorId().equals(comment.getAuthorId());
+                    return new CommunityCommentResponse(base.commentId(), base.parentCommentId(), base.authorId(),
+                            base.authorName(), base.avatarUrl(), base.content(), base.imageUrls(),
+                            base.thumbnailUrls(), base.likeCount(), base.liked(), base.pinned(),
+                            isPostAuthor, base.createdAt());
+                }).toList();
+        return new CommunityPostDetailResponse(toPostResponse(post, user.userId()), commentResponses);
     }
 
     @Override
@@ -281,24 +301,96 @@ public class CommunityServiceImpl implements CommunityService {
         return post;
     }
 
+    /** 单条路径 = 批量组装退化为 1 条（详情/发布/点赞等复用），查询形态与批量一致 */
     private CommunityPostResponse toPostResponse(CommunityPostEntity post, Long viewerId) {
-        UserEntity author = userMapper.selectById(post.getAuthorId());
-        CommunitySectionEntity section = sectionMapper.selectById(post.getSectionId());
-        boolean liked = postLikeMapper.selectCount(new LambdaQueryWrapper<CommunityPostLikeEntity>()
-                .eq(CommunityPostLikeEntity::getPostId, post.getId()).eq(CommunityPostLikeEntity::getUserId, viewerId)) > 0;
-        return new CommunityPostResponse(post.getId(), post.getSectionId(), section == null ? null : section.getSectionName(),
-                section == null ? null : section.getIcon(), post.getAuthorId(), author == null ? "同学" : author.getDisplayName(),
-                avatarUrl(author), post.getTitle(), post.getContent(), signImages(JsonIds.parse(post.getImageFileIds())), signThumbnailImages(JsonIds.parse(post.getImageFileIds())), parseTopics(post.getTopics()),
-                post.getCommentCount() == null ? 0 : post.getCommentCount(), post.getLikeCount() == null ? 0 : post.getLikeCount(), liked, post.getCreatedAt());
+        return assemblePosts(List.of(post), viewerId).get(0);
     }
 
+    /** 单条评论组装：postAuthorId 语义保留（作者标记） */
     private CommunityCommentResponse toCommentResponse(CommunityCommentEntity comment, Long viewerId, Long postAuthorId) {
-        UserEntity author = userMapper.selectById(comment.getAuthorId());
-        boolean liked = commentLikeMapper.selectCount(new LambdaQueryWrapper<CommunityCommentLikeEntity>()
-                .eq(CommunityCommentLikeEntity::getCommentId, comment.getId()).eq(CommunityCommentLikeEntity::getUserId, viewerId)) > 0;
-        return new CommunityCommentResponse(comment.getId(), comment.getParentCommentId(), comment.getAuthorId(),
-                author == null ? "同学" : author.getDisplayName(), avatarUrl(author), comment.getContent(), signImages(JsonIds.parse(comment.getImageFileIds())), signThumbnailImages(JsonIds.parse(comment.getImageFileIds())), comment.getLikeCount() == null ? 0 : comment.getLikeCount(), liked,
-                comment.getPinned() != null && comment.getPinned() == 1, postAuthorId != null && postAuthorId.equals(comment.getAuthorId()), comment.getCreatedAt());
+        CommunityCommentResponse response = assembleComments(List.of(comment), viewerId).get(comment.getId());
+        boolean isPostAuthor = postAuthorId != null && postAuthorId.equals(comment.getAuthorId());
+        return new CommunityCommentResponse(response.commentId(), response.parentCommentId(), response.authorId(),
+                response.authorName(), response.avatarUrl(), response.content(), response.imageUrls(),
+                response.thumbnailUrls(), response.likeCount(), response.liked(), response.pinned(),
+                isPostAuthor, response.createdAt());
+    }
+
+    /**
+     * 批量组装（2026-10-17 定稿：31 SQL/屏 → 4 条）：
+     * ①selectBatchIds 作者行（avatarUrl/wornBadgeCode 整行搭车）②selectBatchIds 分区行
+     * ③IN 查询当前用户对全部帖子的点赞态 ④内存 Map 组装。
+     * authorLevel 列表场景不展示（等级=f(exp) 需逐人业务数据，个人中心 /achievements/profile 下发）；
+     * authorBadgeCode 为佩戴列搭车零成本。
+     */
+    private List<CommunityPostResponse> assemblePosts(List<CommunityPostEntity> posts, Long viewerId) {
+        if (posts.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> authorIds = posts.stream().map(CommunityPostEntity::getAuthorId)
+                .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        Set<Long> sectionIds = posts.stream().map(CommunityPostEntity::getSectionId)
+                .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        Set<Long> postIds = posts.stream().map(CommunityPostEntity::getId).collect(Collectors.toSet());
+
+        Map<Long, UserEntity> authors = authorIds.isEmpty() ? Map.of()
+                : userMapper.selectBatchIds(authorIds).stream()
+                        .collect(Collectors.toMap(UserEntity::getId, java.util.function.Function.identity(), (a, b) -> a));
+        Map<Long, CommunitySectionEntity> sections = sectionIds.isEmpty() ? Map.of()
+                : sectionMapper.selectBatchIds(sectionIds).stream()
+                        .collect(Collectors.toMap(CommunitySectionEntity::getId, java.util.function.Function.identity(), (a, b) -> a));
+        Set<Long> likedPostIds = viewerId == null || postIds.isEmpty() ? Set.of()
+                : postLikeMapper.selectList(new LambdaQueryWrapper<CommunityPostLikeEntity>()
+                        .eq(CommunityPostLikeEntity::getUserId, viewerId)
+                        .in(CommunityPostLikeEntity::getPostId, postIds))
+                        .stream().map(CommunityPostLikeEntity::getPostId).collect(Collectors.toSet());
+
+        return posts.stream().map(post -> {
+            UserEntity author = authors.get(post.getAuthorId());
+            CommunitySectionEntity section = sections.get(post.getSectionId());
+            return new CommunityPostResponse(post.getId(), post.getSectionId(),
+                    section == null ? null : section.getSectionName(), section == null ? null : section.getIcon(),
+                    post.getAuthorId(), author == null ? "同学" : author.getDisplayName(), avatarUrl(author),
+                    null,
+                    author == null ? null : author.getWornBadgeCode(),
+                    post.getTitle(), post.getContent(),
+                    signImages(JsonIds.parse(post.getImageFileIds())),
+                    signThumbnailImages(JsonIds.parse(post.getImageFileIds())), parseTopics(post.getTopics()),
+                    post.getCommentCount() == null ? 0 : post.getCommentCount(),
+                    post.getLikeCount() == null ? 0 : post.getLikeCount(),
+                    likedPostIds.contains(post.getId()), post.getCreatedAt());
+        }).toList();
+    }
+
+    /** 批量组装评论：同样 4 条；返回按评论 ID 索引，供调用点按序取用 */
+    private Map<Long, CommunityCommentResponse> assembleComments(List<CommunityCommentEntity> comments, Long viewerId) {
+        if (comments.isEmpty()) {
+            return Map.of();
+        }
+        Set<Long> authorIds = comments.stream().map(CommunityCommentEntity::getAuthorId)
+                .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        Set<Long> commentIds = comments.stream().map(CommunityCommentEntity::getId).collect(Collectors.toSet());
+        Map<Long, UserEntity> authors = authorIds.isEmpty() ? Map.of()
+                : userMapper.selectBatchIds(authorIds).stream()
+                        .collect(Collectors.toMap(UserEntity::getId, java.util.function.Function.identity(), (a, b) -> a));
+        Set<Long> likedCommentIds = viewerId == null || commentIds.isEmpty() ? Set.of()
+                : commentLikeMapper.selectList(new LambdaQueryWrapper<CommunityCommentLikeEntity>()
+                        .eq(CommunityCommentLikeEntity::getUserId, viewerId)
+                        .in(CommunityCommentLikeEntity::getCommentId, commentIds))
+                        .stream().map(CommunityCommentLikeEntity::getCommentId).collect(Collectors.toSet());
+        Map<Long, CommunityCommentResponse> result = new java.util.LinkedHashMap<>();
+        for (CommunityCommentEntity comment : comments) {
+            UserEntity author = authors.get(comment.getAuthorId());
+            result.put(comment.getId(), new CommunityCommentResponse(comment.getId(), comment.getParentCommentId(),
+                    comment.getAuthorId(), author == null ? "同学" : author.getDisplayName(), avatarUrl(author),
+                    comment.getContent(), signImages(JsonIds.parse(comment.getImageFileIds())),
+                    signThumbnailImages(JsonIds.parse(comment.getImageFileIds())),
+                    comment.getLikeCount() == null ? 0 : comment.getLikeCount(),
+                    likedCommentIds.contains(comment.getId()),
+                    comment.getPinned() != null && comment.getPinned() == 1,
+                    false, comment.getCreatedAt()));
+        }
+        return result;
     }
 
     private CommunityCommentEntity requireComment(Long id) {

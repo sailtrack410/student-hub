@@ -9,7 +9,7 @@ import java.util.List;
 public interface CommunityService {
     List<CommunitySectionResponse> sections(Long campusId);
     List<CommunityTopicResponse> hotTopics(Long campusId);
-    PageResult<CommunityPostResponse> pagePosts(AuthenticatedUser user, Long sectionId, String keyword, long pageNum, long pageSize);
+    PageResult<CommunityPostResponse> pagePosts(AuthenticatedUser user, Long sectionId, String keyword, long pageNum, long pageSize, String sort);
     CommunityPostDetailResponse detail(AuthenticatedUser user, Long postId);
     CommunityPostResponse publish(AuthenticatedUser user, CreateCommunityPostRequest request);
     CommunityCommentResponse comment(AuthenticatedUser user, Long postId, CreateCommunityCommentRequest request);
