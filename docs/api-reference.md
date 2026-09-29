@@ -266,6 +266,15 @@
 
 - 返回：`PageResult<NotificationResponse>` / `NotificationResponse`：notificationId, notificationType, title, content, relatedType, relatedId, read, readAt, createdAt
 
+### 统一收件箱 `/api/app/messages/inbox`
+
+| 方法 路径 | 说明 | 鉴权 | 请求 |
+|---|---|---|---|
+| GET `/api/app/messages/inbox` | 三路会话聚合的统一收件箱流：流程通知折叠 1 条（置顶，未读数=站内通知未读总数）+ 私信按对端展开 + AI 会话按条展开，按最后消息时间倒序 | 登录 | query: pageNum(默认 1), pageSize(默认 20) |
+
+- `InboxItemResponse`：sessionId（`PROCESS_NOTIFICATION` / `DIRECT_MESSAGE:<peerId>` / `AI_ASSISTANT:<conversationId>`）, sessionType(PROCESS_NOTIFICATION/DIRECT_MESSAGE/AI_ASSISTANT), peerId(仅私信), conversationId(仅 AI), title, avatarUrl(仅私信), lastContent, lastTime(原始时间戳，相对时间前端渲染), unreadCount, pinned
+- AI 会话取最近 20 个活跃会话；lastTime 为创建/最后活跃时间，当前 AI 无未读概念（固定 0）
+
 ### AI 助手 `/api/app/ai`（以下均需权限 ai:chat）
 
 | 方法 路径 | 说明 | 鉴权 | 请求 |
@@ -273,11 +282,12 @@
 | POST `/api/app/ai/conversations` | 创建 AI 会话 | 登录+ai:chat | body: title（可空，默认「新对话」） |
 | GET `/api/app/ai/conversations` | 分页查询我的会话，按最近活跃倒序 | 登录+ai:chat | query: pageNum, pageSize |
 | GET `/api/app/ai/conversations/{conversationId}/messages` | 会话消息（仅属主），按时间正序 | 登录+ai:chat | 无 |
-| POST `/api/app/ai/conversations/{conversationId}/messages` | 发送消息并返回助手回复；AI 不可用时降级回复 | 登录+ai:chat | body: content(≤2000，带图片时可空), images: Long[](≤4) |
+| POST `/api/app/ai/conversations/{conversationId}/messages` | 发送消息并返回助手回复；AI 不可用时降级回复 | 登录+ai:chat | body: content(≤2000，带附件时可空), attachments: [{type: IMAGE/DOCUMENT, fileId}](IMAGE≤4、DOCUMENT≤2)；旧 images: Long[] 仍兼容，与 attachments 同传时以 attachments 为准 |
 | POST `/api/app/ai/speech/transcribe` | 语音转写（mp3/aac/m4a/wav） | 登录+ai:chat | body: fileId |
 
 - `AiConversationResponse`：conversationId, title, createdAt
-- `AiMessageResponse`：messageId, role: USER/ASSISTANT, content, images: Long[], degraded(降级标记), actions: [{type: SERVICE_APPLY/REQUEST_DETAIL/REQUEST_LIST/SCHEDULE, label, itemCode, itemId, url}], createdAt
+- `AiMessageResponse`：messageId, role: USER/ASSISTANT, content, images: Long[], degraded(降级标记), actions: [{type: SERVICE_APPLY/REQUEST_DETAIL/REQUEST_LIST/SCHEDULE, label, itemCode, itemId, url}], suggestions(服务端暂固定 null，前端预留), createdAt
+- DOCUMENT 附件服务端读取文本（pdf/docx/txt/md，单份截断 8000 字）注入提示词；解析失败降级忽略该文档不阻断对话
 
 ### 成就勋章 `/api/app/achievements`
 

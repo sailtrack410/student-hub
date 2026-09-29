@@ -52,9 +52,12 @@ public class AiConversationServiceImpl implements AiConversationService {
     private static final String ROLE_ASSISTANT = "ASSISTANT";
     private static final String MESSAGE_STATUS_OK = "OK";
     private static final String MESSAGE_STATUS_FAILED = "FAILED";
+    /** 单份文档注入提示词的字符上限，超出截断 */
+    private static final int MAX_DOCUMENT_CHARACTERS = 8000;
 
     private final AiConversationMapper conversationMapper;
     private final AiMessageMapper messageMapper;
+    private final com.studenthub.modules.rag.service.KnowledgeDocumentParser documentParser;
     private final AiChatService aiChatService;
     private final AiSpeechService aiSpeechService;
     private final AiChatProperties aiChatProperties;
@@ -99,8 +102,9 @@ public class AiConversationServiceImpl implements AiConversationService {
         Long userId = user.userId();
         AiConversationEntity conversation = requireOwnedConversation(userId, conversationId);
         String content = request.content() == null ? "" : request.content().trim();
-        List<Long> imageIds = normalizeImageIds(request.images());
-        if (content.isEmpty() && imageIds.isEmpty()) {
+        List<Long> imageIds = normalizeImageIds(request.effectiveImageIds());
+        List<Long> documentIds = normalizeDocumentIds(request.effectiveDocumentIds());
+        if (content.isEmpty() && imageIds.isEmpty() && documentIds.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER, "消息不能为空");
         }
         if (content.length() > currentMaxMessageCharacters()) {
@@ -113,6 +117,8 @@ public class AiConversationServiceImpl implements AiConversationService {
         }
         // 图片走多模态识别，读取文件内容构造 OpenAI 图片 data URL
         List<String> imageDataUrls = imageIds.stream().map(this::toImageDataUrl).toList();
+        // 文档走服务端读取注入提示词（当前用户已上传文件，防越权）
+        String documentText = documentIds.isEmpty() ? null : readDocumentText(documentIds);
 
         AiMessageEntity userMessage = new AiMessageEntity();
         userMessage.setConversationId(conversation.getId());
@@ -124,8 +130,7 @@ public class AiConversationServiceImpl implements AiConversationService {
 
         AiIntentMatch intent = imageIds.isEmpty()
                 ? intentClassifier.classify(content)
-                : AiIntentMatch.fallback();
-        AiAssistantResolved resolved = resolveForIntent(intent, user);
+                : AiIntentMatch.fallback();        AiAssistantResolved resolved = resolveForIntent(intent, user);
 
         long start = System.currentTimeMillis();
         String reply;
@@ -143,6 +148,9 @@ public class AiConversationServiceImpl implements AiConversationService {
                 String ragContext = ragService == null ? null : ragService.assistantContext(content);
                 String mergedContext = resolved == null ? ragContext : resolved.contextText();
                 if (resolved != null && ragContext != null) mergedContext = resolved.contextText() + "\n\n【公共知识库资料】\n" + ragContext;
+                if (documentText != null) {
+                    mergedContext = mergedContext == null ? documentText : mergedContext + "\n\n" + documentText;
+                }
                 List<AiMessage> prompt = buildPrompt(content, conversation.getId(),
                         mergedContext, imageDataUrls, userMessage.getId());
                 AiChatResponse response = imageIds.isEmpty()
@@ -248,6 +256,46 @@ public class AiConversationServiceImpl implements AiConversationService {
             log.warn("图片 ID 序列化失败", exception);
             return null;
         }
+    }
+
+    /** 文档附件（≤2 份）：服务端读取当前用户已上传文件并抽取文本注入提示词；失败降级为忽略该文档不阻断对话 */
+    private String readDocumentText(List<Long> documentIds) {
+        StringBuilder block = new StringBuilder();
+        for (Long fileId : documentIds) {
+            try {
+                FileStorageService.StoredContent stored = fileStorageService.readContent(fileId);
+                String fileName = stored.originalName() == null ? "文档" : stored.originalName();
+                String text = documentParser.parse(stored.bytes(), fileName).stream()
+                        .map(com.studenthub.modules.rag.service.KnowledgeDocumentParser.Section::text)
+                        .reduce("", (a, b) -> a + "\n" + b)
+                        .trim();
+                if (text.isEmpty()) continue;
+                if (text.length() > MAX_DOCUMENT_CHARACTERS) {
+                    text = text.substring(0, MAX_DOCUMENT_CHARACTERS) + "\n…（文档过长已截断）";
+                }
+                if (block.length() > 0) block.append("\n\n");
+                block.append("【用户上传文档：").append(fileName).append("】\n").append(text);
+            } catch (Exception exception) {
+                log.warn("AI 消息文档附件解析失败, fileId={}", fileId, exception);
+            }
+        }
+        return block.length() == 0 ? null
+                : "以下是用户随本条消息上传的文档内容，仅用于回答本次问题：\n\n" + block;
+    }
+
+    private List<Long> normalizeDocumentIds(List<Long> documentIds) {
+        if (documentIds == null || documentIds.isEmpty()) {
+            return List.of();
+        }
+        List<Long> distinct = documentIds.stream()
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        if (distinct.size() > SendMessageRequest.MAX_DOCUMENTS) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER,
+                    "最多附带 " + SendMessageRequest.MAX_DOCUMENTS + " 份文档");
+        }
+        return distinct;
     }
 
     private AiAssistantResolved resolveForIntent(AiIntentMatch intent, AuthenticatedUser user) {
