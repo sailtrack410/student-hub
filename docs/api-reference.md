@@ -86,6 +86,22 @@
 
 - 返回：`PageResult<AdminEvaluationSummaryResponse>`：evaluationId, requestId, workOrderId, rating, tags, comment, reply, repliedAt, evaluatorId, assigneeName, createdAt
 
+### 公告管理 `/api/admin/notices`（需权限 platform:all / announcement:manage 其一）
+
+公告渠道拆分：SCREEN 终端大屏轮播 / APP 校园公告共用 screen_notice 表，以 channel 区分；
+发布状态机 DRAFT/SCHEDULED → PUBLISHED → OFFLINE（可恢复），SCHEDULED 到点由 30 秒定时器自动上线。
+
+| 方法 路径 | 说明 | 鉴权 | 请求 |
+|---|---|---|---|
+| GET `/api/admin/notices` | 查询公告列表，可按渠道/发布状态/类型过滤 | 登录+上述权限之一 | query: channel: SCREEN/APP, publishStatus: DRAFT/SCHEDULED/PUBLISHED/OFFLINE, noticeType: NOTICE/NEWS/ACTIVITY |
+| POST `/api/admin/notices` | 创建公告，action 决定初始状态 | 同上 | body: noticeType, title(≤128), summary(≤512), publishDate(yyyy-MM-dd，默认今天), channel, action: PUBLISH(默认)/SCHEDULE/DRAFT/OFFLINE, publishAt(ISO，SCHEDULE 必填且须未来), sortOrder, author(≤64), enabled |
+| PUT `/api/admin/notices/{id}` | 更新公告内容（action 语义同创建） | 同上 | body 同创建 |
+| POST `/api/admin/notices/{id}/publish` | 上线：置 PUBLISHED（SCHEDULED 可提前上线） | 同上 | 无 |
+| POST `/api/admin/notices/{id}/offline` | 下线：置 OFFLINE，可再 publish 恢复 | 同上 | 无 |
+| DELETE `/api/admin/notices/{id}` | 删除公告 | 同上 | 无 |
+
+- `AdminNoticeResponse`：id, noticeType, typeText(通知/要闻/活动), title, summary, publishDate, channel, publishStatus, publishAt, sortOrder, author, enabled
+
 ### 社区治理 `/api/admin/community`（需权限 platform:all / community:moderate 其一）
 
 | 方法 路径 | 说明 | 鉴权 | 请求 |
@@ -196,6 +212,9 @@
 | GET `/api/app/service-requests` | 分页查询我的申请，按提交时间倒序 | 登录+service-request:view:self | query: pageNum, pageSize, status: SUBMITTED/PROCESSING/COMPLETED/REJECTED/CANCELLED |
 | GET `/api/app/service-requests/{requestId}` | 申请详情（本人可查），含表单、工单、评价与时间线 | 登录+service-request:view:self | 无 |
 | POST `/api/app/service-requests/{requestId}/cancel` | 撤销申请（办结前），已派单工单同步撤销 | 登录+service-request:view:self | body: reason |
+| POST `/api/app/service-requests/{requestId}/urge` | 催单：站内提醒当前接单师傅尽快处理；单条申请每 2 小时限频 1 次，冷却期内返回 urged=false | 登录+service-request:view:self | 无 |
+
+- 催单返回 `UrgeResponse`：requestId, urged, nextUrgeAvailableSeconds(urged=true 时为 7200，冷却中为剩余秒数), message
 
 - `ServiceRequestSummaryResponse`：requestId, requestNo, title, itemName, status, submittedAt, completedAt
 - `ServiceRequestDetailResponse`：在概要基础上加 itemIcon, slaHours, formData, rejectReason, cancelReason, workOrder(WorkOrderSummaryResponse), evaluation(EvaluationResponse), timeline: [{action, operatorName, comment, createdAt}]
@@ -238,6 +257,7 @@
 | POST `/api/app/community/comments/{commentId}/like` | 点赞/取消点赞评论 | 登录 | 无 |
 | POST `/api/app/community/comments/{commentId}/pin` | 置顶/取消置顶作者评论 | 登录 | 无 |
 | DELETE `/api/app/community/comments/{commentId}` | 删除自己的评论 | 登录 | 无 |
+| DELETE `/api/app/community/posts/{postId}` | 删除作者自己发布的帖子：帖子与全部评论同步逻辑删除，发帖/评论经验按经验可回收原则自动扣减 | 登录 | 无 |
 | POST `/api/app/community/reports` | 举报帖子/评论/私信/用户；服务端保存内容快照 | 登录 | body: targetType: POST/COMMENT/MESSAGE/USER, targetId, reasonCode: AD/ABUSE/PORN/POLITICS/PRIVACY/OTHER, reasonDetail |
 | GET `/api/app/community/authors/{authorId}` | 查看作者主页（资料+帖子） | 登录 | 无 |
 | GET `/api/app/community/messages` | 查询与指定用户的私信 | 登录 | query: withUserId |
@@ -267,13 +287,25 @@
 
 - 返回：`PageResult<NotificationResponse>` / `NotificationResponse`：notificationId, notificationType, title, content, relatedType, relatedId, read, readAt, createdAt
 
+### 校园公告 `/api/app/announcements`
+
+管理员在 `/api/admin/notices` 以 channel=APP 发布的内容在此消费；与终端大屏免登录轮播隔离，登录态只读。
+
+| 方法 路径 | 说明 | 鉴权 | 请求 |
+|---|---|---|---|
+| GET `/api/app/announcements` | 分页查询校园公告：仅 APP 渠道已发布，按发布日期倒序 | 登录 | query: pageNum(默认 1), pageSize(默认 10，上限 50) |
+
+- `AppAnnouncementResponse`：id, title, type(NOTICE/NEWS/ACTIVITY), typeText(通知/要闻/活动), summary, publishDate(yyyy-MM-dd), author(发布方署名)
+
 ### 统一收件箱 `/api/app/messages/inbox`
 
 | 方法 路径 | 说明 | 鉴权 | 请求 |
 |---|---|---|---|
 | GET `/api/app/messages/inbox` | 三路会话聚合的统一收件箱流：流程通知折叠 1 条（置顶，未读数=站内通知未读总数）+ 私信按对端展开 + AI 会话按条展开，按最后消息时间倒序 | 登录 | query: pageNum(默认 1), pageSize(默认 20) |
+| GET `/api/app/messages/category-summary` | 消息中心四大分类未读数聚合：流程通知=非社区站内通知；互动=社区通知+私信；公告与 AI 待办暂无已读态恒为 0 | 登录 | 无 |
 
 - `InboxItemResponse`：sessionId（`PROCESS_NOTIFICATION` / `DIRECT_MESSAGE:<peerId>` / `AI_ASSISTANT:<conversationId>`）, sessionType(PROCESS_NOTIFICATION/DIRECT_MESSAGE/AI_ASSISTANT), peerId(仅私信), conversationId(仅 AI), title, avatarUrl(仅私信), lastContent, lastTime(原始时间戳，相对时间前端渲染), unreadCount, pinned
+- `CategorySummaryResponse`：processNoticeUnread, interactionUnread, announcementUnread, aiTodoCount, totalUnread
 - AI 会话取最近 20 个活跃会话；lastTime 为创建/最后活跃时间，当前 AI 无未读概念（固定 0）
 
 ### AI 助手 `/api/app/ai`（以下均需权限 ai:chat）

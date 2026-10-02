@@ -10,6 +10,7 @@ import com.studenthub.modules.community.entity.CommunityDirectMessageEntity;
 import com.studenthub.modules.community.mapper.CommunityDirectMessageMapper;
 import com.studenthub.modules.community.service.DirectMessageService;
 import com.studenthub.modules.identity.security.AuthenticatedUser;
+import com.studenthub.modules.message.controller.dto.CategorySummaryResponse;
 import com.studenthub.modules.message.controller.dto.InboxItemResponse;
 import com.studenthub.modules.message.service.InboxService;
 import com.studenthub.modules.notification.controller.dto.MyNotificationQuery;
@@ -54,6 +55,17 @@ public class InboxServiceImpl implements InboxService {
         int from = Math.min((pageNum - 1) * pageSize, all.size());
         int to = Math.min(from + pageSize, all.size());
         return PageResult.of(pageNum, pageSize, all.size(), all.subList(from, to));
+    }
+
+    @Override
+    public CategorySummaryResponse categorySummary(AuthenticatedUser user) {
+        // 公告与 AI 待办暂无已读态，恒为 0；公告上线已读回执后再接入
+        long processUnread = notificationService.unreadCount(user.userId(), false);
+        long communityUnread = notificationService.unreadCount(user.userId(), true);
+        long dmUnread = directMessageService.unreadCount(user);
+        long interactionUnread = communityUnread + dmUnread;
+        return new CategorySummaryResponse(processUnread, interactionUnread, 0, 0,
+                processUnread + interactionUnread);
     }
 
     private void appendNotifications(AuthenticatedUser user, List<InboxItemResponse> out) {

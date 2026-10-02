@@ -24,6 +24,7 @@ import com.studenthub.modules.servicerequest.controller.dto.RequestLogResponse;
 import com.studenthub.modules.servicerequest.controller.dto.ServiceRequestDetailResponse;
 import com.studenthub.modules.servicerequest.controller.dto.ServiceRequestSummaryResponse;
 import com.studenthub.modules.servicerequest.controller.dto.SubmitServiceRequestRequest;
+import com.studenthub.modules.servicerequest.controller.dto.UrgeResponse;
 import com.studenthub.modules.servicerequest.entity.ServiceRequestEntity;
 import com.studenthub.modules.servicerequest.entity.ServiceRequestLogEntity;
 import com.studenthub.modules.servicerequest.mapper.ServiceRequestLogMapper;
@@ -50,6 +51,9 @@ import java.util.List;
 public class ServiceRequestServiceImpl implements ServiceRequestService {
 
     private static final String REQUEST_NO_PREFIX = "SR-";
+
+    /** 催单冷却期（小时）：单条申请每 2 小时仅允许催单 1 次 */
+    private static final long URGE_COOLDOWN_HOURS = 2;
 
     private final ServiceRequestMapper serviceRequestMapper;
     private final ServiceRequestLogMapper requestLogMapper;
@@ -226,6 +230,48 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
             log.warn("申请表单数据解析失败, formData 长度={}", formData == null ? 0 : formData.length());
             return null;
         }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public UrgeResponse urge(AuthenticatedUser requester, Long requestId) {
+        ServiceRequestEntity entity = requireOwnedRequest(requester.userId(), requestId);
+        RequestTransitions.Status from = RequestTransitions.parse(entity.getStatus());
+        RequestTransitions.target(RequestTransitions.Action.URGE, from);
+
+        // 2 小时限频：查最近一条 URGE 日志，未满冷却期直接拒绝催单
+        LocalDateTime now = LocalDateTime.now();
+        ServiceRequestLogEntity lastUrge = requestLogMapper.selectOne(
+                new LambdaQueryWrapper<ServiceRequestLogEntity>()
+                        .eq(ServiceRequestLogEntity::getRequestId, requestId)
+                        .eq(ServiceRequestLogEntity::getAction, RequestTransitions.Action.URGE.name())
+                        .orderByDesc(ServiceRequestLogEntity::getCreatedAt)
+                        .last("LIMIT 1"));
+        if (lastUrge != null && lastUrge.getCreatedAt() != null
+                && lastUrge.getCreatedAt().isAfter(now.minusHours(URGE_COOLDOWN_HOURS))) {
+            long waitSeconds = URGE_COOLDOWN_HOURS * 3600
+                    - java.time.Duration.between(lastUrge.getCreatedAt(), now).getSeconds();
+            return new UrgeResponse(requestId, false, Math.max(waitSeconds, 1),
+                    "已收到您的催单，请稍后再试");
+        }
+
+        requestLogRecorder.record(entity.getId(), null, RequestTransitions.Action.URGE,
+                from, from, requester.userId(), requester.displayName(), "用户催单");
+        notifyAssigneeForUrge(entity);
+        log.info("服务申请已催单, requestId={}, requesterId={}", requestId, requester.userId());
+        return new UrgeResponse(requestId, true, URGE_COOLDOWN_HOURS * 3600L,
+                "已为您提醒负责师傅尽快处理");
+    }
+
+    /** 催单提醒发给当前工单接单师傅；未派单或师傅无账号则跳过 */
+    private void notifyAssigneeForUrge(ServiceRequestEntity entity) {
+        WorkOrderEntity order = workOrderMapper.findByRequestId(entity.getId());
+        if (order == null || order.getAssigneeId() == null) {
+            return;
+        }
+        notificationService.send(new NotificationSendCommand(order.getAssigneeId(), "REQUEST",
+                "用户催单提醒", "申请「" + entity.getTitle() + "」（" + entity.getRequestNo() + "）的用户催促尽快处理。",
+                "SERVICE_REQUEST", entity.getId()));
     }
 
     private ServiceRequestEntity requireOwnedRequest(Long requesterId, Long requestId) {

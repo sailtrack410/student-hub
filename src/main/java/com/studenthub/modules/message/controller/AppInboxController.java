@@ -3,6 +3,7 @@ package com.studenthub.modules.message.controller;
 import com.studenthub.common.PageResult;
 import com.studenthub.common.Result;
 import com.studenthub.modules.identity.security.CurrentUserProvider;
+import com.studenthub.modules.message.controller.dto.CategorySummaryResponse;
 import com.studenthub.modules.message.controller.dto.InboxItemResponse;
 import com.studenthub.modules.message.service.InboxService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -28,5 +29,12 @@ public class AppInboxController {
     public Result<PageResult<InboxItemResponse>> inbox(@RequestParam(defaultValue = "1") int pageNum,
                                                        @RequestParam(defaultValue = "20") int pageSize) {
         return Result.success(inboxService.inbox(currentUserProvider.requireCurrentUser(), pageNum, pageSize));
+    }
+
+    @GetMapping("/category-summary")
+    @Operation(summary = "消息中心四大分类未读数聚合", description = "流程通知=非社区站内通知；互动=社区通知+私信；公告与 AI 待办暂无已读态恒为 0。",
+            operationId = "messageCategorySummary")
+    public Result<CategorySummaryResponse> categorySummary() {
+        return Result.success(inboxService.categorySummary(currentUserProvider.requireCurrentUser()));
     }
 }
