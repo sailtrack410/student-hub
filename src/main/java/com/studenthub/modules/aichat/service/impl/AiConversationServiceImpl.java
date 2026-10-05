@@ -191,6 +191,128 @@ public class AiConversationServiceImpl implements AiConversationService {
         return AiMessageResponse.from(assistantMessage);
     }
 
+    @Override
+    public void sendMessageStream(AuthenticatedUser user, Long conversationId, SendMessageRequest request,
+                                  java.util.function.Consumer<String> onDelta,
+                                  java.util.function.Consumer<AiMessageResponse> onDone,
+                                  java.util.function.Consumer<String> onError) {
+        long start = System.currentTimeMillis();
+        try {
+            // 校验与用户消息落库复用非流式链路（先走一遍快速校验，避免流式开始后才发现非法）
+            AiConversationEntity conversation = requireOwnedConversation(user.userId(), conversationId);
+            String content = request.content() == null ? "" : request.content().trim();
+            List<Long> imageIds = normalizeImageIds(request.effectiveImageIds());
+            List<Long> documentIds = normalizeDocumentIds(request.effectiveDocumentIds());
+            if (content.isEmpty() && imageIds.isEmpty() && documentIds.isEmpty()) {
+                throw new BusinessException(ErrorCode.INVALID_PARAMETER, "消息不能为空");
+            }
+            if (content.length() > currentMaxMessageCharacters()) {
+                throw new BusinessException(ErrorCode.INVALID_PARAMETER, "消息长度超过限制");
+            }
+            long sentLastHour = messageMapper.countUserMessagesSince(user.userId(), LocalDateTime.now().minusHours(1));
+            if (sentLastHour >= currentHourlyMessageLimit()) {
+                throw new BusinessException(ErrorCode.AI_RATE_LIMITED);
+            }
+            List<String> imageDataUrls = imageIds.stream().map(this::toImageDataUrl).toList();
+            String documentText = documentIds.isEmpty() ? null : readDocumentText(documentIds);
+
+            AiMessageEntity userMessage = new AiMessageEntity();
+            userMessage.setConversationId(conversation.getId());
+            userMessage.setRole(ROLE_USER);
+            userMessage.setContent(content);
+            userMessage.setImages(serializeImageIds(imageIds));
+            userMessage.setStatus(MESSAGE_STATUS_OK);
+            messageMapper.insert(userMessage);
+
+            AiIntentMatch intent = imageIds.isEmpty() ? intentClassifier.classify(content) : AiIntentMatch.fallback();
+            AiAssistantResolved resolved = resolveForIntent(intent, user);
+            String actionsJson = assistantDataService.serializeActions(resolved == null ? null : resolved.actions());
+
+            String reply;
+            String model = null;
+            Integer tokenUsage = null;
+            String errorCode = null;
+            String directTimeReply = currentTimeReply(content);
+            if (directTimeReply != null) {
+                reply = directTimeReply;
+                model = "system";
+                onDelta.accept(reply);
+            } else {
+                try {
+                    var ragService = imageIds.isEmpty() ? knowledgeBaseService.getIfAvailable() : null;
+                    String ragContext = ragService == null ? null : ragService.assistantContext(content);
+                    String mergedContext = resolved == null ? ragContext : resolved.contextText();
+                    if (resolved != null && ragContext != null) {
+                        mergedContext = resolved.contextText() + "\n\n【公共知识库资料】\n" + ragContext;
+                    }
+                    if (documentText != null) {
+                        mergedContext = mergedContext == null ? documentText : mergedContext + "\n\n" + documentText;
+                    }
+                    List<AiMessage> prompt = buildPrompt(content, conversation.getId(),
+                            mergedContext, imageDataUrls, userMessage.getId());
+                    StringBuilder streamed = new StringBuilder();
+                    if (imageIds.isEmpty()) {
+                        AiChatService.StreamDone[] done = new AiChatService.StreamDone[1];
+                        aiChatService.chatStream(prompt,
+                                delta -> {
+                                    streamed.append(delta);
+                                    onDelta.accept(delta);
+                                },
+                                streamDone -> done[0] = streamDone);
+                        if (done[0] != null) {
+                            model = done[0].model();
+                            Integer promptTokens = done[0].promptTokens();
+                            Integer completionTokens = done[0].completionTokens();
+                            tokenUsage = promptTokens == null && completionTokens == null
+                                    ? null : (promptTokens == null ? 0 : promptTokens) + (completionTokens == null ? 0 : completionTokens);
+                        }
+                        reply = streamed.toString();
+                    } else {
+                        // 视觉消息不支持流式，一次性推送
+                        AiChatResponse response = aiChatService.chatVision(prompt);
+                        reply = response.content();
+                        model = response.model();
+                        onDelta.accept(reply);
+                        Integer promptTokens = response.promptTokens();
+                        Integer completionTokens = response.completionTokens();
+                        tokenUsage = promptTokens == null && completionTokens == null
+                                ? null : (promptTokens == null ? 0 : promptTokens) + (completionTokens == null ? 0 : completionTokens);
+                    }
+                } catch (BusinessException exception) {
+                    log.warn("AI 流式调用失败, conversationId={}, code={}", conversation.getId(), exception.getCode());
+                    if (resolved != null && resolved.actions() != null && !resolved.actions().isEmpty()) {
+                        reply = localFallbackReply(intent, resolved);
+                        onDelta.accept(reply);
+                    } else {
+                        reply = CampusAssistantPrompts.DEGRADED_REPLY;
+                        errorCode = exception.getCode();
+                        onDelta.accept(reply);
+                    }
+                }
+            }
+
+            AiMessageEntity assistantMessage = new AiMessageEntity();
+            assistantMessage.setConversationId(conversation.getId());
+            assistantMessage.setRole(ROLE_ASSISTANT);
+            assistantMessage.setContent(reply);
+            assistantMessage.setActions(actionsJson);
+            assistantMessage.setModel(model);
+            assistantMessage.setPromptVersion(CampusAssistantPrompts.PROMPT_VERSION);
+            assistantMessage.setTokenUsage(tokenUsage);
+            assistantMessage.setCostMs((int) Math.min(Integer.MAX_VALUE, System.currentTimeMillis() - start));
+            assistantMessage.setErrorCode(errorCode);
+            assistantMessage.setStatus(errorCode == null ? MESSAGE_STATUS_OK : MESSAGE_STATUS_FAILED);
+            messageMapper.insert(assistantMessage);
+            touchConversation(conversation);
+            onDone.accept(AiMessageResponse.from(assistantMessage));
+        } catch (BusinessException exception) {
+            onError.accept(exception.getMessage() == null ? "AI 调用失败" : exception.getMessage());
+        } catch (RuntimeException exception) {
+            log.warn("AI 流式对话异常, conversationId={}", conversationId, exception);
+            onError.accept("AI 调用失败");
+        }
+    }
+
     private String currentTimeReply(String content) {
         String text = content == null ? "" : content.trim();
         if (text.isEmpty() || text.contains("课") || text.contains("课程")) {

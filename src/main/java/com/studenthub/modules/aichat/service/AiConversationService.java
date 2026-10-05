@@ -23,6 +23,16 @@ public interface AiConversationService {
     AiMessageResponse sendMessage(AuthenticatedUser user, Long conversationId, SendMessageRequest request);
 
     /**
+     * App SSE 流式对话（API需求清单 6.1）：校验/用户消息落库/意图数据与 sendMessage 同链路，
+     * 助手回复按增量推给 onDelta，结束后完整回复落库并经 onDone 返回最终消息。
+     * 调用方负责 SseEmitter 生命周期；本方法在工作线程执行。
+     */
+    void sendMessageStream(AuthenticatedUser user, Long conversationId, SendMessageRequest request,
+                           java.util.function.Consumer<String> onDelta,
+                           java.util.function.Consumer<AiMessageResponse> onDone,
+                           java.util.function.Consumer<String> onError);
+
+    /**
      * 上传的音频文件转写为文本，供发送消息使用；未配置 ASR 模型时抛业务异常。
      */
     String transcribeAudio(Long fileId);
