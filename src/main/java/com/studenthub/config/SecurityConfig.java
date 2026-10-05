@@ -40,13 +40,20 @@ public class SecurityConfig {
         return http
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                // 允许管理台 iframe 嵌入数据大屏（同源）
+                .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
+                        // SSE 异步完成后的 ASYNC/ERROR 分派会再次过授权过滤器，
+                        // 此时异步线程的 SecurityContext 不可用，须按分派类型放行
+                        .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ASYNC,
+                                jakarta.servlet.DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(
                                 "/api/common/system/health",
                                 "/api/common/auth/login",
                                 "/api/common/auth/wechat-login",
+                                "/api/common/auth/qq-login",
                                 "/api/common/auth/dev-wechat-login",
                                 "/api/common/files/view/**",
                                 "/api/common/assets/**",

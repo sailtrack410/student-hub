@@ -12,6 +12,8 @@ public enum ErrorCode {
     INVALID_CREDENTIALS("AUTH_401_01", "用户名或密码错误", HttpStatus.UNAUTHORIZED),
     WECHAT_LOGIN_FAILED("AUTH_401_02", "微信登录失败，请稍后重试", HttpStatus.UNAUTHORIZED),
     WECHAT_NOT_CONFIGURED("AUTH_503_01", "微信登录服务尚未配置", HttpStatus.SERVICE_UNAVAILABLE),
+    QQ_LOGIN_FAILED("AUTH_401_03", "QQ 登录失败，请稍后重试", HttpStatus.UNAUTHORIZED),
+    QQ_NOT_CONFIGURED("AUTH_503_02", "QQ 登录服务尚未配置", HttpStatus.SERVICE_UNAVAILABLE),
     ACCOUNT_DISABLED("AUTH_403_01", "账号已停用", HttpStatus.FORBIDDEN),
     FORBIDDEN("AUTH_403", "没有执行该操作的权限", HttpStatus.FORBIDDEN),
     NOT_FOUND("COMMON_404", "资源不存在", HttpStatus.NOT_FOUND),
@@ -36,6 +38,12 @@ public enum ErrorCode {
     JW_RATE_LIMITED("JW_429_01", "操作过于频繁，请稍后再试", HttpStatus.TOO_MANY_REQUESTS),
     PHONE_EXCHANGE_FAILED("PHONE_400_01", "手机号获取失败，请手动填写", HttpStatus.BAD_REQUEST),
     PUBLIC_RATE_LIMITED("PUBLIC_429", "访问过于频繁，请稍后再试", HttpStatus.TOO_MANY_REQUESTS),
+    COMMUNITY_REPORT_DUPLICATE("COMMUNITY_409_01", "你已举报过该内容，正在处理中", HttpStatus.CONFLICT),
+    COMMUNITY_REPORT_HANDLED("COMMUNITY_409_02", "该举报已处理", HttpStatus.CONFLICT),
+    COMMUNITY_REPORT_TARGET_INVALID("COMMUNITY_400_01", "举报对象不存在或不可举报", HttpStatus.BAD_REQUEST),
+    COMMUNITY_REPORT_NOT_FOUND("COMMUNITY_404_01", "举报记录不存在", HttpStatus.NOT_FOUND),
+    COMMUNITY_MUTED("COMMUNITY_403_01", "你已被限制发言，暂时无法发布内容", HttpStatus.FORBIDDEN),
+    COMMUNITY_REPORT_RATE_LIMITED("COMMUNITY_429_01", "举报过于频繁，请稍后再试", HttpStatus.TOO_MANY_REQUESTS),
     INTERNAL_ERROR("COMMON_500", "系统繁忙，请稍后重试", HttpStatus.INTERNAL_SERVER_ERROR);
 
     private final String code;

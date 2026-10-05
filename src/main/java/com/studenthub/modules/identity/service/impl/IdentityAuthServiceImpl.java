@@ -10,6 +10,8 @@ import com.studenthub.modules.identity.entity.UserEntity;
 import com.studenthub.modules.identity.entity.UserRoleEntity;
 import com.studenthub.integration.wechat.WechatIdentity;
 import com.studenthub.integration.wechat.WechatIdentityProvider;
+import com.studenthub.integration.qq.QqIdentity;
+import com.studenthub.integration.qq.QqIdentityProvider;
 import com.studenthub.modules.identity.mapper.IdentityAccessMapper;
 import com.studenthub.modules.identity.mapper.RoleMapper;
 import com.studenthub.modules.identity.mapper.RoleScopeRow;
@@ -19,6 +21,7 @@ import com.studenthub.modules.identity.security.AuthenticatedUser;
 import com.studenthub.modules.identity.security.CurrentUserProvider;
 import com.studenthub.modules.identity.security.RoleScope;
 import com.studenthub.modules.identity.security.SecurityProperties;
+import com.studenthub.modules.identity.security.SessionClientPolicy;
 import com.studenthub.modules.identity.security.AuthenticatedUserFactory;
 import com.studenthub.modules.identity.security.SessionStore;
 import com.studenthub.modules.identity.security.SessionToken;
@@ -54,8 +57,10 @@ public class IdentityAuthServiceImpl implements IdentityAuthService {
     private final PasswordEncoder passwordEncoder;
     private final SessionStore sessionStore;
     private final SecurityProperties securityProperties;
+    private final SessionClientPolicy sessionClientPolicy;
     private final CurrentUserProvider currentUserProvider;
     private final WechatIdentityProvider wechatIdentityProvider;
+    private final QqIdentityProvider qqIdentityProvider;
     private final AuthenticatedUserFactory authenticatedUserFactory;
     private final com.studenthub.modules.file.mapper.FileStorageMapper fileStorageMapper;
     private final org.springframework.beans.factory.ObjectProvider<com.studenthub.integration.wechat.WechatPhoneNumberClient> phoneClientProvider;
@@ -84,30 +89,54 @@ public class IdentityAuthServiceImpl implements IdentityAuthService {
     @Transactional(rollbackFor = Exception.class)
     public LoginResponse wechatLogin(String code) {
         WechatIdentity identity = wechatIdentityProvider.exchange(code);
-        return loginOrCreateByOpenId(identity.openId(), "微信用户");
+        return loginOrCreateByIdentity("WECHAT", identity.openId(), "微信用户");
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public LoginResponse qqLogin(String accessToken, String openId) {
+        QqIdentity identity = qqIdentityProvider.exchange(accessToken);
+        // 客户端提交的 openId 可伪造；只接受与 QQ 反查结果一致的提交值，不一致按登录失败处理
+        if (openId != null && !openId.isBlank() && !openId.equals(identity.openId())) {
+            log.warn("QQ openId 与反查结果不一致, 拒绝登录");
+            throw new BusinessException(ErrorCode.QQ_LOGIN_FAILED);
+        }
+        return loginOrCreateByIdentity("QQ", identity.openId(), "QQ用户");
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public LoginResponse devWechatLogin() {
-        return loginOrCreateByOpenId(DEV_FIXED_OPEN_ID, "调试同学");
+        return loginOrCreateByIdentity("WECHAT", DEV_FIXED_OPEN_ID, "调试同学");
     }
 
-    private LoginResponse loginOrCreateByOpenId(String openId, String defaultDisplayName) {
-        UserEntity user = userMapper.findByWechatOpenId(openId);
+    /**
+     * 按 provider 身份登录或建号：openId 只在对应身份列中查找（各 provider 的 openId
+     * 互不通用），新号 username 用 provider 小写前缀，授权态/默认角色与微信登录一致。
+     */
+    private LoginResponse loginOrCreateByIdentity(String provider, String openId, String defaultDisplayName) {
+        UserEntity user = "QQ".equals(provider)
+                ? userMapper.findByQqOpenId(openId)
+                : userMapper.findByWechatOpenId(openId);
         boolean newUser = user == null;
         if (newUser) {
             user = new UserEntity();
-            user.setCampusId(wechatIdentityProvider.defaultCampusId());
-            user.setUsername("wx_" + openId.substring(0, Math.min(24, openId.length())));
+            user.setCampusId("QQ".equals(provider)
+                    ? qqIdentityProvider.defaultCampusId()
+                    : wechatIdentityProvider.defaultCampusId());
+            user.setUsername(provider.toLowerCase() + "_" + openId.substring(0, Math.min(24, openId.length())));
             user.setDisplayName(defaultDisplayName);
             user.setStatus("ENABLED");
-            user.setWechatOpenId(openId);
+            if ("QQ".equals(provider)) {
+                user.setQqOpenId(openId);
+            } else {
+                user.setWechatOpenId(openId);
+            }
             user.setIdentityType("STUDENT");
             user.setAuthorizationStatus("BASIC");
             userMapper.insert(user);
             bindDefaultRequesterRole(user.getId());
-            log.info("首次登录自动创建用户, userId={}", user.getId());
+            log.info("首次登录自动创建用户, userId={}, provider={}", user.getId(), provider);
         }
         if (!"ENABLED".equals(user.getStatus())) {
             log.warn("已停用账号尝试登录, userId={}", user.getId());
@@ -215,7 +244,8 @@ public class IdentityAuthServiceImpl implements IdentityAuthService {
 
     private LoginResponse createSession(UserEntity user, boolean newUser) {
         AuthenticatedUser authenticatedUser = authenticatedUserFactory.build(user);
-        SessionToken token = sessionStore.create(authenticatedUser, securityProperties.getSessionTtl());
+        // App 端使用长期 TTL（配合滑动续期实现免登录），Web/管理端保持短 TTL
+        SessionToken token = sessionStore.create(authenticatedUser, sessionClientPolicy.creationTtl());
 
         UserEntity loginUpdate = new UserEntity();
         loginUpdate.setId(user.getId());
