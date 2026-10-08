@@ -60,6 +60,26 @@ public class InMemorySessionStore implements SessionStore {
     }
 
     @Override
+    public boolean renew(String rawToken, Long userId, Duration ttl, Duration threshold) {
+        // 内存实现的会话索引随会话对象生命周期管理，无需按 userId 单独续期
+        if (ttl == null || ttl.isZero() || ttl.isNegative()
+                || threshold == null || threshold.isNegative() || threshold.isZero()) {
+            return false;
+        }
+        String tokenHash = SecureTokenSupport.hash(rawToken);
+        StoredSession storedSession = sessions.get(tokenHash);
+        Instant now = Instant.now();
+        if (storedSession == null || storedSession.expiresAt().isBefore(now)) {
+            return false;
+        }
+        if (Duration.between(now, storedSession.expiresAt()).toSeconds() > threshold.toSeconds()) {
+            return false;
+        }
+        sessions.put(tokenHash, new StoredSession(storedSession.user(), now.plus(ttl)));
+        return true;
+    }
+
+    @Override
     public int refreshUserSessions(Long userId, AuthenticatedUser refreshed) {
         int[] count = {0};
         for (String tokenHash : sessionHashesByUser.getOrDefault(userId, Set.of())) {
