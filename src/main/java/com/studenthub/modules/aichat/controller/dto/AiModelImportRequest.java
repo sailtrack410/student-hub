@@ -17,7 +17,16 @@ public record AiModelImportRequest(
     @Schema(description = "导入模型项")
     public record AiModelImportItem(
             @Schema(description = "供应商模型 ID") @NotBlank @Size(max = 128) String providerModelId,
-            @Schema(description = "模型类型：CHAT/VISION/ASR，默认 CHAT", nullable = true)
-            @Pattern(regexp = "^(CHAT|VISION|ASR|EMBEDDING)$", message = "模型类型仅支持 CHAT/VISION/ASR/EMBEDDING") String modelType) {
+            @Schema(description = "主类型：CHAT/VISION/ASR/TTS/EMBEDDING/RERANK；留空按模型 ID 自动推断", nullable = true)
+            @Pattern(regexp = "^(CHAT|VISION|ASR|TTS|EMBEDDING|RERANK)$", message = "模型类型仅支持 CHAT/VISION/ASR/TTS/EMBEDDING/RERANK") String modelType,
+            @Schema(description = "能力标签列表（多选，如 vision+stream），留空按模型 ID 自动推断", nullable = true)
+            List<@Pattern(regexp = "^(stream|vision|audio|tools|structured|reasoning)$",
+                    message = "能力仅支持 stream/vision/audio/tools/structured/reasoning") String> capabilities) {
+
+        /** 归一化能力标签：去重、排序、逗号连接 */
+        public String capabilitiesJoined() {
+            if (capabilities == null || capabilities.isEmpty()) return null;
+            return capabilities.stream().distinct().sorted().reduce((a, b) -> a + "," + b).orElse(null);
+        }
     }
 }

@@ -53,7 +53,9 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
     private static final String TYPE_CHAT = "CHAT";
     private static final String TYPE_VISION = "VISION";
     private static final String TYPE_ASR = "ASR";
+    private static final String TYPE_TTS = "TTS";
     private static final String TYPE_EMBEDDING = "EMBEDDING";
+    private static final String TYPE_RERANK = "RERANK";
     private static final Pattern VALID_PROVIDER_CODE = Pattern.compile("^[a-z0-9][a-z0-9-]{0,62}$");
     private static final Duration CHECK_CONNECT_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration CHECK_READ_TIMEOUT = Duration.ofSeconds(15);
@@ -89,6 +91,9 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
         provider.setBaseUrl(normalizeBaseUrl(request.baseUrl()));
         provider.setApiKey(request.apiKey().trim());
         provider.setEnabled(true);
+        provider.setIcon(StringUtils.hasText(request.icon()) ? request.icon().trim() : null);
+        provider.setProtocol(StringUtils.hasText(request.protocol()) ? request.protocol() : "OPENAI_CHAT");
+        provider.setStreaming(request.streaming() == null || request.streaming());
         providerMapper.insert(provider);
         aiConfigService.refreshRuntime();
         log.info("AI 供应商已新增, providerId={}, code={}, operatorId={}", provider.getId(), code, operatorId);
@@ -111,6 +116,15 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
         }
         if (request.enabled() != null) {
             provider.setEnabled(request.enabled());
+        }
+        if (request.icon() != null) {
+            provider.setIcon(StringUtils.hasText(request.icon()) ? request.icon().trim() : null);
+        }
+        if (StringUtils.hasText(request.protocol())) {
+            provider.setProtocol(request.protocol());
+        }
+        if (request.streaming() != null) {
+            provider.setStreaming(request.streaming());
         }
         providerMapper.updateById(provider);
         aiConfigService.refreshRuntime();
@@ -207,7 +221,20 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
             AiModelEntity model = new AiModelEntity();
             model.setProviderId(providerId);
             model.setProviderModelId(modelId);
-            model.setModelType(type);
+            // 类型与能力：用户指定优先，否则按模型 ID 命名规律自动推断
+            String caps = item.capabilitiesJoined();
+            if (StringUtils.hasText(item.modelType())) {
+                model.setModelType(item.modelType());
+            } else {
+                String guessed = guessModelType(modelId);
+                model.setModelType(guessed);
+                // 用户未指定类型时，推断出的主类型也要写进能力标签（RERANK 无能力标签，跳过）
+                String primary = primaryCapOf(guessed);
+                if (primary != null && caps != null && !caps.contains(primary)) {
+                    caps = primary + "," + caps;
+                }
+            }
+            model.setCapabilities(caps != null ? caps : guessCapabilities(modelId));
             model.setEnabled(true);
             modelMapper.insert(model);
             existing.add(modelId);
@@ -222,8 +249,7 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
     }
 
     @Override
-    public List<AiModelResponse> listModels(String keyword, String modelType) {
-        List<AiModelEntity> models = modelMapper.selectList(new LambdaQueryWrapper<AiModelEntity>()
+    public List<AiModelResponse> listModels(String keyword, String modelType) {        List<AiModelEntity> models = modelMapper.selectList(new LambdaQueryWrapper<AiModelEntity>()
                 .like(StringUtils.hasText(keyword), AiModelEntity::getProviderModelId, keyword)
                 .eq(StringUtils.hasText(modelType), AiModelEntity::getModelType, modelType)
                 .orderByAsc(AiModelEntity::getProviderId)
@@ -271,7 +297,7 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
                         AiDefaultModelEntity::getModelId));
         Map<Long, String> providerNames = providerNameMap();
         List<AiDefaultModelResponse> result = new ArrayList<>();
-        for (String typeCode : List.of(TYPE_CHAT, TYPE_VISION, TYPE_ASR, TYPE_EMBEDDING)) {
+        for (String typeCode : List.of(TYPE_CHAT, TYPE_VISION, TYPE_ASR, TYPE_TTS, TYPE_EMBEDDING, TYPE_RERANK)) {
             Long modelId = defaults.get(typeCode);
             AiModelEntity model = modelId == null ? null : modelMap.get(modelId);
             result.add(new AiDefaultModelResponse(typeCode, typeName(typeCode),
@@ -412,9 +438,11 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
     private String typeName(String typeCode) {
         return switch (typeCode) {
             case TYPE_VISION -> "图片识别";
-            case TYPE_ASR -> "语音识别";
+            case TYPE_ASR -> "语音转写";
+            case TYPE_TTS -> "语音合成";
             case TYPE_EMBEDDING -> "向量模型";
-            default -> "聊天模型";
+            case TYPE_RERANK -> "精排";
+            default -> "语言对话";
         };
     }
 
@@ -424,5 +452,65 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
             root = root.getCause();
         }
         return root.getMessage() == null ? root.getClass().getSimpleName() : root.getMessage();
+    }
+
+    /** 主类型对应的能力标签（推断类型时同步写入 capabilities） */
+    private String primaryCapOf(String typeCode) {
+        return switch (typeCode) {
+            case TYPE_VISION -> "vision";
+            case TYPE_ASR, TYPE_TTS -> "audio";
+            case TYPE_EMBEDDING -> "embedding";
+            case TYPE_RERANK -> null;
+            default -> "stream";
+        };
+    }
+
+    /**
+     * 按模型 ID 命名规律推断类型（OpenAI 兼容 /models 不返回能力元数据，业内通用做法）。
+     * 用户在导入/创建时手动指定的类型优先于此推断。
+     */
+    private String guessModelType(String modelId) {
+        String id = modelId.toLowerCase();
+        if (id.contains("rerank")) {
+            return TYPE_RERANK;
+        }
+        if (id.contains("embedding") || id.contains("embed") || id.contains("bge-")
+                || id.contains("m3e") || id.contains("text-embedding")) {
+            return TYPE_EMBEDDING;
+        }
+        if (id.contains("tts") || id.contains("speech-synthesis") || id.contains("samlb")
+                || id.contains("cosyvoice")) {
+            return TYPE_TTS;
+        }
+        if (id.contains("asr") || id.contains("whisper") || id.contains("audio")
+                || id.contains("transcri")) {
+            return TYPE_ASR;
+        }
+        if (id.contains("vl") || id.contains("vision") || id.contains("image")
+                || id.contains("4v") || id.contains("-v-")) {
+            return TYPE_VISION;
+        }
+        return TYPE_CHAT;
+    }
+
+    /** 按模型 ID 推断能力标签（逗号分隔，与 capabilities 字段约定一致） */
+    private String guessCapabilities(String modelId) {
+        String id = modelId.toLowerCase();
+        List<String> caps = new ArrayList<>();
+        caps.add("stream");
+        if (id.contains("vl") || id.contains("vision") || id.contains("image") || id.contains("4v")) {
+            caps.add("vision");
+        }
+        if (id.contains("asr") || id.contains("whisper") || id.contains("tts") || id.contains("audio")) {
+            caps.add("audio");
+        }
+        if (id.contains("r1") || id.contains("reasoning") || id.contains("thinking")
+                || id.contains("o1") || id.contains("o3")) {
+            caps.add("reasoning");
+        }
+        if (id.contains("function") || id.contains("tool") || id.contains("qwen3") || id.contains("glm-4")) {
+            caps.add("tools");
+        }
+        return String.join(",", caps);
     }
 }
