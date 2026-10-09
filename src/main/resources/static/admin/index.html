@@ -7,6 +7,8 @@
     <title>Student Hub 管理台</title>
     <link rel="stylesheet" href="/admin/vendor/element-plus.css">
     <link rel="stylesheet" href="/admin/css/admin.css">
+    <link rel="stylesheet" href="/admin/css/pages.css">
+    <script>document.documentElement.dataset.theme = localStorage.getItem('admin_theme') || 'dark';</script>
 </head>
 <body>
 <div id="app"></div>
@@ -14,12 +16,22 @@
 <script src="/admin/vendor/element-plus.full.min.js"></script>
 <script src="/admin/vendor/element-plus.zh-cn.locale.min.js"></script>
 <script src="/admin/vendor/element-icons.iife.min.js"></script>
+<script src="/admin/vendor/marked.min.js"></script>
+<script src="/admin/vendor/dompurify.min.js"></script>
+<script src="/admin/js/md-view.js"></script>
 <script src="/admin/js/api.js"></script>
 <script src="/admin/js/pages/login.js"></script>
+<script src="/admin/js/pages/dashboard.js"></script>
+<script src="/admin/js/pages/requests.js"></script>
+<script src="/admin/js/pages/eval.js"></script>
+<script src="/admin/js/pages/community.js"></script>
+<script src="/admin/js/pages/aitest.js"></script>
 <script src="/admin/js/pages/workorders.js"></script>
 <script src="/admin/js/pages/users.js"></script>
 <script src="/admin/js/pages/aiconfig.js"></script>
 <script src="/admin/js/pages/knowledge.js"></script>
+<script src="/admin/js/pages/services.js"></script>
+<script src="/admin/js/pages/design.js"></script>
 <script src="/admin/js/app.js"></script>
 </body>
 </html>

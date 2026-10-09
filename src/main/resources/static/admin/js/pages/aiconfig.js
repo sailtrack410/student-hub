@@ -7,12 +7,14 @@
 
     window.AdminPages = window.AdminPages || {};
 
-    var TYPE_LABEL = { CHAT: '语言模型', VISION: '图片识别', ASR: '语音识别', EMBEDDING: '向量模型' };
+    var TYPE_LABEL = { CHAT: '语言模型', VISION: '图片识别', ASR: '语音识别', TTS: '语音合成', EMBEDDING: '向量模型', RERANK: '精排' };
     var TYPE_OPTIONS = [
         { value: 'CHAT', label: '语言模型' },
         { value: 'VISION', label: '图片识别' },
         { value: 'ASR', label: '语音识别' }
+        ,{ value: 'TTS', label: '语音合成' }
         ,{ value: 'EMBEDDING', label: '向量模型' }
+        ,{ value: 'RERANK', label: '精排' }
     ];
 
     function typeLabel(value) {
@@ -23,164 +25,163 @@
     window.AdminPages.AiProvidersPage = {
         name: 'AiProvidersPage',
         template: [
-            '<div class="ai-layout">',
-            '  <aside class="ai-side">',
-            '    <div class="ai-side-head">',
-            '      <div>',
-            '        <div class="ai-side-title">供应商</div>',
-            '        <div class="muted">已接入 {{ providers.length }} 个</div>',
-            '      </div>',
-            '      <el-button circle :icon="PlusIcon" size="small" @click="openCreate" />',
+            '<div class="duo" style="flex:1;min-height:0">',
+            '  <aside class="lcard" style="width:302px;flex:none;gap:12px;align-self:stretch">',
+            '    <div class="cap" style="font-size:15px">供应商',
+            '      <span class="r" style="gap:6px"><span style="font-size:12px;color:var(--tk-text3)">已接入 {{ providers.length }} 个</span>',
+            '      <span class="op" style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;background:var(--tk-info-bg);cursor:pointer" @click="openCreate" title="新增供应商">',
+            '        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--tk-info)" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+            '      </span></span>',
             '    </div>',
-            '    <div v-if="!providers.length" class="muted" style="padding:12px 4px">还没有供应商，点击右上角 + 新增</div>',
-            '    <div v-for="p in providers" :key="p.providerId"',
-            '         class="ai-provider-item" :class="{ active: p.providerId === selectedId }"',
-            '         @click="select(p.providerId)">',
-            '      <div class="ai-provider-name">',
-            '        <span class="dot" :class="p.enabled && p.apiKeyConfigured ? \'ok\' : \'off\'"></span>',
-            '        <span class="strong">{{ p.providerName }}</span>',
+            '    <div style="display:flex;flex-direction:column;gap:6px;overflow:auto">',
+            '      <div v-if="!providers.length" style="font-size:12px;color:var(--tk-muted);padding:12px 0;text-align:center">还没有供应商，点击右上角 + 新增</div>',
+            '      <div v-for="p in providers" :key="p.providerId" class="node"',
+            '           :class="{ on: p.providerId === selectedId }" style="align-items:flex-start;gap:10px" @click="select(p.providerId)">',
+            '        <img v-if="p.icon" :src="providerIconUrl(p.icon)" width="22" height="22" style="border-radius:5px;flex:none;margin-top:1px" />',
+            '        <span v-else style="width:6px;height:6px;border-radius:999px;margin-top:7px;flex:none;',
+            '          background: p.enabled && p.apiKeyConfigured ? \'var(--tk-ok)\' : \'var(--tk-muted)\'"></span>',
+            '        <span style="display:flex;flex-direction:column;gap:1px;min-width:0">',
+            '          <b style="font-size:13px;color:var(--tk-text)">{{ p.providerName }}</b>',
+            '          <span style="font-size:11px;color:var(--tk-text3)">{{ p.providerCode }} · {{ p.modelCount }} 个模型</span>',
+            '        </span>',
             '      </div>',
-            '      <div class="muted ai-provider-code">{{ p.providerCode }} · {{ p.modelCount }} 个模型</div>',
             '    </div>',
             '  </aside>',
 
-            '  <section class="ai-main" v-loading="loading">',
+            '  <section style="flex:1;display:flex;flex-direction:column;gap:16px;min-width:0;min-height:0" v-loading="loading">',
             '    <template v-if="current">',
-            '      <div class="page-card">',
-            '        <div class="ai-provider-head">',
-            '          <div>',
-            '            <h3 class="ai-title">{{ current.providerName }}</h3>',
-            '            <div class="muted mono">{{ current.providerCode }}</div>',
-            '          </div>',
-            '          <div class="ai-head-actions">',
-            '            <el-switch v-model="current.enabled" @change="toggleEnabled" />',
-            '            <el-button :loading="checking" @click="check">检查连通性</el-button>',
-            '            <el-button @click="openEdit">编辑</el-button>',
-            '            <el-button type="danger" plain @click="removeProvider">删除</el-button>',
-            '          </div>',
+            '      <div class="lcard" style="gap:14px">',
+            '        <div class="cap" style="font-size:15px">',
+            '          <img v-if="current.icon" :src="providerIconUrl(current.icon)" width="38" height="38" style="border-radius:10px;background:var(--tk-info-bg);padding:4px;box-sizing:border-box" />',
+            '          <span v-else style="width:38px;height:38px;border-radius:10px;background:var(--tk-info-bg);display:grid;place-items:center;font-size:15px;font-weight:650;color:var(--tk-info)">{{ (current.providerName || "?").slice(0, 1) }}</span>',
+            '          <span style="display:flex;flex-direction:column"><b style="font-size:15px">{{ current.providerName }}</b><span style="font-size:11px;color:var(--tk-text3);font-weight:400">{{ current.providerCode }}</span></span>',
+            '          <span class="r" style="gap:10px">',
+            '            <span class="switch" :class="{off:!current.enabled}" @click="toggleEnabled(!current.enabled)"><i></i></span>',
+            '            <button class="btn2 sm" style="height:30px" :disabled="checking" @click="check">{{ checking ? "检查中…" : "检查连通性" }}</button>',
+            '            <button class="btn2 sm" style="height:30px" @click="openEdit">编辑</button>',
+            '            <span class="op r" style="font-size:12px;cursor:pointer" @click="removeProvider">删除</span>',
+            '          </span>',
             '        </div>',
-            '        <el-descriptions :column="3" border style="margin-top:12px">',
-            '          <el-descriptions-item label="状态">',
-            '            <span class="dot" :class="current.enabled ? \'ok\' : \'off\'"></span>',
-            '            {{ current.enabled ? \'启用中\' : \'已停用\' }}',
-            '          </el-descriptions-item>',
-            '          <el-descriptions-item label="上次检查">{{ fmt(current.lastCheckAt) }}</el-descriptions-item>',
-            '          <el-descriptions-item label="凭据状态">',
-            '            {{ current.apiKeyConfigured ? \'已配置\' : \'未配置\' }}',
-            '          </el-descriptions-item>',
-            '          <el-descriptions-item label="Base URL" :span="3" class="mono">{{ current.baseUrl }}</el-descriptions-item>',
-            '          <el-descriptions-item label="状态信息" :span="3">',
-            '            <template v-if="current.lastCheckResult">',
-            '              <span class="dot" :class="current.lastCheckOk ? \'ok\' : \'bad\'"></span>',
-            '              {{ current.lastCheckResult }}',
-            '            </template>',
-            '            <span v-else class="muted">尚未检查</span>',
-            '          </el-descriptions-item>',
-            '        </el-descriptions>',
+            '        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">',
+            '          <div><div style="font-size:12px;color:var(--tk-text3)">状态</div><div style="margin-top:4px"><span class="bdg" :class="current.enabled ? \'g\' : \'n2\'">{{ current.enabled ? \'启用中\' : \'已停用\' }}</span></div></div>',
+            '          <div><div style="font-size:12px;color:var(--tk-text3)">上次检查</div><div style="font-size:14px;color:var(--tk-text);margin-top:4px">{{ fmt(current.lastCheckAt) || "尚未检查" }}</div></div>',
+            '          <div><div style="font-size:12px;color:var(--tk-text3)">凭据状态</div><div style="font-size:14px;color:var(--tk-text);margin-top:4px">{{ current.apiKeyConfigured ? "已配置" : "未配置" }}</div></div>',
+            '          <div><div style="font-size:12px;color:var(--tk-text3)">代理</div><div style="font-size:14px;color:var(--tk-muted);margin-top:4px">未配置</div></div>',
+            '        </div>',
+            '        <div style="display:flex;gap:12px;font-size:12px"><span style="color:var(--tk-text3);width:90px;flex:none">Base URL</span><span style="color:var(--tk-text2)">{{ current.baseUrl }}</span></div>',
+            '        <div style="display:flex;gap:12px;font-size:12px;align-items:center"><span style="color:var(--tk-text3);width:90px;flex:none">状态信息</span>',
+            '          <span v-if="current.lastCheckResult" class="bdg" :class="current.lastCheckOk ? \'g\' : \'r\'">{{ current.lastCheckResult }}</span>',
+            '          <span v-else style="color:var(--tk-muted)">尚未检查</span></div>',
             '      </div>',
 
-            '      <div class="page-card" style="margin-top:14px">',
-            '        <div class="ai-models-head">',
-            '          <div>',
-            '            <h4 class="ai-title" style="font-size:15px">模型列表</h4>',
-            '            <div class="muted">当前供应商下共 {{ providerModels.length }} 个模型</div>',
-            '          </div>',
-            '          <el-dropdown @command="addCommand">',
-            '            <el-button type="primary"><el-icon><component :is="PlusIcon" /></el-icon>添加模型</el-button>',
-            '            <template #dropdown>',
-            '              <el-dropdown-menu>',
-            '                <el-dropdown-item command="fetch">从供应商获取</el-dropdown-item>',
-            '                <el-dropdown-item command="manual">手动添加</el-dropdown-item>',
-            '              </el-dropdown-menu>',
-            '            </template>',
-            '          </el-dropdown>',
+            '      <div class="lcard" style="gap:12px;flex:1;min-height:0">',
+            '        <div class="cap" style="font-size:15px">模型列表<span class="cnt">当前供应商下共 {{ providerModels.length }} 个模型</span>',
+            '          <span class="r" style="gap:8px">',
+            '            <button class="btn2 sm pri" style="height:30px" @click="addCommand(\'fetch\')">+ 获取模型</button>',
+            '            <button class="btn2 sm" style="height:30px" @click="addCommand(\'manual\')">手动添加</button>',
+            '          </span>',
             '        </div>',
-            '        <div v-if="!providerModels.length" class="muted" style="padding:16px 0">',
-            '          还没有模型，点击「添加模型」从供应商拉取或手动添加',
-            '        </div>',
-            '        <div v-for="m in providerModels" :key="m.modelId" class="ai-model-row">',
-            '          <div class="grow">',
-            '            <div class="strong">{{ m.providerModelId }}</div>',
-            '            <div class="muted mono">供应商模型 ID: {{ m.providerModelId }}</div>',
+            '        <div v-if="!providerModels.length" style="font-size:12px;color:var(--tk-muted);padding:16px 0">还没有模型，点击「获取模型」从供应商拉取或手动添加</div>',
+            '        <div style="display:flex;flex-direction:column;gap:2px;overflow:auto">',
+            '          <div v-for="m in providerModels" :key="m.modelId" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px">',
+            '            <span style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0">',
+            '              <b style="font-size:13px;font-weight:500;color:var(--tk-text)">{{ m.providerModelId }}</b>',
+            '              <span style="font-size:11px;color:var(--tk-text3)">供应商模型 ID: {{ m.providerModelId }} · {{ capLabels(m.capabilities) || typeLabel(m.modelType) }}</span>',
+            '            </span>',
+            '            <span class="bdg plain" :class="m.modelType === \'VISION\' ? \'\' : \'\'">{{ typeLabel(m.modelType) }}</span>',
+            '            <span class="switch" :class="{off:!m.enabled}" @click="toggleModel(m, !m.enabled)"><i></i></span>',
+            '            <span class="op r" style="font-size:12px;cursor:pointer;padding:0 4px" @click="removeModel(m)">删除</span>',
             '          </div>',
-            '          <el-tag size="small" :type="m.modelType === \'VISION\' ? \'warning\' : \'info\'">{{ typeLabel(m.modelType) }}</el-tag>',
-            '          <el-switch :model-value="m.enabled" @change="function (v) { toggleModel(m, v) }" style="margin-left:12px" />',
-            '          <el-button link type="danger" style="margin-left:8px" @click="removeModel(m)">删除</el-button>',
             '        </div>',
             '      </div>',
             '    </template>',
-            '    <el-empty v-else-if="!loading" description="选择或新增一个供应商" />',
+            '    <div v-else-if="!loading" class="lcard" style="align-items:center;justify-content:center;min-height:200px;color:var(--tk-muted)">选择或新增一个供应商</div>',
             '  </section>',
 
-            '  <el-dialog v-model="editVisible" :title="editId ? \'编辑供应商\' : \'新增供应商\'" width="520px">',
-            '    <el-form label-width="100px">',
-            '      <el-form-item label="名称" required>',
-            '        <el-input v-model.trim="editForm.providerName" maxlength="64" placeholder="如 硅基流动" />',
-            '      </el-form-item>',
-            '      <el-form-item label="Base URL" required>',
-            '        <el-input v-model.trim="editForm.baseUrl" placeholder="如 https://api.siliconflow.cn/v1" />',
-            '      </el-form-item>',
-            '      <el-form-item label="API Key" :required="!editId">',
-            '        <el-input v-model="editForm.apiKey" type="password" show-password',
-            '                  :placeholder="editId ? \'留空表示保持原值\' : \'sk-...\'" />',
-            '      </el-form-item>',
-            '      <el-form-item v-if="!editId" label="编码">',
-            '        <el-input v-model.trim="editForm.providerCode" placeholder="留空自动生成，小写字母/数字/短横线" />',
-            '      </el-form-item>',
-            '    </el-form>',
-            '    <template #footer>',
-            '      <el-button @click="editVisible = false">取消</el-button>',
-            '      <el-button type="primary" :loading="saving" @click="saveProvider">保存</el-button>',
-            '    </template>',
-            '  </el-dialog>',
-
-            '  <el-dialog v-model="manualVisible" title="手动添加模型" width="460px">',
-            '    <el-form label-width="100px">',
-            '      <el-form-item label="模型 ID" required>',
-            '        <el-input v-model.trim="manualModelId" placeholder="如 deepseek-ai/DeepSeek-V4" />',
-            '      </el-form-item>',
-            '      <el-form-item label="类型">',
-            '        <el-select v-model="manualType" style="width:100%">',
-            '          <el-option v-for="t in typeOptions" :key="t.value" :label="t.label" :value="t.value" />',
-            '        </el-select>',
-            '      </el-form-item>',
-            '    </el-form>',
-            '    <template #footer>',
-            '      <el-button @click="manualVisible = false">取消</el-button>',
-            '      <el-button type="primary" :loading="saving" @click="saveManual">添加</el-button>',
-            '    </template>',
-            '  </el-dialog>',
-
-            '  <el-dialog v-model="fetchVisible" title="从供应商获取模型" width="680px">',
-            '    <div v-loading="fetching" style="min-height:200px">',
-            '      <template v-if="remoteLoaded">',
-            '        <div class="ai-fetch-head">',
-            '          <div class="muted">共 {{ remoteModels.length }} 个模型 · 已选择 {{ selectedRemote.length }} 个</div>',
-            '          <div>',
-            '            <el-button size="small" @click="selectAllRemote">选择所有</el-button>',
-            '            <el-button size="small" @click="selectedRemote = []">清空选择</el-button>',
+            // 弹层: 新增/编辑供应商（新增时可选预置模板，自动填 URL/协议/图标）
+            '  <div class="pmask" :class="{ show: editVisible }" @click.self="editVisible = false">',
+            '    <div class="pcard w560">',
+            '      <div class="ph"><b>{{ editId ? "编辑供应商" : "新增供应商" }}</b><span class="sp"></span><span class="x" @click="editVisible = false">✕</span></div>',
+            '      <template v-if="!editId">',
+            '        <div class="plbl">选择预置供应商（自动填好地址与协议），或选择自定义</div>',
+            '        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">',
+            '          <div v-for="t in providerTemplates" :key="t.key" @click="applyTemplate(t)"',
+            '               style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px;border:1px solid #E0E0E0;border-radius:10px;cursor:pointer;background:#fff"',
+            '               :style="editForm.icon === t.icon ? \'border-color:#0066CC;box-shadow:0 0 0 2px rgba(0,102,204,.15)\' : \'\'">',
+            '            <img :src="providerIconUrl(t.icon)" width="28" height="28" style="border-radius:6px" />',
+            '            <span style="font-size:12px;color:#1D1D1F">{{ t.name }}</span>',
             '          </div>',
-            '        </div>',
-            '        <el-input v-model="remoteKeyword" placeholder="搜索模型名称..." clearable style="margin:10px 0" />',
-            '        <div class="ai-fetch-list">',
-            '          <div v-for="m in filteredRemote" :key="m.id" class="ai-fetch-row">',
-            '            <el-checkbox :model-value="selectedRemote.indexOf(m.id) >= 0" @change="function (v) { toggleRemote(m.id, v) }" />',
-            '            <div class="grow strong" style="margin-left:10px">{{ m.id }}</div>',
-            '            <el-select :model-value="remoteType[m.id] || \'CHAT\'" size="small" style="width:110px"',
-            '                       @change="function (v) { remoteType[m.id] = v }">',
-            '              <el-option v-for="t in typeOptions" :key="t.value" :label="t.label" :value="t.value" />',
-            '            </el-select>',
-            '          </div>',
-            '          <el-empty v-if="!filteredRemote.length" description="没有匹配的模型" />',
             '        </div>',
             '      </template>',
+            '      <div class="fld"><label>名称 <em>*</em></label><div class="pin"><input v-model.trim="editForm.providerName" maxlength="64" placeholder="如 硅基流动" /></div></div>',
+            '      <div class="fld"><label>Base URL <em>*</em></label><div class="pin"><input v-model.trim="editForm.baseUrl" placeholder="如 https://api.siliconflow.cn/v1" /></div></div>',
+            '      <div class="frow">',
+            '        <div class="fld"><label>调用协议</label><div class="pin"><select v-model="editForm.protocol" style="width:100%">',
+            '          <option value="OPENAI_CHAT">OpenAI · /chat/completions</option>',
+            '          <option value="ANTHROPIC_MESSAGES">Anthropic · /messages</option>',
+            '          <option value="OPENAI_RESPONSES">OpenAI · /responses</option>',
+            '        </select></div></div>',
+            '        <div class="fld"><label>流式输出</label><div style="display:flex;align-items:center;gap:10px;height:40px">',
+            '          <span class="switch" :class="{ off: !editForm.streaming }" @click="editForm.streaming = !editForm.streaming"><i></i></span>',
+            '          <span style="font-size:13px;color:#3A3A3C">SSE 流式</span></div></div>',
+            '      </div>',
+            '      <div class="fld"><label>API Key <em v-if="!editId">*</em></label><div class="pin"><input v-model="editForm.apiKey" type="password" :placeholder="editId ? \'留空表示保持原值\' : \'sk-...\'" /></div></div>',
+            '      <div style="font-size:12px;color:#9B9B9B" v-if="editId">调用第三方 API 的访问密钥，保存后仅显示尾号。</div>',
+            '      <div class="fld" v-if="!editId"><label>编码</label><div class="pin"><input v-model.trim="editForm.providerCode" placeholder="留空自动生成，小写字母/数字/短横线" /></div></div>',
+            '      <div class="pbtn"><span class="sp"></span><button class="c ghost" @click="editVisible = false">取消</button>',
+            '        <button class="c blue" :disabled="saving" @click="saveProvider">{{ saving ? "保存中…" : "保存" }}</button></div>',
             '    </div>',
-            '    <template #footer>',
-            '      <span class="muted" style="float:left;line-height:32px">已选择 {{ selectedRemote.length }} 个模型</span>',
-            '      <el-button @click="fetchVisible = false">关闭</el-button>',
-            '      <el-button type="primary" :disabled="!selectedRemote.length" :loading="importing" @click="importRemote">导入</el-button>',
-            '    </template>',
-            '  </el-dialog>',
+            '  </div>',
+
+            // 弹层: 手动添加模型
+            '  <div class="pmask" :class="{ show: manualVisible }" @click.self="manualVisible = false">',
+            '    <div class="pcard w440">',
+            '      <div class="ph"><b>手动添加模型</b><span class="sp"></span><span class="x" @click="manualVisible = false">✕</span></div>',
+            '      <div class="fld"><label>模型 ID <em>*</em></label><div class="pin"><input v-model.trim="manualModelId" placeholder="如 deepseek-ai/DeepSeek-V4" @input="guessManualType" /></div></div>',
+            '      <div style="font-size:12px;color:#9B9B9B;margin-top:-8px">类型按模型 ID 自动推断（可手动调整），支持多选</div>',
+            '      <div class="fld"><label>类型（可多选）</label>',
+            '        <div style="display:flex;flex-wrap:wrap;gap:8px">',
+            '          <label v-for="t in typeOptions" :key="t.value" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#3A3A3C;cursor:pointer">',
+            '            <span class="chk" @click.prevent="toggleManualType(t.value)">',
+            '              <span class="bx" :class="{ off: manualTypes.indexOf(t.value) < 0 }">',
+            '                <svg v-if="manualTypes.indexOf(t.value) >= 0" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M1.5 5.5l2.5 2.5 4.5-5"/></svg>',
+            '              </span></span>{{ t.label }}',
+            '          </label>',
+            '        </div></div>',
+            '      <div class="pbtn"><span class="sp"></span><button class="c ghost" @click="manualVisible = false">取消</button>',
+            '        <button class="c blue" :disabled="saving" @click="saveManual">{{ saving ? "添加中…" : "添加" }}</button></div>',
+            '    </div>',
+            '  </div>',
+
+            // 弹层: 从供应商获取模型
+            '  <div class="pmask" :class="{ show: fetchVisible }" @click.self="fetchVisible = false">',
+            '    <div class="pcard w720" style="max-height:80vh">',
+            '      <div class="ph"><b>从供应商获取模型</b><span class="no" v-if="remoteLoaded">共 {{ remoteModels.length }} 个 · 已选 {{ selectedRemote.length }}</span><span class="sp"></span><span class="x" @click="fetchVisible = false">✕</span></div>',
+            '      <div v-if="fetching" style="text-align:center;color:#9B9B9B;padding:40px 0">正在拉取模型列表…</div>',
+            '      <template v-else-if="remoteLoaded">',
+            '        <div style="display:flex;gap:8px;align-items:center">',
+            '          <div class="pin" style="flex:1"><input v-model="remoteKeyword" placeholder="搜索模型名称..." /></div>',
+            '          <button class="c ghost" style="height:40px;border-radius:8px" @click="selectAllRemote">选择所有</button>',
+            '          <button class="c ghost" style="height:40px;border-radius:8px" @click="selectedRemote = []">清空选择</button>',
+            '        </div>',
+            '        <div style="display:flex;flex-direction:column;gap:2px;max-height:320px;overflow:auto">',
+            '          <div v-for="m in filteredRemote" :key="m.id" style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid #F0F0F5">',
+            '            <span class="chk" style="flex:none" @click="toggleRemote(m.id, selectedRemote.indexOf(m.id) < 0)">',
+            '              <span class="bx" :class="{ off: selectedRemote.indexOf(m.id) < 0 }">',
+            '                <svg v-if="selectedRemote.indexOf(m.id) >= 0" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M1.5 5.5l2.5 2.5 4.5-5"/></svg>',
+            '              </span></span>',
+            '            <b style="flex:1;font-size:13px;font-weight:500;color:#1D1D1F">{{ m.id }}</b>',
+            '            <div class="pin" style="width:130px;height:36px"><select :value="remoteType[m.id] || \'CHAT\'" @change="function (e) { remoteType[m.id] = e.target.value }" style="width:100%">',
+            '              <option v-for="t in typeOptions" :key="t.value" :value="t.value">{{ t.label }}</option></select></div>',
+            '          </div>',
+            '          <div v-if="!filteredRemote.length" style="text-align:center;color:#9B9B9B;padding:24px 0">没有匹配的模型</div>',
+            '        </div>',
+            '      </template>',
+            '      <div class="pbtn"><span style="font-size:12px;color:#9B9B9B;line-height:40px">已选择 {{ selectedRemote.length }} 个模型</span>',
+            '        <span class="sp"></span><button class="c ghost" @click="fetchVisible = false">关闭</button>',
+            '        <button class="c blue" :disabled="!selectedRemote.length || importing" @click="importRemote">{{ importing ? "导入中…" : "导入" }}</button></div>',
+            '    </div>',
+            '  </div>',
             '</div>'
         ].join('\n'),
         setup: function () {
@@ -197,11 +198,50 @@
 
             var editVisible = Vue.ref(false);
             var editId = Vue.ref(null);
-            var editForm = Vue.reactive({ providerName: '', baseUrl: '', apiKey: '', providerCode: '' });
+            var editForm = Vue.reactive({ providerName: '', baseUrl: '', apiKey: '', providerCode: '', icon: '', protocol: 'OPENAI_CHAT', streaming: true });
+            var providerTemplates = [
+                { key: 'siliconflow', name: '硅基流动', icon: 'siliconcloud-color', baseUrl: 'https://api.siliconflow.cn/v1', protocol: 'OPENAI_CHAT' },
+                { key: 'openai', name: 'OpenAI', icon: 'openai', baseUrl: 'https://api.openai.com/v1', protocol: 'OPENAI_CHAT' },
+                { key: 'anthropic', name: 'Anthropic', icon: 'anthropic', baseUrl: 'https://api.anthropic.com/v1', protocol: 'ANTHROPIC_MESSAGES' },
+                { key: 'deepseek', name: 'DeepSeek', icon: 'deepseek-color', baseUrl: 'https://api.deepseek.com/v1', protocol: 'OPENAI_CHAT' },
+                { key: 'zhipu', name: '智谱 AI', icon: 'zhipu-color', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', protocol: 'OPENAI_CHAT' },
+                { key: 'moonshot', name: 'Moonshot', icon: 'moonshot', baseUrl: 'https://api.moonshot.cn/v1', protocol: 'OPENAI_CHAT' },
+                { key: 'qwen', name: '阿里百炼', icon: 'qwen-color', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', protocol: 'OPENAI_CHAT' },
+                { key: 'doubao', name: '火山方舟', icon: 'doubao-color', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', protocol: 'OPENAI_CHAT' }
+            ];
 
             var manualVisible = Vue.ref(false);
             var manualModelId = Vue.ref('');
-            var manualType = Vue.ref('CHAT');
+            var manualTypes = Vue.ref(['CHAT']);
+
+            // 前端预推断：输入模型 ID 时即时勾选建议类型
+            function guessManualType() {
+                var id = (manualModelId.value || '').toLowerCase();
+                if (!id) return;
+                var types = ['CHAT'];
+                if (/vl|vision|image|4v|-v-/.test(id)) types.push('VISION');
+                if (/asr|whisper|tts|audio|speech|voice/.test(id)) types.push('ASR');
+                if (/embedding|embed|bge-|m3e/.test(id)) { manualTypes.value = ['EMBEDDING']; return; }
+                manualTypes.value = types;
+            }
+            function toggleManualType(v) {
+                var i = manualTypes.value.indexOf(v);
+                if (i >= 0) {
+                    if (manualTypes.value.length > 1) manualTypes.value.splice(i, 1); // 至少保留一个
+                } else {
+                    manualTypes.value.push(v);
+                }
+            }
+            // 勾选类型 → 后端 capabilities 标签（主类型推断也在后端按 capabilities 生成）
+            function capOf(typeValue) {
+                return { CHAT: 'stream', VISION: 'vision', ASR: 'audio', EMBEDDING: 'embedding' }[typeValue] || 'stream';
+            }
+            // capabilities 逗号串 → 中文标签列表
+            var CAP_TEXT = { stream: '流式', vision: '视觉', audio: '语音', tools: '工具', structured: '结构化', reasoning: '推理', embedding: '向量' };
+            function capLabels(caps) {
+                if (!caps) return '';
+                return caps.split(',').map(function (c) { return CAP_TEXT[c.trim()] || c.trim(); }).join(' · ');
+            }
 
             var fetchVisible = Vue.ref(false);
             var fetching = Vue.ref(false);
@@ -286,6 +326,9 @@
                 editForm.baseUrl = '';
                 editForm.apiKey = '';
                 editForm.providerCode = '';
+                editForm.icon = '';
+                editForm.protocol = 'OPENAI_CHAT';
+                editForm.streaming = true;
                 editVisible.value = true;
             }
 
@@ -295,7 +338,35 @@
                 editForm.baseUrl = current.value.baseUrl;
                 editForm.apiKey = '';
                 editForm.providerCode = '';
+                editForm.icon = current.value.icon || '';
+                editForm.protocol = current.value.protocol || 'OPENAI_CHAT';
+                editForm.streaming = current.value.streaming !== false;
                 editVisible.value = true;
+            }
+
+            // 预置供应商模板：点选后自动填名称前缀/Base URL/协议/图标
+            var providerTemplates = [
+                { key: 'siliconflow', name: '硅基流动', icon: 'siliconcloud-color', baseUrl: 'https://api.siliconflow.cn/v1', protocol: 'OPENAI_CHAT' },
+                { key: 'openai', name: 'OpenAI', icon: 'openai', baseUrl: 'https://api.openai.com/v1', protocol: 'OPENAI_CHAT' },
+                { key: 'anthropic', name: 'Anthropic', icon: 'anthropic', baseUrl: 'https://api.anthropic.com/v1', protocol: 'ANTHROPIC_MESSAGES' },
+                { key: 'deepseek', name: 'DeepSeek', icon: 'deepseek-color', baseUrl: 'https://api.deepseek.com/v1', protocol: 'OPENAI_CHAT' },
+                { key: 'zhipu', name: '智谱 AI', icon: 'zhipu-color', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', protocol: 'OPENAI_CHAT' },
+                { key: 'moonshot', name: 'Moonshot', icon: 'moonshot', baseUrl: 'https://api.moonshot.cn/v1', protocol: 'OPENAI_CHAT' },
+                { key: 'qwen', name: '阿里百炼', icon: 'qwen-color', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', protocol: 'OPENAI_CHAT' },
+                { key: 'doubao', name: '火山方舟', icon: 'doubao-color', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', protocol: 'OPENAI_CHAT' }
+            ];
+            function applyTemplate(t) {
+                editForm.icon = t.icon;
+                editForm.baseUrl = t.baseUrl;
+                editForm.protocol = t.protocol;
+                // 名称：为空或仍是某个模板的预填名（用户未手动改过）时跟随切换，否则保留用户手输名称
+                var isAutoName = !editForm.providerName ||
+                    providerTemplates.some(function (x) { return x.name === editForm.providerName; });
+                if (isAutoName) editForm.providerName = t.name;
+            }
+            function providerIconUrl(icon) {
+                // lobe-icons 静态包：icon 值已含变体后缀（如 siliconcloud-color / openai）
+                return 'https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.95.1/icons/' + icon + '.svg';
             }
 
             function saveProvider() {
@@ -312,13 +383,19 @@
                     ? api.put('/api/admin/ai/providers/' + editId.value, {
                         providerName: editForm.providerName,
                         baseUrl: editForm.baseUrl,
-                        apiKey: editForm.apiKey || null
+                        apiKey: editForm.apiKey || null,
+                        icon: editForm.icon || null,
+                        protocol: editForm.protocol,
+                        streaming: editForm.streaming
                     })
                     : api.post('/api/admin/ai/providers', {
                         providerName: editForm.providerName,
                         baseUrl: editForm.baseUrl,
                         apiKey: editForm.apiKey,
-                        providerCode: editForm.providerCode || null
+                        providerCode: editForm.providerCode || null,
+                        icon: editForm.icon || null,
+                        protocol: editForm.protocol,
+                        streaming: editForm.streaming
                     });
                 request.then(function () {
                     El.ElMessage.success('已保存');
@@ -371,7 +448,7 @@
                         .finally(function () { fetching.value = false; });
                 } else if (command === 'manual') {
                     manualModelId.value = '';
-                    manualType.value = 'CHAT';
+                    manualTypes.value = ['CHAT'];
                     manualVisible.value = true;
                 }
             }
@@ -383,7 +460,7 @@
                 }
                 saving.value = true;
                 api.post('/api/admin/ai/providers/' + current.value.providerId + '/models/import',
-                        { models: [{ providerModelId: manualModelId.value, modelType: manualType.value }] })
+                        { models: [{ providerModelId: manualModelId.value, capabilities: manualTypes.value.map(capOf) }] })
                     .then(function (added) {
                         if (added > 0) {
                             El.ElMessage.success('已添加');
@@ -458,7 +535,9 @@
                 checking: checking, saving: saving,
                 current: current, providerModels: providerModels,
                 editVisible: editVisible, editId: editId, editForm: editForm,
-                manualVisible: manualVisible, manualModelId: manualModelId, manualType: manualType,
+                providerTemplates: providerTemplates, applyTemplate: applyTemplate, providerIconUrl: providerIconUrl,
+                manualVisible: manualVisible, manualModelId: manualModelId, manualTypes: manualTypes,
+                guessManualType: guessManualType, toggleManualType: toggleManualType,
                 fetchVisible: fetchVisible, fetching: fetching, remoteLoaded: remoteLoaded,
                 remoteModels: remoteModels, remoteKeyword: remoteKeyword,
                 selectedRemote: selectedRemote, remoteType: remoteType, importing: importing,
@@ -468,7 +547,7 @@
                 removeProvider: removeProvider, addCommand: addCommand, saveManual: saveManual,
                 toggleRemote: toggleRemote, selectAllRemote: selectAllRemote, importRemote: importRemote,
                 toggleModel: toggleModel, removeModel: removeModel,
-                typeOptions: TYPE_OPTIONS, typeLabel: typeLabel,
+                typeOptions: TYPE_OPTIONS, typeLabel: typeLabel, capLabels: capLabels,
                 fmt: api.fmtDateTime,
                 PlusIcon: ElementPlusIconsVue.Plus
             };
@@ -479,42 +558,37 @@
     window.AdminPages.AiModelsPage = {
         name: 'AiModelsPage',
         template: [
-            '<div class="page-card">',
+            '<div class="pgw" style="display:flex;flex-direction:column;gap:16px;flex:1;min-height:0">',
             '  <div class="toolbar">',
-            '    <el-input v-model.trim="keyword" placeholder="输入关键词搜索" clearable style="width:220px" @keyup.enter="load" @clear="load" />',
-            '    <el-select v-model="modelType" placeholder="类型：全部" clearable style="width:140px" @change="load">',
-            '      <el-option v-for="t in typeOptions" :key="t.value" :label="t.label" :value="t.value" />',
-            '    </el-select>',
-            '    <el-button type="primary" :icon="SearchIcon" @click="load">搜索</el-button>',
-            '    <div class="grow"></div>',
-            '    <span class="muted">共 {{ rows.length }} 个模型</span>',
-            '    <el-button :icon="RefreshIcon" @click="load">刷新</el-button>',
+            '    <div class="srch"><input v-model.trim="keyword" placeholder="输入关键词搜索" @keyup.enter="load" /></div>',
+            '    <div class="fchip"><select v-model="modelType" @change="load" style="border:0;background:none;font:inherit;color:inherit;outline:none">',
+            '      <option value="">类型：全部</option>',
+            '      <option v-for="t in typeOptions" :key="t.value" :value="t.value">{{ t.label }}</option></select></div>',
+            '    <button class="btn2 pri" @click="load">搜索</button>',
+            '    <span style="flex:1"></span>',
+            '    <span style="font-size:12px;color:var(--tk-muted)">共 {{ rows.length }} 个模型</span>',
+            '    <button class="btn2" @click="load">刷新</button>',
             '  </div>',
-            '  <el-table :data="rows" v-loading="loading" stripe>',
-            '    <el-table-column prop="providerModelId" label="模型" min-width="260" show-overflow-tooltip />',
-            '    <el-table-column label="供应商" width="150">',
-            '      <template #default="scope">',
-            '        <el-tag size="small" effect="plain">{{ scope.row.providerName }}</el-tag>',
-            '      </template>',
-            '    </el-table-column>',
-            '    <el-table-column label="类型" width="110">',
-            '      <template #default="scope">',
-            '        <el-tag size="small" :type="scope.row.modelType === \'VISION\' ? \'warning\' : \'info\'">',
-            '          {{ typeLabel(scope.row.modelType) }}',
-            '        </el-tag>',
-            '      </template>',
-            '    </el-table-column>',
-            '    <el-table-column label="启用" width="90">',
-            '      <template #default="scope">',
-            '        <el-switch :model-value="scope.row.enabled" @change="function (v) { toggle(scope.row, v) }" />',
-            '      </template>',
-            '    </el-table-column>',
-            '    <el-table-column label="操作" width="90" fixed="right">',
-            '      <template #default="scope">',
-            '        <el-button link type="danger" @click="remove(scope.row)">删除</el-button>',
-            '      </template>',
-            '    </el-table-column>',
-            '  </el-table>',
+            '  <div class="lcard" style="flex:1">',
+            '    <div class="cap">模型汇总<span class="cnt">跨供应商全部模型</span></div>',
+            '    <div class="tblw">',
+            '      <table class="pk">',
+            '        <colgroup><col><col style="width:150px"><col style="width:120px"><col style="width:90px"><col style="width:90px"></colgroup>',
+            '        <thead><tr><th>模型</th><th>供应商</th><th>类型</th><th>启用</th><th class="r">操作</th></tr></thead>',
+            '        <tbody>',
+            '          <tr v-if="!rows.length && !loading"><td colspan="5" style="text-align:center;color:var(--tk-muted);padding:32px 0">暂无模型</td></tr>',
+            '          <tr v-if="loading"><td colspan="5" style="text-align:center;color:var(--tk-muted);padding:32px 0">加载中…</td></tr>',
+            '          <tr v-for="row in rows" :key="row.modelId">',
+            '            <td style="color:var(--tk-text);font-weight:500">{{ row.providerModelId }}</td>',
+            '            <td><span class="bdg plain">{{ row.providerName }}</span></td>',
+            '            <td><span class="bdg i" v-if="row.modelType !== \'VISION\'">{{ typeLabel(row.modelType) }}</span><span class="bdg a" v-else>{{ typeLabel(row.modelType) }}</span></td>',
+            '            <td><span class="switch" :class="{off:!row.enabled}" @click="toggle(row, !row.enabled)"><i></i></span></td>',
+            '            <td class="r"><span class="op r" @click="remove(row)">删除</span></td>',
+            '          </tr>',
+            '        </tbody>',
+            '      </table>',
+            '    </div>',
+            '  </div>',
             '</div>'
         ].join('\n'),
         setup: function () {
@@ -575,53 +649,38 @@
     window.AdminPages.AiDefaultsPage = {
         name: 'AiDefaultsPage',
         template: [
-            '<div class="page-card" style="max-width:860px">',
-            '  <h4 class="ai-title" style="margin-top:0">默认模型</h4>',
-            '  <p class="muted" style="margin-top:0">每个类型设置一个默认模型；AI 助手使用「聊天模型」的默认项，未设置时提示未配置。</p>',
-            '  <div v-for="def in defaults" :key="def.typeCode" class="ai-default-row" v-loading="loading">',
-            '    <div class="ai-default-label">',
-            '      <div class="strong">{{ def.typeName }}</div>',
-            '      <div class="muted mono">{{ def.model ? def.model.providerModelId : \'未设置\' }}</div>',
+            '<div class="pgw" style="display:flex;flex-direction:column;gap:16px;flex:1;min-height:0">',
+            '  <div class="lcard" style="gap:14px;max-width:860px">',
+            '    <div class="cap" style="font-size:15px">默认模型</div>',
+            '    <div style="font-size:12px;color:var(--tk-text3)">每个类型设置一个默认模型；AI 助手使用「语言模型」的默认项，未设置时提示未配置。</div>',
+            '    <div v-for="def in defaults" :key="def.typeCode" style="display:grid;grid-template-columns:220px 1fr 80px;gap:12px;align-items:center;background:var(--tk-subtle);border-radius:10px;padding:12px 16px" v-loading="loading">',
+            '      <span style="display:flex;flex-direction:column;gap:2px">',
+            '        <b style="font-size:13px;font-weight:600;color:var(--tk-text)">{{ def.typeName }}</b>',
+            '        <span style="font-size:11px;color:var(--tk-text3)">{{ def.model ? def.model.providerModelId : "未设置" }}</span>',
+            '      </span>',
+            '      <div class="ipt2"><select :value="def.model ? def.model.modelId : null" @change="function (e) { setDefault(def, e.target.value || null) }" style="width:100%">',
+            '        <option :value="null" disabled>选择模型</option>',
+            '        <option v-for="m in enabledModels" :key="m.modelId" :value="m.modelId">{{ m.providerModelId }}（{{ m.providerName }}）</option>',
+            '      </select></div>',
+            '      <button class="btn2 sm" style="height:32px" :disabled="!def.model" @click="setDefault(def, null)">清除</button>',
             '    </div>',
-            '    <el-select :model-value="def.model ? def.model.modelId : null" placeholder="选择模型" filterable',
-            '               style="width:340px" @change="function (v) { setDefault(def, v) }">',
-            '      <el-option v-for="m in enabledModels" :key="m.modelId"',
-            '                 :label="m.providerModelId + \'（\' + m.providerName + \'）\'"',
-            '                 :value="m.modelId" />',
-            '    </el-select>',
-            '    <el-button :disabled="!def.model" style="margin-left:10px" @click="setDefault(def, null)">清除</el-button>',
             '  </div>',
-            '  <el-divider />',
-            '  <h4 class="ai-title">全局设置</h4>',
-            '  <el-form label-width="150px">',
-            '    <el-form-item label="启用 AI 助手">',
-            '      <el-switch v-model="global.enabled" />',
-            '    </el-form-item>',
-            '    <div class="form-grid">',
-            '      <el-form-item label="连接超时（秒）">',
-            '        <el-input-number v-model="global.connectTimeoutSeconds" :min="1" :max="120" />',
-            '      </el-form-item>',
-            '      <el-form-item label="读取超时（秒）">',
-            '        <el-input-number v-model="global.readTimeoutSeconds" :min="1" :max="600" />',
-            '      </el-form-item>',
-            '      <el-form-item label="最大输入字符数">',
-            '        <el-input-number v-model="global.maxInputCharacters" :min="1" :max="100000" :step="1000" />',
-            '      </el-form-item>',
-            '      <el-form-item label="每小时消息上限">',
-            '        <el-input-number v-model="global.hourlyMessageLimit" :min="1" :max="10000" />',
-            '      </el-form-item>',
-            '      <el-form-item label="携带历史条数">',
-            '        <el-input-number v-model="global.historyWindow" :min="0" :max="100" />',
-            '      </el-form-item>',
-            '      <el-form-item label="单条消息上限字符">',
-            '        <el-input-number v-model="global.maxMessageCharacters" :min="1" :max="100000" :step="100" />',
-            '      </el-form-item>',
+            '  <div class="lcard" style="gap:14px;max-width:860px">',
+            '    <div class="cap" style="font-size:15px">全局设置</div>',
+            '    <div style="display:flex;align-items:center;gap:12px"><span class="switch" :class="{off:!global.enabled}" @click="global.enabled=!global.enabled"><i></i></span><span style="font-size:14px;color:var(--tk-text2)">启用 AI 助手</span></div>',
+            '    <div class="frow" style="grid-template-columns:repeat(3,1fr);gap:12px">',
+            '      <div class="fld"><label>连接超时（秒）</label><div class="ipt2"><input type="number" v-model.number="global.connectTimeoutSeconds" min="1" max="120" /></div></div>',
+            '      <div class="fld"><label>读取超时（秒）</label><div class="ipt2"><input type="number" v-model.number="global.readTimeoutSeconds" min="1" max="600" /></div></div>',
+            '      <div class="fld"><label>最大输入字符数</label><div class="ipt2"><input type="number" v-model.number="global.maxInputCharacters" min="1" max="100000" step="1000" /></div></div>',
+            '      <div class="fld"><label>每小时消息上限</label><div class="ipt2"><input type="number" v-model.number="global.hourlyMessageLimit" min="1" max="10000" /></div></div>',
+            '      <div class="fld"><label>携带历史条数</label><div class="ipt2"><input type="number" v-model.number="global.historyWindow" min="0" max="100" /></div></div>',
+            '      <div class="fld"><label>单条消息上限字符</label><div class="ipt2"><input type="number" v-model.number="global.maxMessageCharacters" min="1" max="100000" step="100" /></div></div>',
             '    </div>',
-            '    <el-form-item>',
-            '      <el-button type="primary" :loading="saving" @click="saveGlobal">保存设置</el-button>',
-            '    </el-form-item>',
-            '  </el-form>',
-            '  <p class="form-hint">所有保存即时生效，无需重启。聊天当前生效模型：{{ activeChatModel || \'未配置\' }}</p>',
+            '    <div style="display:flex;align-items:center;gap:12px">',
+            '      <button class="btn2 pri" :disabled="saving" @click="saveGlobal">{{ saving ? "保存中…" : "保存设置" }}</button>',
+            '      <span style="font-size:12px;color:var(--tk-muted)">所有保存即时生效，无需重启。聊天当前生效模型：{{ activeChatModel || "未配置" }}</span>',
+            '    </div>',
+            '  </div>',
             '</div>'
         ].join('\n'),
         setup: function () {
@@ -715,15 +774,26 @@
     window.AdminPages.AiConfigPage = {
         name: 'AiConfigPage',
         template: [
-            '<el-tabs v-model="tab" class="ai-tabs">',
-            '  <el-tab-pane label="模型配置" name="providers"><component :is="\'AiProvidersPage\'" /></el-tab-pane>',
-            '  <el-tab-pane label="模型列表" name="models"><component :is="\'AiModelsPage\'" /></el-tab-pane>',
-            '  <el-tab-pane label="默认模型" name="defaults"><component :is="\'AiDefaultsPage\'" /></el-tab-pane>',
-            '</el-tabs>'
+            '<div class="pgw" style="display:flex;flex-direction:column;gap:16px;flex:1;min-height:0">',
+            '  <div class="ptabs">',
+            '    <span v-for="t in tabs" :key="t.key" class="ptab" :class="{ on: tab === t.key }" @click="tab = t.key">{{ t.label }}</span>',
+            '  </div>',
+            '  <component :is="paneComponent" />',
+            '</div>'
         ].join('\n'),
         setup: function () {
-            var tab = window.Vue.ref('providers');
-            return { tab: tab };
+            var Vue = window.Vue;
+            var tab = Vue.ref('providers');
+            var tabs = [
+                { key: 'providers', label: '模型配置' },
+                { key: 'models', label: '模型列表' },
+                { key: 'defaults', label: '默认模型' },
+                { key: 'test', label: '测试' }
+            ];
+            var paneComponent = Vue.computed(function () {
+                return { providers: 'AiProvidersPage', models: 'AiModelsPage', defaults: 'AiDefaultsPage', test: 'AiTestPage' }[tab.value];
+            });
+            return { tab: tab, tabs: tabs, paneComponent: paneComponent };
         }
     };
 })();
