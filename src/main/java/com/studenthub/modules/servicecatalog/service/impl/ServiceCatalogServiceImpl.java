@@ -9,6 +9,7 @@ import com.studenthub.common.ErrorCode;
 import com.studenthub.exception.BusinessException;
 import com.studenthub.modules.servicecatalog.controller.dto.CatalogCategoryResponse;
 import com.studenthub.modules.servicecatalog.controller.dto.ServiceCategoryCreateRequest;
+import com.studenthub.modules.servicecatalog.controller.dto.ServiceItemAdminResponse;
 import com.studenthub.modules.servicecatalog.controller.dto.ServiceItemDetailResponse;
 import com.studenthub.modules.servicecatalog.controller.dto.ServiceItemUpsertRequest;
 import com.studenthub.modules.servicecatalog.entity.ServiceCategoryEntity;
@@ -35,6 +36,7 @@ import java.util.Map;
 public class ServiceCatalogServiceImpl implements ServiceCatalogService {
 
     private static final String STATUS_ENABLED = "ENABLED";
+    private static final String STATUS_DISABLED = "DISABLED";
 
     private final ServiceCategoryMapper categoryMapper;
     private final ServiceItemMapper itemMapper;
@@ -58,6 +60,46 @@ public class ServiceCatalogServiceImpl implements ServiceCatalogService {
         return categories.stream()
                 .map(category -> CatalogCategoryResponse.from(
                         category, itemsByCategory.getOrDefault(category.getId(), List.of())))
+                .toList();
+    }
+
+    @Override
+    public List<CatalogCategoryResponse> adminCategoryTree(Long campusId) {
+        List<ServiceCategoryEntity> categories = categoryMapper.selectList(
+                new LambdaQueryWrapper<ServiceCategoryEntity>()
+                        .eq(ServiceCategoryEntity::getCampusId, campusId)
+                        .orderByAsc(ServiceCategoryEntity::getSortOrder));
+        List<ServiceItemEntity> items = itemMapper.selectList(new LambdaQueryWrapper<ServiceItemEntity>()
+                .eq(ServiceItemEntity::getCampusId, campusId)
+                .orderByAsc(ServiceItemEntity::getSortOrder));
+        Map<Long, List<ServiceItemEntity>> itemsByCategory = new LinkedHashMap<>();
+        for (ServiceItemEntity item : items) {
+            itemsByCategory.computeIfAbsent(item.getCategoryId(), key -> new ArrayList<>()).add(item);
+        }
+        return categories.stream()
+                .map(category -> CatalogCategoryResponse.from(
+                        category, itemsByCategory.getOrDefault(category.getId(), List.of())))
+                .toList();
+    }
+
+    @Override
+    public List<ServiceItemAdminResponse> listItems(Long categoryId) {
+        List<ServiceCategoryEntity> categories = categoryMapper.selectList(
+                new LambdaQueryWrapper<ServiceCategoryEntity>().orderByAsc(ServiceCategoryEntity::getSortOrder));
+        Map<Long, String> categoryNames = new LinkedHashMap<>();
+        for (ServiceCategoryEntity category : categories) {
+            categoryNames.put(category.getId(), category.getCategoryName());
+        }
+        LambdaQueryWrapper<ServiceItemEntity> wrapper = new LambdaQueryWrapper<ServiceItemEntity>()
+                .orderByAsc(ServiceItemEntity::getSortOrder)
+                .orderByDesc(ServiceItemEntity::getUpdatedAt);
+        if (categoryId != null) {
+            wrapper.eq(ServiceItemEntity::getCategoryId, categoryId);
+        }
+        return itemMapper.selectList(wrapper).stream()
+                .map(item -> ServiceItemAdminResponse.from(item,
+                        categoryNames.getOrDefault(item.getCategoryId(), "未分类"),
+                        parseSchema(item.getId(), item.getFormSchema())))
                 .toList();
     }
 
@@ -156,6 +198,35 @@ public class ServiceCatalogServiceImpl implements ServiceCatalogService {
             itemMapper.updateById(entity);
         }
         return entity.getId();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteItem(Long itemId) {
+        ServiceItemEntity item = itemMapper.selectById(itemId);
+        if (item == null) {
+            throw new BusinessException(ErrorCode.CATALOG_ITEM_NOT_FOUND);
+        }
+        itemMapper.deleteById(itemId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateItemStatus(Long itemId, String status) {
+        ServiceItemEntity item = itemMapper.selectById(itemId);
+        if (item == null) {
+            throw new BusinessException(ErrorCode.CATALOG_ITEM_NOT_FOUND);
+        }
+        if (!STATUS_ENABLED.equals(status) && !STATUS_DISABLED.equals(status)) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "状态仅支持 ENABLED 或 DISABLED");
+        }
+        if (status.equals(item.getStatus())) {
+            return;
+        }
+        ServiceItemEntity update = new ServiceItemEntity();
+        update.setId(itemId);
+        update.setStatus(status);
+        itemMapper.updateById(update);
     }
 
     private JsonNode parseSchema(Long itemId, String formSchema) {

@@ -13,11 +13,12 @@ public record CatalogCategoryResponse(
         @Schema(description = "分类名称") String categoryName,
         @Schema(description = "分类图标资源标识", nullable = true) String icon,
         @Schema(description = "分类描述", nullable = true) String description,
+        @Schema(description = "分类状态：ENABLED / DISABLED") String status,
         @Schema(description = "分类下的服务项") List<ServiceItemSummaryResponse> items) {
 
     public static CatalogCategoryResponse from(ServiceCategoryEntity category, List<ServiceItemEntity> items) {
         return new CatalogCategoryResponse(category.getId(), category.getCategoryCode(), category.getCategoryName(),
-                category.getIcon(), category.getDescription(),
+                category.getIcon(), category.getDescription(), category.getStatus(),
                 items.stream().map(ServiceItemSummaryResponse::from).toList());
     }
 }
