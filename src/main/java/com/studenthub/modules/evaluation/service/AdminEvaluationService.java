@@ -88,9 +88,9 @@ public class AdminEvaluationService {
                 entity.getTags(),
                 entity.getComment(),
                 entity.getReply(),
-                entity.getRepliedAt() == null ? null : entity.getRepliedAt().toString(),
+                entity.getRepliedAt(),
                 entity.getEvaluatorId(),
                 entity.getAssigneeName(),
-                entity.getCreatedAt() == null ? null : entity.getCreatedAt().atZone(ZONE).toLocalDateTime().toString());
+                entity.getCreatedAt());
     }
 }

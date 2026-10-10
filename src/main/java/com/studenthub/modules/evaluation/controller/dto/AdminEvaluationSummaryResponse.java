@@ -2,6 +2,8 @@ package com.studenthub.modules.evaluation.controller.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.time.LocalDateTime;
+
 @Schema(description = "管理端服务评价摘要")
 public record AdminEvaluationSummaryResponse(
         Long evaluationId,
@@ -11,9 +13,9 @@ public record AdminEvaluationSummaryResponse(
         String tags,
         String comment,
         String reply,
-        String repliedAt,
+        LocalDateTime repliedAt,
         Long evaluatorId,
         String assigneeName,
-        String createdAt
+        LocalDateTime createdAt
 ) {
 }
