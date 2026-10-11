@@ -1,8 +1,7 @@
 package com.studenthub.modules.workorder.controller.dto;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
+import com.studenthub.modules.workorder.entity.WorkOrderEntity;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
@@ -10,10 +9,8 @@ import java.util.List;
 
 @Schema(description = "工单详情（含关联申请信息）")
 public record WorkOrderDetailResponse(
-        @JsonSerialize(using = ToStringSerializer.class)
         @Schema(description = "工单 ID") Long orderId,
         @Schema(description = "工单号") String orderNo,
-        @JsonSerialize(using = ToStringSerializer.class)
         @Schema(description = "关联申请 ID") Long requestId,
         @Schema(description = "申请编号", nullable = true) String requestNo,
         @Schema(description = "工单标题") String title,
@@ -37,4 +34,24 @@ public record WorkOrderDetailResponse(
         @Schema(description = "开始时间", nullable = true) LocalDateTime startedAt,
         @Schema(description = "完成时间", nullable = true) LocalDateTime completedAt,
         @Schema(description = "完成说明", nullable = true) String completeRemark) {
+
+    /**
+     * 静态工厂：附属查询结果（requesterName/requesterPhone/formData/repairAddress/照片签名地址等）
+     * 由 service 组装后传入，DTO 只负责装配字段，避免 service 手拼 26 参构造器。
+     */
+    public static WorkOrderDetailResponse from(WorkOrderEntity order, String requestNo,
+                                               String requesterName, String requesterPhone,
+                                               JsonNode formData, JsonNode formSchema,
+                                               String repairAddress,
+                                               String arrivalPhotoUrl, String completionPhotoUrl,
+                                               List<String> completionPhotoUrls) {
+        return new WorkOrderDetailResponse(order.getId(), order.getOrderNo(), order.getRequestId(), requestNo,
+                order.getTitle(), order.getStatus(), order.getPriority(), order.getAssigneeName(),
+                requesterName, requesterPhone, repairAddress, formData, formSchema,
+                Boolean.TRUE.equals(order.getPhotoWorkflowRequired()), arrivalPhotoUrl, completionPhotoUrl,
+                completionPhotoUrls == null ? List.of() : completionPhotoUrls,
+                order.getCompletionSubmittedAt(), order.getConfirmedAt(), order.getConfirmationRejectReason(),
+                order.getCreatedAt(), order.getAssignedAt(), order.getStartedAt(), order.getCompletedAt(),
+                order.getCompleteRemark());
+    }
 }

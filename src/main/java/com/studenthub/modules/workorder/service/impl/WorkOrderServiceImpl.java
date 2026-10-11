@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studenthub.common.ErrorCode;
 import com.studenthub.common.PageResult;
+import com.studenthub.common.util.JsonIds;
+import com.studenthub.common.util.OrderNoGenerator;
 import com.studenthub.exception.BusinessException;
 import com.studenthub.modules.identity.mapper.IdentityAccessMapper;
 import com.studenthub.modules.identity.mapper.UserMapper;
@@ -34,9 +36,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.ArrayList;
 
@@ -45,9 +45,9 @@ import java.util.ArrayList;
 @RequiredArgsConstructor
 public class WorkOrderServiceImpl implements WorkOrderService {
 
-    private static final DateTimeFormatter ORDER_NO_DATE = DateTimeFormatter.ofPattern("yyyyMMdd");
     private static final String PRIORITY_NORMAL = "NORMAL";
     private static final String ROLE_WORKER = "WORKER";
+    private static final String ORDER_NO_PREFIX = "WO-";
 
     private final WorkOrderMapper workOrderMapper;
     private final ServiceRequestMapper serviceRequestMapper;
@@ -66,7 +66,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
     @Transactional(rollbackFor = Exception.class)
     public WorkOrderEntity createPendingForRequest(ServiceRequestEntity request) {
         WorkOrderEntity order = new WorkOrderEntity();
-        order.setOrderNo("WO-" + LocalDate.now().format(ORDER_NO_DATE) + "-TMP");
+        order.setOrderNo(OrderNoGenerator.next(ORDER_NO_PREFIX, null));
         order.setRequestId(request.getId());
         order.setCampusId(request.getCampusId());
         order.setItemId(request.getItemId());
@@ -81,7 +81,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
 
         WorkOrderEntity orderNoUpdate = new WorkOrderEntity();
         orderNoUpdate.setId(order.getId());
-        orderNoUpdate.setOrderNo("WO-" + LocalDate.now().format(ORDER_NO_DATE) + "-" + order.getId());
+        orderNoUpdate.setOrderNo(OrderNoGenerator.next(ORDER_NO_PREFIX, order.getId()));
         orderNoUpdate.setVersion(order.getVersion());
         workOrderMapper.updateById(orderNoUpdate);
         return order;
@@ -247,9 +247,9 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         WorkOrderEntity update = new WorkOrderEntity();
         update.setId(order.getId());
         update.setCompletionPhotoFileId(request.fileId());
-        List<Long> completionPhotoIds = parseIds(order.getCompletionPhotoFileIds());
+        List<Long> completionPhotoIds = JsonIds.parse(order.getCompletionPhotoFileIds());
         if (!completionPhotoIds.contains(request.fileId())) completionPhotoIds.add(request.fileId());
-        update.setCompletionPhotoFileIds(writeIds(completionPhotoIds));
+        update.setCompletionPhotoFileIds(JsonIds.write(completionPhotoIds));
         update.setCompleteRemark(request.remark().trim());
         update.setCompletionSubmittedAt(LocalDateTime.now());
         update.setStatus(to.name());
@@ -419,17 +419,12 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         String repairAddress = formDataNode == null ? null : textValue(formDataNode, "address", "location");
         String arrivalPhotoUrl = signPhoto(order.getArrivalPhotoFileId());
         String completionPhotoUrl = signPhoto(order.getCompletionPhotoFileId());
-        List<String> completionPhotoUrls = parseIds(order.getCompletionPhotoFileIds()).stream()
+        List<String> completionPhotoUrls = JsonIds.parse(order.getCompletionPhotoFileIds()).stream()
                 .map(this::signPhoto).filter(java.util.Objects::nonNull).toList();
         if (completionPhotoUrls.isEmpty() && completionPhotoUrl != null) completionPhotoUrls = List.of(completionPhotoUrl);
-        return new WorkOrderDetailResponse(order.getId(), order.getOrderNo(), order.getRequestId(), requestNo,
-                order.getTitle(), order.getStatus(), order.getPriority(), order.getAssigneeName(),
-                requesterName, requesterPhone, repairAddress, formDataNode, schemaNode,
-                Boolean.TRUE.equals(order.getPhotoWorkflowRequired()), arrivalPhotoUrl, completionPhotoUrl,
-                completionPhotoUrls,
-                order.getCompletionSubmittedAt(), order.getConfirmedAt(), order.getConfirmationRejectReason(),
-                order.getCreatedAt(), order.getAssignedAt(), order.getStartedAt(), order.getCompletedAt(),
-                order.getCompleteRemark());
+        return WorkOrderDetailResponse.from(order, requestNo, requesterName, requesterPhone,
+                formDataNode, schemaNode, repairAddress,
+                arrivalPhotoUrl, completionPhotoUrl, completionPhotoUrls);
     }
 
     private JsonNode parseSchema(String schema) {
@@ -448,17 +443,6 @@ public class WorkOrderServiceImpl implements WorkOrderService {
 
     private String signPhoto(Long fileId) {
         return fileId == null ? null : fileStorageService.signViewPath(fileId);
-    }
-
-    private List<Long> parseIds(String value) {
-        if (value == null || value.isBlank()) return new ArrayList<>();
-        try { return objectMapper.readValue(value, objectMapper.getTypeFactory().constructCollectionType(List.class, Long.class)); }
-        catch (Exception ignored) { return new ArrayList<>(); }
-    }
-
-    private String writeIds(List<Long> ids) {
-        try { return objectMapper.writeValueAsString(ids); }
-        catch (Exception exception) { throw new IllegalStateException("工单照片信息序列化失败", exception); }
     }
 
     private void requirePhotoWorkflow(WorkOrderEntity order) {

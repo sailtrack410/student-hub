@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studenthub.common.ErrorCode;
 import com.studenthub.common.PageResult;
+import com.studenthub.common.util.JsonIds;
+import com.studenthub.common.util.OrderNoGenerator;
 import com.studenthub.exception.BusinessException;
 import com.studenthub.modules.evaluation.controller.dto.EvaluationResponse;
 import com.studenthub.modules.evaluation.entity.ServiceEvaluationEntity;
@@ -37,9 +39,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 @Slf4j
@@ -47,7 +47,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ServiceRequestServiceImpl implements ServiceRequestService {
 
-    private static final DateTimeFormatter REQUEST_NO_DATE = DateTimeFormatter.ofPattern("yyyyMMdd");
+    private static final String REQUEST_NO_PREFIX = "SR-";
 
     private final ServiceRequestMapper serviceRequestMapper;
     private final ServiceRequestLogMapper requestLogMapper;
@@ -70,7 +70,7 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
                 request.itemId(), request.formData());
 
         ServiceRequestEntity entity = new ServiceRequestEntity();
-        entity.setRequestNo("SR-" + LocalDate.now().format(REQUEST_NO_DATE) + "-TMP");
+        entity.setRequestNo(OrderNoGenerator.next(REQUEST_NO_PREFIX, null));
         entity.setCampusId(item.getCampusId());
         entity.setItemId(item.getId());
         entity.setItemName(item.getItemName());
@@ -99,7 +99,7 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
 
         ServiceRequestEntity requestNoUpdate = new ServiceRequestEntity();
         requestNoUpdate.setId(entity.getId());
-        requestNoUpdate.setRequestNo("SR-" + LocalDate.now().format(REQUEST_NO_DATE) + "-" + entity.getId());
+        requestNoUpdate.setRequestNo(OrderNoGenerator.next(REQUEST_NO_PREFIX, entity.getId()));
         requestNoUpdate.setVersion(entity.getVersion());
         serviceRequestMapper.updateById(requestNoUpdate);
         entity.setRequestNo(requestNoUpdate.getRequestNo());
@@ -167,7 +167,7 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
         Integer slaHours = item == null ? null : item.getSlaHours();
 
         WorkOrderEntity order = workOrderMapper.findByRequestId(entity.getId());
-        List<String> completionPhotoUrls = order == null ? List.of() : parsePhotoIds(order.getCompletionPhotoFileIds()).stream()
+        List<String> completionPhotoUrls = order == null ? List.of() : JsonIds.parse(order.getCompletionPhotoFileIds()).stream()
                 .map(fileStorageService::signViewPath).toList();
         if (order != null && completionPhotoUrls.isEmpty() && order.getCompletionPhotoFileId() != null) {
             completionPhotoUrls = List.of(fileStorageService.signViewPath(order.getCompletionPhotoFileId()));
@@ -215,12 +215,6 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
             log.warn("申请表单数据解析失败, formData 长度={}", formData == null ? 0 : formData.length());
             return null;
         }
-    }
-
-    private List<Long> parsePhotoIds(String value) {
-        if (value == null || value.isBlank()) return List.of();
-        try { return objectMapper.readValue(value, objectMapper.getTypeFactory().constructCollectionType(List.class, Long.class)); }
-        catch (Exception ignored) { return List.of(); }
     }
 
     private ServiceRequestEntity requireOwnedRequest(Long requesterId, Long requestId) {

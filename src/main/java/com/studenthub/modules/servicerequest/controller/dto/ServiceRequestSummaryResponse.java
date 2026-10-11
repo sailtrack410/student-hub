@@ -1,7 +1,5 @@
 package com.studenthub.modules.servicerequest.controller.dto;
 
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.studenthub.modules.servicerequest.entity.ServiceRequestEntity;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -9,7 +7,6 @@ import java.time.LocalDateTime;
 
 @Schema(description = "服务申请概要")
 public record ServiceRequestSummaryResponse(
-        @JsonSerialize(using = ToStringSerializer.class)
         @Schema(description = "申请 ID") Long requestId,
         @Schema(description = "申请编号") String requestNo,
         @Schema(description = "申请标题") String title,

@@ -2,6 +2,7 @@ package com.studenthub.modules.community.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.studenthub.common.ErrorCode;
+import com.studenthub.common.util.JsonIds;
 import com.studenthub.exception.BusinessException;
 import com.studenthub.modules.community.controller.dto.DirectMessageResponse;
 import com.studenthub.modules.community.controller.dto.SendDirectMessageRequest;
@@ -15,7 +16,6 @@ import com.studenthub.modules.identity.security.AuthenticatedUser;
 import com.studenthub.modules.file.service.FileStorageService;
 import com.studenthub.modules.community.realtime.CommunityWebSocketHandler;
 import com.studenthub.modules.file.mapper.FileStorageMapper;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,7 +31,6 @@ public class DirectMessageServiceImpl implements DirectMessageService {
     private final UserMapper userMapper;
     private final FileStorageService fileStorageService;
     private final FileStorageMapper fileStorageMapper;
-    private final ObjectMapper objectMapper;
     private final CommunityWebSocketHandler webSocketHandler;
 
     @Override
@@ -55,7 +54,7 @@ public class DirectMessageServiceImpl implements DirectMessageService {
         entity.setSenderId(user.userId());
         entity.setReceiverId(peer.getId());
         entity.setContent(content);
-        entity.setImageFileIds(writeIds(imageIds));
+        entity.setImageFileIds(imageIds.isEmpty() ? null : JsonIds.write(imageIds));
         messageMapper.insert(entity);
         DirectMessageResponse response = toResponse(entity);
         webSocketHandler.publish(peer.getId(), response);
@@ -105,7 +104,7 @@ public class DirectMessageServiceImpl implements DirectMessageService {
     }
 
     private DirectMessageResponse toResponse(CommunityDirectMessageEntity entity) {
-        List<Long> ids = parseIds(entity.getImageFileIds());
+        List<Long> ids = JsonIds.parse(entity.getImageFileIds());
         UserEntity sender = userMapper.selectById(entity.getSenderId());
         String senderAvatar = null;
         if (sender != null && sender.getAvatarUrl() != null) {
@@ -128,17 +127,5 @@ public class DirectMessageServiceImpl implements DirectMessageService {
                 throw new BusinessException(ErrorCode.FORBIDDEN, "只能使用自己上传的图片");
             }
         }
-    }
-
-    private String writeIds(List<Long> ids) {
-        if (ids.isEmpty()) return null;
-        try { return objectMapper.writeValueAsString(ids); }
-        catch (Exception exception) { throw new IllegalStateException("私信图片信息序列化失败", exception); }
-    }
-
-    private List<Long> parseIds(String value) {
-        if (value == null || value.isBlank()) return List.of();
-        try { return objectMapper.readValue(value, objectMapper.getTypeFactory().constructCollectionType(List.class, Long.class)); }
-        catch (Exception exception) { return List.of(); }
     }
 }
