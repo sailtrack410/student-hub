@@ -1,11 +1,9 @@
 package com.studenthub.modules.identity.security;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import com.studenthub.common.util.Digests;
+
 import java.security.SecureRandom;
 import java.util.Base64;
-import java.util.HexFormat;
 
 final class SecureTokenSupport {
 
@@ -21,11 +19,6 @@ final class SecureTokenSupport {
     }
 
     static String hash(String rawToken) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(rawToken.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
-        }
+        return Digests.sha256Hex(rawToken);
     }
 }
