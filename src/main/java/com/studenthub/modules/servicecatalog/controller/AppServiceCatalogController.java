@@ -17,7 +17,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/app/services")
-@Tag(name = "小程序-服务目录")
+@Tag(name = "小程序-服务目录", description = "已上线服务分类与服务项查询")
 @RequiredArgsConstructor
 public class AppServiceCatalogController {
 

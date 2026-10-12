@@ -31,7 +31,7 @@ import java.io.IOException;
 @Slf4j
 @RestController
 @RequestMapping("/api/common/files")
-@Tag(name = "文件访问")
+@Tag(name = "通用-文件访问", description = "签名 URL 匿名直读文件")
 @RequiredArgsConstructor
 public class FileViewController {
 

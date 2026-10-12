@@ -14,17 +14,21 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Duration;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
  * 将 MinIO 中的静态小程序素材通过 API 域名公开读取，避免真机直连 MinIO 端口被网络规则拦截。
  */
 @RestController
 @RequestMapping("/api/common/assets")
+@Tag(name = "通用-静态素材", description = "小程序静态素材公开直读")
 @RequiredArgsConstructor
 public class PublicAssetController {
     private final BinaryStorage binaryStorage;
 
     @GetMapping("/{*assetPath}")
+    @Operation(summary = "读取小程序静态素材", description = "按相对路径直读 MinIO static/assets/ 下的素材，浏览器缓存 7 天。")
     public ResponseEntity<byte[]> get(@PathVariable String assetPath) {
         String normalizedPath = assetPath == null ? "" : assetPath.replaceFirst("^/", "");
         if (normalizedPath.isBlank() || normalizedPath.contains("..") || normalizedPath.startsWith("/")) {

@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/admin/service-requests")
-@Tag(name = "管理端-服务申请审批")
+@Tag(name = "管理端-服务申请审批", description = "服务申请分页与审批")
 @RequiredArgsConstructor
 @PreAuthorize("hasAuthority('platform:all') or hasAuthority('catalog:manage') or hasAuthority('work-order:dispatch')")
 public class AdminServiceRequestController {

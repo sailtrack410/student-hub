@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/app/jw")
-@Tag(name = "小程序-教务认证")
+@Tag(name = "小程序-教务认证", description = "教务账号绑定、状态与个人信息")
 @RequiredArgsConstructor
 public class AppJwAuthController {
 

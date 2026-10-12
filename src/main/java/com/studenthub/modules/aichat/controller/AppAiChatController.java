@@ -25,7 +25,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/app/ai")
-@Tag(name = "小程序-AI助手")
+@Tag(name = "小程序-AI助手", description = "小程序端 AI 对话与语音转写")
 @RequiredArgsConstructor
 public class AppAiChatController {
 

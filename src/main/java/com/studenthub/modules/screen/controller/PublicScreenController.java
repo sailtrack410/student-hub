@@ -39,7 +39,7 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequestMapping("/api/public/screen")
-@Tag(name = "公开-数据大屏")
+@Tag(name = "公开-数据大屏", description = "大屏公开数据与 AI 问答")
 @RequiredArgsConstructor
 public class PublicScreenController {
 

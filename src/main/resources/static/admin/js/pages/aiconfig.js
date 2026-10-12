@@ -708,7 +708,7 @@
                 Promise.all([
                     api.get('/api/admin/ai/defaults'),
                     api.get('/api/admin/ai/models'),
-                    api.get('/api/admin/ai-config')
+                    api.get('/api/admin/ai/config')
                 ]).then(function (results) {
                     defaults.value = results[0] || [];
                     enabledModels.value = (results[1] || []).filter(function (m) { return m.enabled; });
@@ -742,7 +742,7 @@
 
             function saveGlobal() {
                 saving.value = true;
-                api.put('/api/admin/ai-config', {
+                api.put('/api/admin/ai/config', {
                     enabled: global.enabled,
                     connectTimeoutSeconds: global.connectTimeoutSeconds,
                     readTimeoutSeconds: global.readTimeoutSeconds,

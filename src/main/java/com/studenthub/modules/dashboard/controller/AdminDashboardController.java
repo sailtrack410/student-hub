@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/admin/dashboard")
-@Tag(name = "管理端-工作台")
+@Tag(name = "管理端-工作台", description = "管理端聚合工作台数据")
 @RequiredArgsConstructor
 @PreAuthorize("hasAuthority('platform:all') or hasAuthority('system:user:manage') or hasAuthority('work-order:dispatch')")
 public class AdminDashboardController {

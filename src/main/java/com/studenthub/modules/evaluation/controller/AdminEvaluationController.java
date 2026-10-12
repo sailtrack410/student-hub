@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/admin/evaluations")
-@Tag(name = "管理端-服务评价")
+@Tag(name = "管理端-服务评价", description = "全平台评价查询与回复")
 @RequiredArgsConstructor
 @PreAuthorize("hasAuthority('platform:all') or hasAuthority('catalog:manage')")
 public class AdminEvaluationController {

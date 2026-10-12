@@ -2,6 +2,7 @@ package com.studenthub.modules.devtool;
 
 import com.studenthub.common.Result;
 import com.studenthub.modules.schedule.job.ScheduleSyncTimer;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
@@ -20,6 +21,7 @@ public class DevScheduleSyncController {
     private final ScheduleSyncTimer syncTimer;
 
     @PostMapping("/run")
+    @Operation(summary = "手动触发一次课表同步")
     public Result<String> run() {
         syncTimer.run();
         return Result.success("已触发课表同步");

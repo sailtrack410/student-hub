@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/admin/work-orders")
-@Tag(name = "管理端-工单调度")
+@Tag(name = "管理端-工单调度", description = "工单队列查询、派发与驳回")
 @RequiredArgsConstructor
 @PreAuthorize("hasAuthority('work-order:dispatch')")
 public class AdminWorkOrderController {

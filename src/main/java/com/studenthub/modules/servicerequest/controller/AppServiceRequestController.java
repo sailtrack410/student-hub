@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/app/service-requests")
-@Tag(name = "小程序-服务申请")
+@Tag(name = "小程序-服务申请", description = "服务申请提交、查询与撤销")
 @RequiredArgsConstructor
 public class AppServiceRequestController {
 
