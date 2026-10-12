@@ -13,6 +13,7 @@ import com.studenthub.modules.aichat.entity.AiConfigEntity;
 import com.studenthub.modules.aichat.entity.AiDefaultModelEntity;
 import com.studenthub.modules.aichat.entity.AiModelEntity;
 import com.studenthub.modules.aichat.entity.AiProviderEntity;
+import com.studenthub.modules.aichat.enums.AiModelType;
 import com.studenthub.modules.aichat.mapper.AiConfigMapper;
 import com.studenthub.modules.aichat.mapper.AiDefaultModelMapper;
 import com.studenthub.modules.aichat.mapper.AiModelMapper;
@@ -36,11 +37,6 @@ import java.util.concurrent.atomic.AtomicLong;
 @RequiredArgsConstructor
 public class AiConfigServiceImpl implements AiConfigService {
 
-    public static final String TYPE_CHAT = "CHAT";
-    public static final String TYPE_VISION = "VISION";
-    public static final String TYPE_ASR = "ASR";
-    public static final String TYPE_EMBEDDING = "EMBEDDING";
-
     private static final Long SINGLETON_ID = 1L;
 
     private final AiConfigMapper aiConfigMapper;
@@ -54,7 +50,7 @@ public class AiConfigServiceImpl implements AiConfigService {
     @Override
     public AiConfigResponse current() {
         AiConfigEntity entity = requireEntity();
-        AiModelBinding chat = resolveBinding(TYPE_CHAT);
+        AiModelBinding chat = resolveBinding(AiModelType.CHAT.name());
         return AiConfigResponse.fromEntity(entity, chat == null ? null : chat.model());
     }
 
@@ -88,10 +84,10 @@ public class AiConfigServiceImpl implements AiConfigService {
         long version = versionCounter.incrementAndGet();
         AiRuntimeConfig.update(new AiRuntimeSnapshot(
                 Boolean.TRUE.equals(config.getEnabled()),
-                resolveBinding(TYPE_CHAT),
-                resolveBinding(TYPE_VISION),
-                resolveBinding(TYPE_ASR),
-                resolveBinding(TYPE_EMBEDDING),
+                resolveBinding(AiModelType.CHAT.name()),
+                resolveBinding(AiModelType.VISION.name()),
+                resolveBinding(AiModelType.ASR.name()),
+                resolveBinding(AiModelType.EMBEDDING.name()),
                 config.getConnectTimeoutSeconds(),
                 config.getReadTimeoutSeconds(),
                 config.getMaxInputCharacters(),
@@ -102,10 +98,12 @@ public class AiConfigServiceImpl implements AiConfigService {
     }
 
     /**
-     * 解析某类型的默认模型绑定：默认模型存在 → 模型启用 → 供应商启用且已配密钥，
+     * 按类型码解析某类型的默认模型绑定：默认模型存在 → 模型启用 → 供应商启用且已配密钥，
      * 任一环缺失即视为未配置（返回 null，调用方回退或报 AI_NOT_CONFIGURED）。
+     * 语义为静默降级，与 {@link #resolveBinding(Long, String)} 显式指定型抛异常语义分开保留。
      */
-    private AiModelBinding resolveBinding(String typeCode) {
+    @Override
+    public AiModelBinding resolveBinding(String typeCode) {
         AiDefaultModelEntity def = aiDefaultModelMapper.selectOne(new LambdaQueryWrapper<AiDefaultModelEntity>()
                 .eq(AiDefaultModelEntity::getTypeCode, typeCode)
                 .last("LIMIT 1"));
@@ -121,8 +119,41 @@ public class AiConfigServiceImpl implements AiConfigService {
                 || !StringUtils.hasText(provider.getApiKey())) {
             return null;
         }
+        return toBinding(provider, model.getProviderModelId());
+    }
+
+    /**
+     * 显式指定供应商/模型时的绑定解析（管理端流式测试）：供应商须启用且已配密钥；
+     * 模型缺省取该供应商下第一个启用模型。错误显式抛出，与按类型码的静默降级语义分开。
+     */
+    @Override
+    public AiModelBinding resolveBinding(Long providerId, String modelId) {
+        AiProviderEntity provider = aiProviderMapper.selectById(providerId);
+        if (provider == null || !Boolean.TRUE.equals(provider.getEnabled())) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "供应商不存在或未启用");
+        }
+        if (!StringUtils.hasText(provider.getApiKey())) {
+            throw new BusinessException(ErrorCode.AI_NOT_CONFIGURED, "该供应商尚未配置 API Key");
+        }
+        String model = StringUtils.hasText(modelId) ? modelId : null;
+        if (model == null) {
+            AiModelEntity first = aiModelMapper.selectOne(new LambdaQueryWrapper<AiModelEntity>()
+                    .eq(AiModelEntity::getProviderId, providerId)
+                    .eq(AiModelEntity::getEnabled, true)
+                    .orderByAsc(AiModelEntity::getProviderModelId)
+                    .last("LIMIT 1"));
+            if (first == null) {
+                throw new BusinessException(ErrorCode.AI_NOT_CONFIGURED, "该供应商下没有启用的模型");
+            }
+            model = first.getProviderModelId();
+        }
+        return toBinding(provider, model);
+    }
+
+    /** 实体 → 绑定；streaming 空值兜底为支持流式（全仓该兜底唯一落点） */
+    private AiModelBinding toBinding(AiProviderEntity provider, String model) {
         return new AiModelBinding(provider.getId(), provider.getBaseUrl(), provider.getApiKey(),
-                model.getProviderModelId(), provider.getProtocol(),
+                model, provider.getProtocol(),
                 provider.getStreaming() == null || provider.getStreaming());
     }
 

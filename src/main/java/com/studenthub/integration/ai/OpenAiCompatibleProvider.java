@@ -3,6 +3,7 @@ package com.studenthub.integration.ai;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studenthub.common.ErrorCode;
+import com.studenthub.config.HttpClientConfig;
 import com.studenthub.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -23,11 +24,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * AI 供应商统一调用器：默认聊天模型绑定来自 {@link AiRuntimeConfig} 快照，
  * 按供应商懒构建/缓存客户端，管理后台变更配置后下一次调用即使用新连接，无需重启。
+ * 直连 HttpClient.Builder 由 {@link HttpClientConfig#directHttpClientBuilder()} 提供。
  *
  * <p>协议分流：OPENAI_CHAT（/chat/completions）、ANTHROPIC_MESSAGES（/messages）、
  * OPENAI_RESPONSES（/responses）；流式（SSE）按供应商 streaming 开关启用。
@@ -39,14 +40,17 @@ public class OpenAiCompatibleProvider implements AiProvider {
 
     private final AiProperties properties;
     private final ObjectMapper objectMapper;
-    /** providerId:version -> RestClient，配置版本变化后自动重建 */
-    private final ConcurrentHashMap<String, RestClient> clientCache = new ConcurrentHashMap<>();
-    private final AtomicReference<String> lastCacheKey = new AtomicReference<>();
+    /** 直连 HttpClient.Builder 工厂（HttpClientConfig 提供，不走系统代理），超时由调用方按快照设置 */
+    private final HttpClient.Builder directHttpClientBuilder;
+    /** providerId:version -> CallClient，配置版本变化后自动重建 */
+    private final ConcurrentHashMap<String, CallClient> callClientCache = new ConcurrentHashMap<>();
 
     public OpenAiCompatibleProvider(AiProperties properties,
-                                    ObjectMapper objectMapper) {
+                                    ObjectMapper objectMapper,
+                                    HttpClient.Builder directHttpClientBuilder) {
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.directHttpClientBuilder = directHttpClientBuilder;
     }
 
     @Override
@@ -77,25 +81,10 @@ public class OpenAiCompatibleProvider implements AiProvider {
     }
 
     @Override
-    public void chatStream(AiChatRequest request, java.util.function.Consumer<String> onDelta,
-                           TriConsumer<String, Integer, Integer> onDone) {
-        CallContext ctx = resolveContext(request);
-        doStream(ctx, request, onDelta, onDone);
-    }
-
-    @Override
     public void chatStreamWithBinding(AiModelBinding binding, AiChatRequest request,
                                       java.util.function.Consumer<String> onDelta,
                                       TriConsumer<String, Integer, Integer> onDone) {
-        AiRuntimeSnapshot snapshot = AiRuntimeConfig.current();
-        int connectTimeout = snapshot != null ? snapshot.connectTimeoutSeconds()
-                : properties.getConnectTimeoutSeconds();
-        int readTimeout = snapshot != null ? snapshot.readTimeoutSeconds()
-                : properties.getReadTimeoutSeconds();
-        String protocol = binding.protocolOrDefault();
-        CallContext ctx = new CallContext(binding, protocol, binding.streaming(), readTimeout,
-                httpClientFor(binding, connectTimeout, readTimeout, snapshot == null ? 0 : snapshot.version()),
-                headersFor(protocol, binding.apiKey()));
+        CallContext ctx = resolveContext(binding);
         doStream(ctx, request, onDelta, onDone);
     }
 
@@ -174,7 +163,7 @@ public class OpenAiCompatibleProvider implements AiProvider {
             throw new BusinessException(ErrorCode.AI_NOT_CONFIGURED, "Embedding 模型尚未配置");
         }
         try {
-            RestClient client = clientFor(binding, snapshot.connectTimeoutSeconds(), snapshot.readTimeoutSeconds(), snapshot.version());
+            RestClient client = clientFor(binding, snapshot.connectTimeoutSeconds(), snapshot.readTimeoutSeconds());
             Map<String, Object> payload = Map.of("model", request.model(), "input", request.input());
             String body = client.post().uri("/embeddings").header("Content-Type", "application/json")
                     .header("Authorization", "Bearer " + binding.apiKey()).body(payload)
@@ -223,6 +212,16 @@ public class OpenAiCompatibleProvider implements AiProvider {
         if (!enabled || binding == null) {
             throw new BusinessException(ErrorCode.AI_NOT_CONFIGURED);
         }
+        return buildContext(binding, snapshot);
+    }
+
+    /** 显式绑定路径：不经快照绑定选择，仅复用快照的超时/版本构建调用上下文 */
+    private CallContext resolveContext(AiModelBinding binding) {
+        return buildContext(binding, AiRuntimeConfig.current());
+    }
+
+    /** 绑定 + 当前快照 → 调用上下文（客户端按 providerId:version 复用） */
+    private CallContext buildContext(AiModelBinding binding, AiRuntimeSnapshot snapshot) {
         if (!StringUtils.hasText(binding.apiKey())) {
             throw new BusinessException(ErrorCode.AI_NOT_CONFIGURED);
         }
@@ -232,7 +231,7 @@ public class OpenAiCompatibleProvider implements AiProvider {
                 : properties.getReadTimeoutSeconds();
         String protocol = binding.protocolOrDefault();
         return new CallContext(binding, protocol, binding.streaming(), readTimeout,
-                httpClientFor(binding, connectTimeout, readTimeout, snapshot == null ? 0 : snapshot.version()),
+                httpClientFor(binding, connectTimeout),
                 headersFor(protocol, binding.apiKey()));
     }
 
@@ -456,33 +455,53 @@ public class OpenAiCompatibleProvider implements AiProvider {
 
     // ==================== 客户端构建 ====================
 
-    /** 流式/非流式共用的原生 HttpClient（显式直连，避免系统代理把 AI 请求路由到境外线路） */
-    private final ConcurrentHashMap<String, HttpClient> httpClientCache = new ConcurrentHashMap<>();
-
-    private HttpClient httpClientFor(AiModelBinding binding, int connectTimeout, int readTimeout, int version) {
-        String cacheKey = binding.providerId() + ":" + version;
-        return httpClientCache.computeIfAbsent(cacheKey, ignored -> HttpClient.newBuilder()
-                .proxy(HttpClient.Builder.NO_PROXY)
-                .connectTimeout(Duration.ofSeconds(connectTimeout))
-                .build());
+    /**
+     * 唯一缓存：providerId:version -> CallClient（原生 HttpClient + 其上构建的 RestClient）。
+     * 聊天/流式走原生 HttpClient，Embedding 走同一 HttpClient 之上的 RestClient；
+     * 缓存键含配置版本，版本推进时整表清空（旧连接全部释放），杜绝按版本累积的缓存泄漏。
+     */
+    private record CallClient(HttpClient httpClient, RestClient restClient) {
     }
 
-    /** 按供应商+配置版本懒构建/重建 RestClient；版本推进后清掉旧连接，避免缓存累积 */
-    private RestClient clientFor(AiModelBinding binding, int connectTimeout, int readTimeout, int version) {
+    /** 流式/非流式共用的原生 HttpClient（显式直连，避免系统代理把 AI 请求路由到境外线路） */
+    private HttpClient httpClientFor(AiModelBinding binding, int connectTimeout) {
+        return callClient(binding, connectTimeout, readTimeoutOf()).httpClient();
+    }
+
+    /** Embedding 路径用的 RestClient：同一 HttpClient + 快照读超时 */
+    private RestClient clientFor(AiModelBinding binding, int connectTimeout, int readTimeout) {
+        return callClient(binding, connectTimeout, readTimeout).restClient();
+    }
+
+    private CallClient callClient(AiModelBinding binding, int connectTimeout, int restReadTimeout) {
+        int version = versionOf();
         String cacheKey = binding.providerId() + ":" + version;
-        String previous = lastCacheKey.getAndSet(cacheKey);
-        if (!cacheKey.equals(previous)) {
-            clientCache.clear();
-        }
-        return clientCache.computeIfAbsent(cacheKey, ignored -> {
-            JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(
-                    httpClientFor(binding, connectTimeout, readTimeout, version));
-            requestFactory.setReadTimeout(Duration.ofSeconds(readTimeout));
-            return RestClient.builder()
+        // 版本推进时清掉全部旧版本条目（含旧 HttpClient 连接池），多个供应商同版本共存互不驱逐
+        callClientCache.keySet().removeIf(key -> !key.endsWith(":" + version));
+        return callClientCache.computeIfAbsent(cacheKey, ignored -> {
+            HttpClient httpClient = directHttpClientBuilder
+                    .connectTimeout(Duration.ofSeconds(connectTimeout))
+                    .build();
+            JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+            requestFactory.setReadTimeout(Duration.ofSeconds(restReadTimeout));
+            RestClient restClient = RestClient.builder()
                     .requestFactory(requestFactory)
                     .baseUrl(binding.baseUrl())
                     .build();
+            return new CallClient(httpClient, restClient);
         });
+    }
+
+    /** 当前快照版本；无快照（启动早期）按 0 处理 */
+    private int versionOf() {
+        AiRuntimeSnapshot snapshot = AiRuntimeConfig.current();
+        return snapshot == null ? 0 : snapshot.version();
+    }
+
+    /** 当前快照读超时；无快照回退环境变量配置 */
+    private int readTimeoutOf() {
+        AiRuntimeSnapshot snapshot = AiRuntimeConfig.current();
+        return snapshot != null ? snapshot.readTimeoutSeconds() : properties.getReadTimeoutSeconds();
     }
 
     /** 无进程内快照（如启动早期）时回退到环境变量配置 */
@@ -490,7 +509,8 @@ public class OpenAiCompatibleProvider implements AiProvider {
         if (!StringUtils.hasText(properties.getBaseUrl()) || !StringUtils.hasText(properties.getModel())) {
             return null;
         }
-        return new AiModelBinding(0L, properties.getBaseUrl(), properties.getApiKey(), properties.getModel());
+        return new AiModelBinding(0L, properties.getBaseUrl(), properties.getApiKey(),
+                properties.getModel(), AiModelBinding.PROTOCOL_OPENAI_CHAT, true);
     }
 
     private String abbreviate(String s) {

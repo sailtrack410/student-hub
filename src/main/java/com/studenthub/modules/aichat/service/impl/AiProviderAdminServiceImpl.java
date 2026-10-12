@@ -17,6 +17,7 @@ import com.studenthub.modules.aichat.controller.dto.AiProviderUpdateRequest;
 import com.studenthub.modules.aichat.entity.AiDefaultModelEntity;
 import com.studenthub.modules.aichat.entity.AiModelEntity;
 import com.studenthub.modules.aichat.entity.AiProviderEntity;
+import com.studenthub.modules.aichat.enums.AiModelType;
 import com.studenthub.modules.aichat.mapper.AiDefaultModelMapper;
 import com.studenthub.modules.aichat.mapper.AiModelMapper;
 import com.studenthub.modules.aichat.mapper.AiProviderMapper;
@@ -34,6 +35,7 @@ import org.springframework.web.client.RestClientException;
 
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.util.Arrays;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -50,12 +52,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AiProviderAdminServiceImpl implements AiProviderAdminService {
 
-    private static final String TYPE_CHAT = "CHAT";
-    private static final String TYPE_VISION = "VISION";
-    private static final String TYPE_ASR = "ASR";
-    private static final String TYPE_TTS = "TTS";
-    private static final String TYPE_EMBEDDING = "EMBEDDING";
-    private static final String TYPE_RERANK = "RERANK";
     private static final Pattern VALID_PROVIDER_CODE = Pattern.compile("^[a-z0-9][a-z0-9-]{0,62}$");
     private static final Duration CHECK_CONNECT_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration CHECK_READ_TIMEOUT = Duration.ofSeconds(15);
@@ -65,6 +61,8 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
     private final AiDefaultModelMapper defaultModelMapper;
     private final AiConfigService aiConfigService;
     private final ObjectMapper objectMapper;
+    /** 直连 HttpClient.Builder 工厂（HttpClientConfig 提供，不走系统代理），探活用固定短超时 */
+    private final HttpClient.Builder directHttpClientBuilder;
 
     @Override
     public List<AiProviderResponse> listProviders() {
@@ -214,7 +212,7 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
         int added = 0;
         for (AiModelImportRequest.AiModelImportItem item : request.models()) {
             String modelId = item.providerModelId().trim();
-            String type = StringUtils.hasText(item.modelType()) ? item.modelType() : TYPE_CHAT;
+            String type = StringUtils.hasText(item.modelType()) ? item.modelType() : AiModelType.CHAT.name();
             if (!seenInRequest.add(modelId) || existing.contains(modelId)) {
                 continue;
             }
@@ -297,7 +295,7 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
                         AiDefaultModelEntity::getModelId));
         Map<Long, String> providerNames = providerNameMap();
         List<AiDefaultModelResponse> result = new ArrayList<>();
-        for (String typeCode : List.of(TYPE_CHAT, TYPE_VISION, TYPE_ASR, TYPE_TTS, TYPE_EMBEDDING, TYPE_RERANK)) {
+        for (String typeCode : Arrays.stream(AiModelType.values()).map(Enum::name).toList()) {
             Long modelId = defaults.get(typeCode);
             AiModelEntity model = modelId == null ? null : modelMap.get(modelId);
             result.add(new AiDefaultModelResponse(typeCode, typeName(typeCode),
@@ -338,10 +336,9 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
                 .findFirst().orElseThrow();
     }
 
-    /** 连通性检查/拉取模型共用的短超时客户端（显式直连，绕过系统代理避免境外绕行） */
+    /** 连通性检查/拉取模型共用的短超时客户端（directHttpClientBuilder 直连，固定短超时） */
     private RestClient modelsClient(AiProviderEntity provider) {
-        HttpClient httpClient = HttpClient.newBuilder()
-                .proxy(HttpClient.Builder.NO_PROXY)
+        HttpClient httpClient = directHttpClientBuilder
                 .connectTimeout(CHECK_CONNECT_TIMEOUT)
                 .build();
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
@@ -436,14 +433,8 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
     }
 
     private String typeName(String typeCode) {
-        return switch (typeCode) {
-            case TYPE_VISION -> "图片识别";
-            case TYPE_ASR -> "语音转写";
-            case TYPE_TTS -> "语音合成";
-            case TYPE_EMBEDDING -> "向量模型";
-            case TYPE_RERANK -> "精排";
-            default -> "语言对话";
-        };
+        AiModelType type = AiModelType.of(typeCode);
+        return type == null ? typeCode : type.display();
     }
 
     private String rootMessage(Exception exception) {
@@ -457,10 +448,10 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
     /** 主类型对应的能力标签（推断类型时同步写入 capabilities） */
     private String primaryCapOf(String typeCode) {
         return switch (typeCode) {
-            case TYPE_VISION -> "vision";
-            case TYPE_ASR, TYPE_TTS -> "audio";
-            case TYPE_EMBEDDING -> "embedding";
-            case TYPE_RERANK -> null;
+            case "VISION" -> "vision";
+            case "ASR", "TTS" -> "audio";
+            case "EMBEDDING" -> "embedding";
+            case "RERANK" -> null;
             default -> "stream";
         };
     }
@@ -472,25 +463,25 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
     private String guessModelType(String modelId) {
         String id = modelId.toLowerCase();
         if (id.contains("rerank")) {
-            return TYPE_RERANK;
+            return AiModelType.RERANK.name();
         }
         if (id.contains("embedding") || id.contains("embed") || id.contains("bge-")
                 || id.contains("m3e") || id.contains("text-embedding")) {
-            return TYPE_EMBEDDING;
+            return AiModelType.EMBEDDING.name();
         }
         if (id.contains("tts") || id.contains("speech-synthesis") || id.contains("samlb")
                 || id.contains("cosyvoice")) {
-            return TYPE_TTS;
+            return AiModelType.TTS.name();
         }
         if (id.contains("asr") || id.contains("whisper") || id.contains("audio")
                 || id.contains("transcri")) {
-            return TYPE_ASR;
+            return AiModelType.ASR.name();
         }
         if (id.contains("vl") || id.contains("vision") || id.contains("image")
                 || id.contains("4v") || id.contains("-v-")) {
-            return TYPE_VISION;
+            return AiModelType.VISION.name();
         }
-        return TYPE_CHAT;
+        return AiModelType.CHAT.name();
     }
 
     /** 按模型 ID 推断能力标签（逗号分隔，与 capabilities 字段约定一致） */

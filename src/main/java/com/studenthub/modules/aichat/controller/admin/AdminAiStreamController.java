@@ -1,16 +1,10 @@
 package com.studenthub.modules.aichat.controller.admin;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.studenthub.common.ErrorCode;
-import com.studenthub.exception.BusinessException;
 import com.studenthub.integration.ai.AiChatRequest;
 import com.studenthub.integration.ai.AiMessage;
 import com.studenthub.integration.ai.AiModelBinding;
 import com.studenthub.integration.ai.AiProvider;
-import com.studenthub.modules.aichat.entity.AiModelEntity;
-import com.studenthub.modules.aichat.entity.AiProviderEntity;
-import com.studenthub.modules.aichat.mapper.AiModelMapper;
-import com.studenthub.modules.aichat.mapper.AiProviderMapper;
+import com.studenthub.modules.aichat.service.AiConfigService;
 import com.studenthub.modules.rag.controller.dto.RagTestResponse;
 import com.studenthub.modules.rag.entity.KnowledgeBaseEntity;
 import com.studenthub.modules.rag.service.KnowledgeBaseService;
@@ -48,8 +42,7 @@ import java.util.concurrent.Executors;
 public class AdminAiStreamController {
 
     private final AiChatService aiChatService;
-    private final AiProviderMapper providerMapper;
-    private final AiModelMapper modelMapper;
+    private final AiConfigService aiConfigService;
     private final AiProvider aiProvider;
     private final KnowledgeBaseService knowledgeBaseService;
     private final ExecutorService streamExecutor = Executors.newCachedThreadPool(r -> {
@@ -83,7 +76,7 @@ public class AdminAiStreamController {
                 }
                 final List<AiMessage> finalMessages = effective;
                 if (providerId != null) {
-                    AiModelBinding binding = resolveBinding(providerId, request.model());
+                    AiModelBinding binding = aiConfigService.resolveBinding(providerId, request.model());
                     aiProvider.chatStreamWithBinding(binding,
                             new AiChatRequest(binding.model(), finalMessages),
                             delta -> send(emitter, "delta", delta),
@@ -186,31 +179,7 @@ public class AdminAiStreamController {
         return s.length() <= max ? s : s.substring(0, max) + "…";
     }
 
-    /** 显式指定供应商/模型时的绑定解析：供应商须启用且已配密钥；模型缺省取其第一个启用模型 */
-    private AiModelBinding resolveBinding(Long providerId, String modelId) {
-        AiProviderEntity provider = providerMapper.selectById(providerId);
-        if (provider == null || !Boolean.TRUE.equals(provider.getEnabled())) {
-            throw new BusinessException(ErrorCode.NOT_FOUND, "供应商不存在或未启用");
-        }
-        if (!StringUtils.hasText(provider.getApiKey())) {
-            throw new BusinessException(ErrorCode.AI_NOT_CONFIGURED, "该供应商尚未配置 API Key");
-        }
-        String model = StringUtils.hasText(modelId) ? modelId : null;
-        if (model == null) {
-            AiModelEntity first = modelMapper.selectOne(new LambdaQueryWrapper<AiModelEntity>()
-                    .eq(AiModelEntity::getProviderId, providerId)
-                    .eq(AiModelEntity::getEnabled, true)
-                    .orderByAsc(AiModelEntity::getProviderModelId)
-                    .last("LIMIT 1"));
-            if (first == null) {
-                throw new BusinessException(ErrorCode.AI_NOT_CONFIGURED, "该供应商下没有启用的模型");
-            }
-            model = first.getProviderModelId();
-        }
-        return new AiModelBinding(provider.getId(), provider.getBaseUrl(), provider.getApiKey(),
-                model, provider.getProtocol(),
-                provider.getStreaming() == null || provider.getStreaming());
-    }
+    /** 显式指定供应商/模型时的绑定解析已下沉 {@link AiConfigService#resolveBinding(Long, String)}（抛异常语义） */
 
     private String doneJson(String model, Integer promptTokens, Integer completionTokens) {
         return "{\"model\":\"" + (model == null ? "" : model) + "\",\"promptTokens\":"
