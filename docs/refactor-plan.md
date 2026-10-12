@@ -79,11 +79,8 @@
 ## 进度
 
 - [x] 刀 1 状态机收权（含 1.6 聚合口径）——2026-10-17 完成，提交 538deb7 / b923044 / de29401；1.6 附注：①service_request status 实际分布因数据库连接被掐未验证，待跑 `SELECT status, COUNT(*) FROM service_request WHERE deleted=0 GROUP BY status` 复核；②V17 迁移脚本 H2 不兼容致集成测试 ServiceRequestFlowIntegrationTest 无法启动（存量问题，与刀 1 无关，建议归入刀 7 前置修复）；③evaluation 假时区转换按边界留给刀 6
-- [ ] 刀 2 AI 域收权
-- [ ] 刀 3 API 按端分组（含 ai-config 前端联动）
-- [ ] 刀 4 OAuth 基类
-- [ ] 刀 5 common 收尾
-- [x] 刀 6 交叠项（已确认执行，2026-10-17，提交 167b2a3）——前端零回归已核查：LocalDateTime 默认 ISO 序列化与原 toString 同格式，community.js/eval.js 透传一致；ZONE 常量在 setRepliedAt 仍有使用者故保留
-- [ ] 刀 7 终验与提交
+- [x] 刀 2 AI 域收权——2026-10-17 完成，提交 9b09511；2.3 口径决策：update 正则由 4 值放宽至 6 值（与 import/库列同口径，TTS/RERANK 不进快照槽位无运行时风险）；2.4 顺带修复 chat/embed 键交替抖动；AI 域 2 处 + 教务域 2 处同形异常模板留待后续（属刀 4 跨刀遗留清单）
+- [x] 刀 3 API 按端分组（含 ai-config 前端联动）——2026-10-17 完成，提交 a43505c；35/35 @Tag、126 mapping 的 @Operation 缺失为 0、dev 组 @Profile('!prod')；补落袋 P1 漏网的 QqLoginController/QqLoginRequest（c3195dc）
+- [x] 刀 7 终验与提交——2026-10-17：全量 compile 过；纯单测全绿（集成测试 5 类因存量 V17 迁移 H2 不兼容无法起 Spring 上下文，见刀 1 附注，未修）；七刀全部完成，共 17 个提交。遗留台账：①V17 H2 兼容修复 ②service_request 状态分布 DBA 放通后复核 ③AI 域 2 处+教务域 2 处异常模板收敛 ④V40 迁移实库执行验证（下次启动 Flyway 自动确认）
 
 > 修订记录：2026-10-17 按代码复核并入六项修正——5.1 改 record 可实现的接口方案（R-1）；5.6 补 Flyway 迁移前置（R-2）；2.5 固定 bean 改 builder 工厂，2.4 注明 embed 已借 NO_PROXY HttpClient 无需另改、仅合并双缓存（R-3 二次核验半否决「embed 漏代理」：RestClient 经 `JdkClientHttpRequestFactory(httpClientFor(...))` 构建，底层已直连）；4.2 改 common/util/Digests 保依赖方向（R-4）；ai-config 前端联动并入 3.1（R-5）；补 1.6 聚合口径统一（R-6）。复核另确认：分页 7 DTO 全为 record、sys_user_role 仅 4 审计列、dashboard pendingLeaves 查询的 `PENDING` 状态在 RequestTransitions.Status 中不存在（列入 1.6）。
