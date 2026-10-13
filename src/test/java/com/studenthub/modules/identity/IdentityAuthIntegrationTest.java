@@ -127,7 +127,7 @@ class IdentityAuthIntegrationTest {
                 .andExpect(jsonPath("$.data.isNewUser").value(true))
                 .andExpect(jsonPath("$.data.user.identityType").value("STUDENT"))
                 .andExpect(jsonPath("$.data.user.authorizationStatus").value("BASIC"))
-                .andExpect(jsonPath("$.data.user.username").value(org.hamcrest.Matchers.startsWith("wx_")))
+                .andExpect(jsonPath("$.data.user.username").value(org.hamcrest.Matchers.startsWith("wechat_")))
                 .andExpect(jsonPath("$.data.user.roles", hasItem("REQUESTER")))
                 .andExpect(jsonPath("$.data.user.permissions", hasItem("service-request:create")))
                 .andExpect(jsonPath("$.data.user.permissions", hasItem("service-request:view:self")))

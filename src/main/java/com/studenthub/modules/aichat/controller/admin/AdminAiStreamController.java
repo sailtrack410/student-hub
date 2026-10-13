@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
@@ -44,7 +45,8 @@ public class AdminAiStreamController {
     private final AiChatService aiChatService;
     private final AiConfigService aiConfigService;
     private final AiProvider aiProvider;
-    private final KnowledgeBaseService knowledgeBaseService;
+    /** RAG 关闭（如 test profile）时该 bean 不装配，用 Provider 懒解析避免硬依赖阻断上下文启动 */
+    private final ObjectProvider<KnowledgeBaseService> knowledgeBaseServiceProvider;
     private final ExecutorService streamExecutor = Executors.newCachedThreadPool(r -> {
         Thread t = new Thread(r, "ai-stream-test");
         t.setDaemon(true);
@@ -110,6 +112,11 @@ public class AdminAiStreamController {
             if ("user".equals(messages.get(i).role())) { question = messages.get(i).content(); break; }
         }
         if (!StringUtils.hasText(question)) return messages;
+        KnowledgeBaseService knowledgeBaseService = knowledgeBaseServiceProvider.getIfAvailable();
+        if (knowledgeBaseService == null) {
+            send(emitter, "error", "知识库服务未启用");
+            return messages;
+        }
         try {
             KnowledgeBaseEntity base = knowledgeBaseService.requireBase(knowledgeBaseId);
             if (base == null) {

@@ -1,6 +1,7 @@
 package com.studenthub.integration.jw;
 
 import com.studenthub.common.ErrorCode;
+import com.studenthub.common.util.IntegrationExceptions;
 import com.studenthub.exception.BusinessException;
 import com.studenthub.modules.jwauth.config.JwProperties;
 import lombok.extern.slf4j.Slf4j;
@@ -58,7 +59,7 @@ public class KingosoftJwClient {
      * uid 以服务端返回为准（与登录时的 id 参数绑定）。
      */
     public JwCaptcha fetchCaptcha(String uid) {
-        try {
+        return IntegrationExceptions.wrap(() -> {
             HttpClient client = buildClient(new CookieManager());
             HttpResponse<String> response = client.send(
                     HttpRequest.newBuilder(URI.create(properties.getSsoBaseUrl() + "/mcauth/kaptcha?uid=" + uid))
@@ -77,12 +78,7 @@ public class KingosoftJwClient {
             }
             String base64 = content.substring(content.indexOf("base64,") + "base64,".length());
             return new JwCaptcha(serverUid != null ? serverUid : uid, base64);
-        } catch (BusinessException exception) {
-            throw exception;
-        } catch (Exception exception) {
-            log.error("请求教务验证码异常", exception);
-            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "验证码获取失败，请稍后重试");
-        }
+        }, ErrorCode.INTERNAL_ERROR, "请求教务验证码异常");
     }
 
     /**
@@ -92,7 +88,7 @@ public class KingosoftJwClient {
      */
     public JwLoginResult login(String account, String password, String captchaUid, String captchaCode) {
         CookieManager cookieManager = new CookieManager();
-        try {
+        return IntegrationExceptions.wrap(() -> {
             HttpClient client = buildClient(cookieManager);
 
             // 1. SSO tickets：RSA 加密密码换取 ticket
@@ -158,17 +154,12 @@ public class KingosoftJwClient {
             return new JwLoginResult(cookieHeader, finalUri.toString(), profile.ssoAccount(), profile.jwName(),
                     profile.identityKind(), profile.jwStudentNo(),
                     profile.grade(), profile.college(), profile.major(), profile.className());
-        } catch (BusinessException exception) {
-            throw exception;
-        } catch (Exception exception) {
-            log.error("教务登录链路异常", exception);
-            throw new BusinessException(ErrorCode.JW_AUTH_FAILED);
-        }
+        }, ErrorCode.JW_AUTH_FAILED, "教务登录链路异常");
     }
 
     /** 用托管会话 Cookie 访问登录落地页，拉取个人信息 */
     public JwProfile fetchProfile(String cookieHeader, String homeUrl) {
-        try {
+        return IntegrationExceptions.wrap(() -> {
             HttpClient client = buildClient(new CookieManager());
             HttpResponse<byte[]> response = client.send(
                     HttpRequest.newBuilder(URI.create(homeUrl))
@@ -181,12 +172,7 @@ public class KingosoftJwClient {
             }
             JwProfile profile = extractProfile(response.body(), response.headers(), client, cookieHeader);
             return mergeStudentInfo(client, cookieHeader, profile);
-        } catch (BusinessException exception) {
-            throw exception;
-        } catch (Exception exception) {
-            log.error("拉取教务个人信息异常", exception);
-            throw new BusinessException(ErrorCode.JW_SESSION_EXPIRED);
-        }
+        }, ErrorCode.JW_SESSION_EXPIRED, "拉取教务个人信息异常");
     }
 
     /**

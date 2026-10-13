@@ -3,6 +3,7 @@ package com.studenthub.integration.ai;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studenthub.common.ErrorCode;
+import com.studenthub.common.util.IntegrationExceptions;
 import com.studenthub.config.HttpClientConfig;
 import com.studenthub.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
@@ -57,7 +58,7 @@ public class OpenAiCompatibleProvider implements AiProvider {
     public AiChatResponse chat(AiChatRequest request) {
         CallContext ctx = resolveContext(request);
         Map<String, Object> payload = buildPayload(ctx, request, false);
-        try {
+        return IntegrationExceptions.wrap(() -> {
             HttpRequest httpRequest = HttpRequest.newBuilder()
                     .uri(java.net.URI.create(ctx.baseUrl() + endpointPath(ctx.protocol())))
                     .timeout(Duration.ofSeconds(ctx.readTimeout()))
@@ -72,12 +73,7 @@ public class OpenAiCompatibleProvider implements AiProvider {
             }
             JsonNode root = objectMapper.readTree(response.body());
             return parseNonStreaming(ctx.protocol(), root, request.model());
-        } catch (BusinessException exception) {
-            throw exception;
-        } catch (Exception exception) {
-            log.error("AI provider 调用失败, model={}, protocol={}", request.model(), ctx.protocol(), exception);
-            throw new BusinessException(ErrorCode.AI_PROVIDER_ERROR);
-        }
+        }, ErrorCode.AI_PROVIDER_ERROR, "AI provider 调用失败");
     }
 
     @Override
