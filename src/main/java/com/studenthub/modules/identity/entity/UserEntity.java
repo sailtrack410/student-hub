@@ -33,4 +33,6 @@ public class UserEntity extends BaseEntity {
     private String identityType;
     private String authorizationStatus;
     private LocalDateTime lastLoginAt;
+    /** 佩戴勋章编码（V42，卸下置 NULL；社区作者勋章批量组装搭车字段） */
+    private String wornBadgeCode;
 }
