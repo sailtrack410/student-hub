@@ -285,9 +285,15 @@
 |---|---|---|---|
 | POST `/api/app/schedule/import` | 从教务系统拉取个人课表并保存 | 登录 | query: semesterCode(可选) |
 | GET `/api/app/schedule/view` | 查询已导入课表；不传学期返回最近同步学期 | 登录 | query: semesterCode(可选) |
+| GET `/api/app/schedule/view-week` | 按周展开课表：服务端解析周次串成日期与时间段（节次映射服务端统一维护）；个人课表缺失时回落班级课表缓存 | 登录 | query: semesterCode(可选), week(可选，缺省当前周) |
+| GET `/api/app/schedule/next-course` | 当前/下一节课程（首页 BFF） | 登录 | 无 |
+| GET `/api/app/schedule/adjustments` | 调课通知列表（补课/停课/调课），按发布时间倒序；缺省返回最新有公告学期 | 登录 | query: semesterCode(可选) |
 
 - `ScheduleImportResponse`：semesterCode, semesterName, className, personalCount, classCacheCount
 - `ScheduleViewResponse`：semesterCode, semesterName, className, courses: [{courseName, teacher, location, dayOfWeek, startSection, endSection, weeks, weekParity}], availableSemesters: [{semesterCode, semesterName}], firstMonday, totalWeeks
+- `ScheduleWeekViewResponse`：semesterCode, semesterName, week, weekStart, currentWeek, days: [{dayOfWeek: 1-7, date, courses: [{courseName, teacher, location, startSection, endSection, timeRange}]}]（days 固定 7 项周一~周日顺序）
+- `ScheduleNextCourseResponse`：hasCourse, current(可 null), next(可 null, 可为后续上课日), week, date；CourseView：courseName, teacher, location, dayOfWeek, startSection, endSection, timeRange
+- `ScheduleAdjustmentItem`：id, semesterCode, noticeTime, actionType(补课/停课/调课), courseCode, courseName, classNo, targetClasses: String[], summary（raw_text 不出接口）
 
 ### 教务认证 `/api/app/jw`
 
