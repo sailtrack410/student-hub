@@ -17,6 +17,7 @@ public record AiMessageResponse(
         @Schema(description = "用户消息图片文件 ID 列表，可空") List<Long> images,
         @Schema(description = "是否降级回复") boolean degraded,
         @Schema(description = "动作卡片，可空") List<AiActionResponse> actions,
+        @Schema(description = "追问建议数组，服务端暂不下发，预留字段") List<String> suggestions,
         @Schema(description = "发送时间") LocalDateTime createdAt) {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -24,7 +25,7 @@ public record AiMessageResponse(
     public static AiMessageResponse from(AiMessageEntity entity) {
         return new AiMessageResponse(entity.getId(), entity.getRole(), entity.getContent(),
                 JsonIds.parseOrNull(entity.getImages()), "FAILED".equals(entity.getStatus()),
-                parseActions(entity.getActions()), entity.getCreatedAt());
+                parseActions(entity.getActions()), null, entity.getCreatedAt());
     }
 
     private static List<AiActionResponse> parseActions(String json) {
