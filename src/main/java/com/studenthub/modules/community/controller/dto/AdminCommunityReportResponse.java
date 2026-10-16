@@ -2,6 +2,8 @@ package com.studenthub.modules.community.controller.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.time.LocalDateTime;
+
 @Schema(description = "管理端社区举报详情")
 public record AdminCommunityReportResponse(
         @Schema(description = "举报 ID") Long id,
@@ -18,6 +20,6 @@ public record AdminCommunityReportResponse(
         @Schema(description = "状态：PENDING/ACCEPTED/REJECTED") String status,
         @Schema(description = "处理说明") String handleNote,
         @Schema(description = "处理人 ID") Long handledBy,
-        @Schema(description = "处理时间") String handledAt,
-        @Schema(description = "举报时间") String createdAt) {
+        @Schema(description = "处理时间") LocalDateTime handledAt,
+        @Schema(description = "举报时间") LocalDateTime createdAt) {
 }
