@@ -20,9 +20,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import com.studenthub.common.util.Digests;
 import com.studenthub.service.AiChatService;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -102,7 +102,7 @@ public class KnowledgeBaseService {
         catch(Exception e){ log.warn("知识库查询向量生成失败，本轮降级为纯词法召回: {}",e.getMessage()); }
         return retrievalService.retrieve(baseIds,question,queryVector,topK,threshold);
     }
-    private String sha256(byte[] b){try{byte[] h=MessageDigest.getInstance("SHA-256").digest(b);return java.util.HexFormat.of().formatHex(h);}catch(Exception e){return "";}}
+    private String sha256(byte[] b){return Digests.sha256Hex(b);}
     private String trim(String s,int n){return s==null?"":s.length()>n?s.substring(0,n):s;}
     private record Chunk(String titlePath,Integer page,String content){}
 
