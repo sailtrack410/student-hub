@@ -46,6 +46,12 @@ studenthub:
   security:
     session-store: ${SESSION_STORE:memory}
     session-ttl: ${SESSION_TTL:8h}
+    # App 端（x-client-type: app）走长期免登录；其余客户端用上面的 session-ttl
+    app-session-ttl: ${APP_SESSION_TTL:30d}
+    # 滑动续期阈值：App 会话剩余不足该值时刷新回完整 TTL，0 表示关闭续期
+    session-renew-threshold: ${SESSION_RENEW_THRESHOLD:7d}
+    app-client-header: ${APP_CLIENT_HEADER:x-client-type}
+    app-client-value: ${APP_CLIENT_VALUE:app}
     password-login-enabled: ${PASSWORD_LOGIN_ENABLED:false}
     allowed-origins: ${ALLOWED_ORIGINS:}
   schedule-sync:
@@ -84,6 +90,15 @@ studenthub:
     default-campus-id: ${WECHAT_DEFAULT_CAMPUS_ID:1}
     connect-timeout-seconds: ${WECHAT_CONNECT_TIMEOUT_SECONDS:5}
     read-timeout-seconds: ${WECHAT_READ_TIMEOUT_SECONDS:10}
+  qq:
+    # QQ 互联「移动应用」审核通过前用 mock：不访问 QQ，凭 accessToken 派生稳定身份
+    mode: ${QQ_MODE:mock}
+    client-id: ${QQ_CLIENT_ID:}
+    client-secret: ${QQ_CLIENT_SECRET:}
+    api-base-url: ${QQ_API_BASE_URL:https://graph.qq.com}
+    default-campus-id: ${QQ_DEFAULT_CAMPUS_ID:1}
+    connect-timeout-seconds: ${QQ_CONNECT_TIMEOUT_SECONDS:5}
+    read-timeout-seconds: ${QQ_READ_TIMEOUT_SECONDS:10}
   file:
     storage: ${FILE_STORAGE:local}
     storage-dir: ${FILE_STORAGE_DIR:./data/files}

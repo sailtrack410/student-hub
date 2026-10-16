@@ -76,6 +76,29 @@ public class RedisSessionStore implements SessionStore {
     }
 
     @Override
+    public boolean renew(String rawToken, Long userId, Duration ttl, Duration threshold) {
+        if (ttl == null || ttl.isZero() || ttl.isNegative()
+                || threshold == null || threshold.isNegative() || threshold.isZero()) {
+            return false;
+        }
+        String tokenHash = SecureTokenSupport.hash(rawToken);
+        String sessionKey = sessionKey(tokenHash);
+        Long remainingSeconds = redisTemplate.getExpire(sessionKey);
+        if (remainingSeconds == null || remainingSeconds <= 0) {
+            return false;
+        }
+        if (remainingSeconds > threshold.toSeconds()) {
+            return false;
+        }
+        redisTemplate.expire(sessionKey, ttl);
+        // 用户会话索引与主会话同寿命：SADD 幂等，索引已过期时会重新建立
+        String indexKey = userIndexKey(userId);
+        redisTemplate.opsForSet().add(indexKey, tokenHash);
+        redisTemplate.expire(indexKey, ttl);
+        return true;
+    }
+
+    @Override
     public int refreshUserSessions(Long userId, AuthenticatedUser refreshed) {
         String indexKey = userIndexKey(userId);
         Set<String> tokenHashes = redisTemplate.opsForSet().members(indexKey);
