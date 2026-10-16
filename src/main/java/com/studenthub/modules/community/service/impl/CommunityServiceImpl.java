@@ -60,6 +60,7 @@ public class CommunityServiceImpl implements CommunityService {
     private final JwBindingMapper jwBindingMapper;
     private final NotificationService notificationService;
     private final CommunityModerationService communityModerationService;
+    private final com.studenthub.modules.achievement.service.AchievementService achievementService;
 
     @Override
     public List<CommunitySectionResponse> sections(Long campusId) {
@@ -280,7 +281,12 @@ public class CommunityServiceImpl implements CommunityService {
         String major = firstNonBlank(binding == null ? null : binding.getMajor(), "专业未填写");
         String className = firstNonBlank(binding == null ? null : binding.getClassName(), "班级未填写");
         String gender = firstNonBlank(author.getGender(), "性别未填写");
+        // 等级/经验与作者本人成长档案同口径实时重算（AchievementService 单点）
+        int totalExp = achievementService.totalExpOf(authorId);
+        int level = com.studenthub.modules.achievement.service.AchievementService.levelOf(totalExp);
         return new CommunityAuthorProfileResponse(author.getId(), author.getDisplayName(), avatarUrl(author),
+                level, com.studenthub.modules.achievement.service.AchievementService.levelName(level), totalExp,
+                author.getWornBadgeCode(), false,
                 college, major, className, gender, posts);
     }
 
