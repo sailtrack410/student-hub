@@ -83,7 +83,7 @@
 - [ ] 刀 3 API 按端分组（含 ai-config 前端联动）
 - [ ] 刀 4 OAuth 基类
 - [ ] 刀 5 common 收尾
-- [ ] 刀 6 交叠项（待确认，已并入 3.1 的除外）
+- [x] 刀 6 交叠项（已确认执行，2026-10-17，提交 167b2a3）——前端零回归已核查：LocalDateTime 默认 ISO 序列化与原 toString 同格式，community.js/eval.js 透传一致；ZONE 常量在 setRepliedAt 仍有使用者故保留
 - [ ] 刀 7 终验与提交
 
 > 修订记录：2026-10-17 按代码复核并入六项修正——5.1 改 record 可实现的接口方案（R-1）；5.6 补 Flyway 迁移前置（R-2）；2.5 固定 bean 改 builder 工厂，2.4 注明 embed 已借 NO_PROXY HttpClient 无需另改、仅合并双缓存（R-3 二次核验半否决「embed 漏代理」：RestClient 经 `JdkClientHttpRequestFactory(httpClientFor(...))` 构建，底层已直连）；4.2 改 common/util/Digests 保依赖方向（R-4）；ai-config 前端联动并入 3.1（R-5）；补 1.6 聚合口径统一（R-6）。复核另确认：分页 7 DTO 全为 record、sys_user_role 仅 4 审计列、dashboard pendingLeaves 查询的 `PENDING` 状态在 RequestTransitions.Status 中不存在（列入 1.6）。

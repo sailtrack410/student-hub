@@ -35,9 +35,12 @@ import java.util.UUID;
 public class AiSpeechServiceImpl implements AiSpeechService {
 
     private final ObjectMapper objectMapper;
+    /** 直连 HttpClient.Builder 工厂（HttpClientConfig 提供，不走系统代理），超时取运行时快照（动态） */
+    private final HttpClient.Builder directHttpClientBuilder;
 
-    public AiSpeechServiceImpl(ObjectMapper objectMapper) {
+    public AiSpeechServiceImpl(ObjectMapper objectMapper, HttpClient.Builder directHttpClientBuilder) {
         this.objectMapper = objectMapper;
+        this.directHttpClientBuilder = directHttpClientBuilder;
     }
 
     @Override
@@ -56,8 +59,7 @@ public class AiSpeechServiceImpl implements AiSpeechService {
         try {
             // 显式直连：AI 供应商（SiliconFlow/DeepSeek 等）国内可直接访问，
             // 而开发机系统代理（如 Clash）会把这些请求路由到境外线路导致上传超时
-            HttpClient httpClient = HttpClient.newBuilder()
-                    .proxy(HttpClient.Builder.NO_PROXY)
+            HttpClient httpClient = directHttpClientBuilder
                     .connectTimeout(Duration.ofSeconds(snapshot.connectTimeoutSeconds()))
                     .build();
             HttpRequest request = HttpRequest.newBuilder()

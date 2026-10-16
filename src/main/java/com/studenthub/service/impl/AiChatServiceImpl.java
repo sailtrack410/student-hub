@@ -53,11 +53,34 @@ public class AiChatServiceImpl implements AiChatService {
         requireValidMessages(messages);
         AiRuntimeSnapshot snapshot = AiRuntimeConfig.current();
         validateInputSize(messages, snapshot);
-        AiModelBinding chat = snapshot != null ? snapshot.chat() : null;
-        String model = chat != null ? chat.model() : aiProperties.getModel();
-        aiProvider.chatStream(new AiChatRequest(model, messages), onDelta,
+        AiModelBinding chat;
+        String model;
+        if (snapshot != null) {
+            chat = snapshot.chat();
+            if (chat == null) {
+                // 原 chatStream 路径由 provider resolveContext 抛 AI_NOT_CONFIGURED，语义保持不变
+                throw new BusinessException(ErrorCode.AI_NOT_CONFIGURED);
+            }
+            model = chat.model();
+        } else {
+            // 无进程内快照（如启动早期）：回退环境变量，条件与原 provider fallback 一致
+            if (!aiProperties.isEnabled() || !StringUtils.hasText(aiProperties.getBaseUrl())
+                    || !StringUtils.hasText(aiProperties.getModel())) {
+                throw new BusinessException(ErrorCode.AI_NOT_CONFIGURED);
+            }
+            chat = fallbackBinding();
+            model = aiProperties.getModel();
+        }
+        // chatStream 旧入口已删，统一走 chatStreamWithBinding（绑定决定协议与 streaming 开关）
+        aiProvider.chatStreamWithBinding(chat, new AiChatRequest(model, messages), onDelta,
                 (m, promptTokens, completionTokens) ->
                         onDone.accept(new StreamDone(m != null ? m : model, promptTokens, completionTokens)));
+    }
+
+    /** 无进程内快照时的环境变量绑定（调用方已校验 enabled/baseUrl/model） */
+    private AiModelBinding fallbackBinding() {
+        return new AiModelBinding(0L, aiProperties.getBaseUrl(), aiProperties.getApiKey(),
+                aiProperties.getModel(), AiModelBinding.PROTOCOL_OPENAI_CHAT, true);
     }
 
     private void requireValidMessages(List<AiMessage> messages) {

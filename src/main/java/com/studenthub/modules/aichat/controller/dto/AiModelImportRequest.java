@@ -1,5 +1,6 @@
 package com.studenthub.modules.aichat.controller.dto;
 
+import com.studenthub.modules.aichat.enums.AiModelType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -18,7 +19,7 @@ public record AiModelImportRequest(
     public record AiModelImportItem(
             @Schema(description = "供应商模型 ID") @NotBlank @Size(max = 128) String providerModelId,
             @Schema(description = "主类型：CHAT/VISION/ASR/TTS/EMBEDDING/RERANK；留空按模型 ID 自动推断", nullable = true)
-            @Pattern(regexp = "^(CHAT|VISION|ASR|TTS|EMBEDDING|RERANK)$", message = "模型类型仅支持 CHAT/VISION/ASR/TTS/EMBEDDING/RERANK") String modelType,
+            @Pattern(regexp = AiModelType.CODE_PATTERN, message = "模型类型仅支持 CHAT/VISION/ASR/TTS/EMBEDDING/RERANK") String modelType,
             @Schema(description = "能力标签列表（多选，如 vision+stream），留空按模型 ID 自动推断", nullable = true)
             List<@Pattern(regexp = "^(stream|vision|audio|tools|structured|reasoning)$",
                     message = "能力仅支持 stream/vision/audio/tools/structured/reasoning") String> capabilities) {
