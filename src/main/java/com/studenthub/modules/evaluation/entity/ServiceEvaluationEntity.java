@@ -23,4 +23,10 @@ public class ServiceEvaluationEntity extends BaseEntity {
     private Integer rating;
     private String tags;
     private String comment;
+
+    /** 商家回复（管理端"回复评价"写入） */
+    private String reply;
+
+    /** 回复时间 */
+    private java.time.LocalDateTime repliedAt;
 }
