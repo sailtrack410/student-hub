@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/app/schedule")
-@Tag(name = "小程序-课表")
+@Tag(name = "小程序-课表", description = "课表导入与查看")
 @RequiredArgsConstructor
 public class AppScheduleController {
 

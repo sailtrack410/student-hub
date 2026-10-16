@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/app/notifications")
-@Tag(name = "小程序-消息通知")
+@Tag(name = "小程序-消息通知", description = "站内通知查询与已读")
 @RequiredArgsConstructor
 public class AppNotificationController {
 

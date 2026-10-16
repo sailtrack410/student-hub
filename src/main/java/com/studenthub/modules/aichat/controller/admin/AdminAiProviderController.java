@@ -31,7 +31,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin/ai")
-@Tag(name = "管理端-AI 供应商与模型")
+@Tag(name = "管理端-AI 供应商与模型", description = "AI 供应商、模型与类型默认绑定管理")
 @RequiredArgsConstructor
 @PreAuthorize("hasAuthority('ai:manage')")
 public class AdminAiProviderController {

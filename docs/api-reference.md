@@ -109,12 +109,12 @@
 
 - 返回：`DashboardResponse`：pendingWorkOrders, pendingDeltaPercent, todayNewUsers, todayNewUsersDeltaPercent, todayAiSessions, todayAiSessionsDeltaPercent, pendingRequests, pendingRequestsDelta, weekNewWorkOrders, weekResolvedWorkOrders, resolveRatePercent, dailyAvgNew, trend: [{day, created, resolved}], categories: [{name, percent}], latestOrders: [{orderId, orderNo, title, status, createdAt}]
 
-### AI 全局设置 `/api/admin/ai-config`（需权限 ai:manage）
+### AI 全局设置 `/api/admin/ai/config`（需权限 ai:manage）
 
 | 方法 路径 | 说明 | 鉴权 | 请求 |
 |---|---|---|---|
-| GET `/api/admin/ai-config` | 查询 AI 全局设置 | 登录+ai:manage | 无 |
-| PUT `/api/admin/ai-config` | 保存设置，进程内即时生效 | 同上 | body: enabled, connectTimeoutSeconds(1-120), readTimeoutSeconds(1-600), maxInputCharacters, hourlyMessageLimit, historyWindow(0-100), maxMessageCharacters |
+| GET `/api/admin/ai/config` | 查询 AI 全局设置 | 登录+ai:manage | 无 |
+| PUT `/api/admin/ai/config` | 保存设置，进程内即时生效 | 同上 | body: enabled, connectTimeoutSeconds(1-120), readTimeoutSeconds(1-600), maxInputCharacters, hourlyMessageLimit, historyWindow(0-100), maxMessageCharacters |
 
 - 返回：`AiConfigResponse`：enabled, connectTimeoutSeconds, readTimeoutSeconds, maxInputCharacters, hourlyMessageLimit, historyWindow, maxMessageCharacters, activeChatModel(默认聊天模型，未配置为 null)
 

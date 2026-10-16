@@ -28,7 +28,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin/users")
-@Tag(name = "管理端-用户管理")
+@Tag(name = "管理端-用户管理", description = "用户分页、启停、授权审核与角色调整")
 @RequiredArgsConstructor
 @PreAuthorize("hasAuthority('system:user:manage')")
 public class AdminUserController {

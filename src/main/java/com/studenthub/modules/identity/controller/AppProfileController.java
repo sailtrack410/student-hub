@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/app/profile")
-@Tag(name = "小程序-个人中心")
+@Tag(name = "小程序-个人中心", description = "昵称头像与手机号维护")
 @RequiredArgsConstructor
 public class AppProfileController {
 

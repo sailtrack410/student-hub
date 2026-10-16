@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/common/auth")
-@Tag(name = "微信认证")
+@Tag(name = "通用-微信登录", description = "微信登录与开发固定账号登录")
 @RequiredArgsConstructor
 public class WechatLoginController {
 

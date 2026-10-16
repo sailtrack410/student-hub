@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/common/system")
-@Tag(name = "公共系统接口")
+@Tag(name = "通用-系统健康", description = "应用健康检查")
 public class SystemController {
 
     @GetMapping("/health")
