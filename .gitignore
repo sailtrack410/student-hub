@@ -9,3 +9,7 @@ student-hub-weapp/project.private.config.json
 data/
 .zcode/
 .mimosa/
+
+# 发布签名密钥（丢失=QQ互联重新提审，绝不能入库）
+artifacts/keystore/*.jks
+artifacts/keystore/*.keystore

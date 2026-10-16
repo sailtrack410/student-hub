@@ -179,7 +179,7 @@ WECHAT_APP_SECRET=你的小程序AppSecret
 | 分组 | 接口 |
 |---|---|
 | 认证 | `POST /api/common/auth/login`（仅 dev/test）、`POST /api/common/auth/wechat-login`、`GET /api/common/auth/me`、`POST /api/common/auth/logout` |
-| 服务目录 | `GET /api/app/services`、`GET /api/app/services/{itemId}`；管理端 `POST /api/admin/catalog/*` |
+| 服务目录 | `GET /api/app/services`、`GET /api/app/services/{itemId}`；管理端 `GET /api/admin/catalog/categories`、`GET /api/admin/catalog/items?categoryId=`、`POST /api/admin/catalog/categories`、`POST /api/admin/catalog/items`、`POST /api/admin/catalog/items/update`、`POST /api/admin/catalog/items/{itemId}/status`、`DELETE /api/admin/catalog/items/{itemId}` |
 | 服务申请 | `POST /api/app/service-requests`（支持 `Idempotency-Key` 幂等）、`GET /api/app/service-requests`、`GET /api/app/service-requests/{id}`、`POST /api/app/service-requests/{id}/cancel` |
 | 工单（服务人员） | `GET /api/app/work-orders/assigned`、`GET /api/app/work-orders/{id}`、`POST /api/app/work-orders/{id}/start`、`POST /api/app/work-orders/{id}/arrival-photo`、`POST /api/app/work-orders/{id}/completion-photo`、`POST /api/app/work-orders/{id}/complete` |
 | 工单确认（报修人） | `POST /api/app/work-orders/{id}/confirm`、`POST /api/app/work-orders/{id}/reject-confirmation` |
