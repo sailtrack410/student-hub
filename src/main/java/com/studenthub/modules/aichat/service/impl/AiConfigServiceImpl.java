@@ -122,7 +122,8 @@ public class AiConfigServiceImpl implements AiConfigService {
             return null;
         }
         return new AiModelBinding(provider.getId(), provider.getBaseUrl(), provider.getApiKey(),
-                model.getProviderModelId());
+                model.getProviderModelId(), provider.getProtocol(),
+                provider.getStreaming() == null || provider.getStreaming());
     }
 
     private AiConfigEntity loadEntity() {

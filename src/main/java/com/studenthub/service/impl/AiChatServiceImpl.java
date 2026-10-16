@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * AI 对话服务：每次调用读取 {@link AiRuntimeConfig} 当前快照，
@@ -44,6 +45,19 @@ public class AiChatServiceImpl implements AiChatService {
         }
         validateInputSize(messages, snapshot);
         return aiProvider.chat(new AiChatRequest(snapshot.vision().model(), messages, true));
+    }
+
+    @Override
+    public void chatStream(List<AiMessage> messages, Consumer<String> onDelta,
+                           Consumer<StreamDone> onDone) {
+        requireValidMessages(messages);
+        AiRuntimeSnapshot snapshot = AiRuntimeConfig.current();
+        validateInputSize(messages, snapshot);
+        AiModelBinding chat = snapshot != null ? snapshot.chat() : null;
+        String model = chat != null ? chat.model() : aiProperties.getModel();
+        aiProvider.chatStream(new AiChatRequest(model, messages), onDelta,
+                (m, promptTokens, completionTokens) ->
+                        onDone.accept(new StreamDone(m != null ? m : model, promptTokens, completionTokens)));
     }
 
     private void requireValidMessages(List<AiMessage> messages) {

@@ -7,6 +7,34 @@ public interface AiProvider {
 
     AiChatResponse chat(AiChatRequest request);
 
+    /**
+     * 流式对话：增量文本通过 onDelta 回调推送，结束时调用 onDone(model, promptTokens, completionTokens)。
+     * 供应商不支持流式时默认回退为阻塞调用一次性回调。
+     *
+     * @param onDone  结束回调，参数依次为模型名、prompt tokens（可空）、completion tokens（可空）
+     */
+    default void chatStream(AiChatRequest request, java.util.function.Consumer<String> onDelta,
+                            TriConsumer<String, Integer, Integer> onDone) {
+        AiChatResponse response = chat(request);
+        onDelta.accept(response.content());
+        onDone.accept(response.model(), response.promptTokens(), response.completionTokens());
+    }
+
+    /**
+     * 流式对话（显式绑定）：绕过默认模型解析，直接按指定供应商绑定调用。
+     * 默认实现回退为阻塞调用一次性回调。
+     */
+    default void chatStreamWithBinding(AiModelBinding binding, AiChatRequest request,
+                                       java.util.function.Consumer<String> onDelta,
+                                       TriConsumer<String, Integer, Integer> onDone) {
+        chatStream(request, onDelta, onDone);
+    }
+
+    /** 三参数无返回值回调（流式结束通知用） */
+    interface TriConsumer<A, B, C> {
+        void accept(A a, B b, C c);
+    }
+
     default AiEmbeddingResponse embed(AiEmbeddingRequest request) {
         throw new UnsupportedOperationException("embedding not supported");
     }
