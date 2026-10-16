@@ -2,6 +2,7 @@ package com.studenthub.modules.identity.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.studenthub.common.ErrorCode;
+import com.studenthub.common.util.PhoneNumbers;
 import com.studenthub.exception.BusinessException;
 import com.studenthub.modules.identity.controller.dto.CurrentUserResponse;
 import com.studenthub.modules.identity.controller.dto.LoginResponse;
@@ -198,7 +199,7 @@ public class IdentityAuthServiceImpl implements IdentityAuthService {
     @Transactional(rollbackFor = Exception.class)
     public CurrentUserResponse updatePhone(String rawToken, AuthenticatedUser current, String phone) {
         String normalized = phone == null ? "" : phone.trim();
-        if (!normalized.matches("1[3-9]\\d{9}")) {
+        if (!PhoneNumbers.isValid(normalized)) {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER, "手机号格式不正确");
         }
         return persistPhone(rawToken, current, normalized);

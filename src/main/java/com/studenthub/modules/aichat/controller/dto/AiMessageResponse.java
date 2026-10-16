@@ -2,6 +2,7 @@ package com.studenthub.modules.aichat.controller.dto;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.studenthub.common.util.JsonIds;
 import com.studenthub.modules.aichat.entity.AiMessageEntity;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -22,19 +23,8 @@ public record AiMessageResponse(
 
     public static AiMessageResponse from(AiMessageEntity entity) {
         return new AiMessageResponse(entity.getId(), entity.getRole(), entity.getContent(),
-                parseIds(entity.getImages()), "FAILED".equals(entity.getStatus()),
+                JsonIds.parseOrNull(entity.getImages()), "FAILED".equals(entity.getStatus()),
                 parseActions(entity.getActions()), entity.getCreatedAt());
-    }
-
-    private static List<Long> parseIds(String json) {
-        if (json == null || json.isBlank()) {
-            return null;
-        }
-        try {
-            return MAPPER.readValue(json, new TypeReference<List<Long>>() { });
-        } catch (Exception ignored) {
-            return null;
-        }
     }
 
     private static List<AiActionResponse> parseActions(String json) {

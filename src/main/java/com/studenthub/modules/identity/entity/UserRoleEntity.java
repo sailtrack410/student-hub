@@ -3,13 +3,14 @@ package com.studenthub.modules.identity.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.studenthub.common.persistence.BaseEntity;
 import lombok.Data;
-
-import java.time.LocalDateTime;
+import lombok.EqualsAndHashCode;
 
 @Data
+@EqualsAndHashCode(callSuper = true)
 @TableName("sys_user_role")
-public class UserRoleEntity {
+public class UserRoleEntity extends BaseEntity {
 
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
@@ -18,6 +19,4 @@ public class UserRoleEntity {
     private Long roleId;
     private Long organizationId;
     private String dataScope;
-    private LocalDateTime createdAt;
-    private Long createdBy;
 }

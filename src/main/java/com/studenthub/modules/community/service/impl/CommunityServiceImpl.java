@@ -3,9 +3,8 @@ package com.studenthub.modules.community.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studenthub.common.ErrorCode;
+import com.studenthub.common.util.JsonIds;
 import com.studenthub.common.PageResult;
 import com.studenthub.exception.BusinessException;
 import com.studenthub.modules.community.controller.dto.*;
@@ -39,7 +38,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 @Slf4j
@@ -56,7 +54,6 @@ public class CommunityServiceImpl implements CommunityService {
     private final UserMapper userMapper;
     private final FileStorageMapper fileStorageMapper;
     private final FileStorageService fileStorageService;
-    private final ObjectMapper objectMapper;
     private final JwBindingMapper jwBindingMapper;
     private final NotificationService notificationService;
     private final CommunityModerationService communityModerationService;
@@ -133,7 +130,7 @@ public class CommunityServiceImpl implements CommunityService {
         entity.setAuthorId(user.userId());
         entity.setTitle(request.title().trim());
         entity.setContent(request.content().trim());
-        entity.setImageFileIds(writeIds(imageIds));
+        entity.setImageFileIds(JsonIds.write(imageIds));
         entity.setTopics(writeTopics(topics));
         entity.setCommentCount(0);
         entity.setLikeCount(0);
@@ -162,7 +159,7 @@ public class CommunityServiceImpl implements CommunityService {
         entity.setContent(request.content().trim());
         List<Long> imageIds = normalizeImageIds(request.imageFileIds());
         validateOwnedImages(imageIds, user.userId());
-        entity.setImageFileIds(writeIds(imageIds));
+        entity.setImageFileIds(JsonIds.write(imageIds));
         entity.setLikeCount(0);
         entity.setPinned(0);
         entity.setStatus(ENABLED);
@@ -291,7 +288,7 @@ public class CommunityServiceImpl implements CommunityService {
                 .eq(CommunityPostLikeEntity::getPostId, post.getId()).eq(CommunityPostLikeEntity::getUserId, viewerId)) > 0;
         return new CommunityPostResponse(post.getId(), post.getSectionId(), section == null ? null : section.getSectionName(),
                 section == null ? null : section.getIcon(), post.getAuthorId(), author == null ? "同学" : author.getDisplayName(),
-                avatarUrl(author), post.getTitle(), post.getContent(), signImages(parseIds(post.getImageFileIds())), signThumbnailImages(parseIds(post.getImageFileIds())), parseTopics(post.getTopics()),
+                avatarUrl(author), post.getTitle(), post.getContent(), signImages(JsonIds.parse(post.getImageFileIds())), signThumbnailImages(JsonIds.parse(post.getImageFileIds())), parseTopics(post.getTopics()),
                 post.getCommentCount() == null ? 0 : post.getCommentCount(), post.getLikeCount() == null ? 0 : post.getLikeCount(), liked, post.getCreatedAt());
     }
 
@@ -300,7 +297,7 @@ public class CommunityServiceImpl implements CommunityService {
         boolean liked = commentLikeMapper.selectCount(new LambdaQueryWrapper<CommunityCommentLikeEntity>()
                 .eq(CommunityCommentLikeEntity::getCommentId, comment.getId()).eq(CommunityCommentLikeEntity::getUserId, viewerId)) > 0;
         return new CommunityCommentResponse(comment.getId(), comment.getParentCommentId(), comment.getAuthorId(),
-                author == null ? "同学" : author.getDisplayName(), avatarUrl(author), comment.getContent(), signImages(parseIds(comment.getImageFileIds())), signThumbnailImages(parseIds(comment.getImageFileIds())), comment.getLikeCount() == null ? 0 : comment.getLikeCount(), liked,
+                author == null ? "同学" : author.getDisplayName(), avatarUrl(author), comment.getContent(), signImages(JsonIds.parse(comment.getImageFileIds())), signThumbnailImages(JsonIds.parse(comment.getImageFileIds())), comment.getLikeCount() == null ? 0 : comment.getLikeCount(), liked,
                 comment.getPinned() != null && comment.getPinned() == 1, postAuthorId != null && postAuthorId.equals(comment.getAuthorId()), comment.getCreatedAt());
     }
 
@@ -344,11 +341,6 @@ public class CommunityServiceImpl implements CommunityService {
         return result;
     }
 
-    private String writeIds(List<Long> ids) {
-        try { return ids.isEmpty() ? null : objectMapper.writeValueAsString(ids); }
-        catch (Exception exception) { throw new IllegalStateException("社区图片信息序列化失败", exception); }
-    }
-
     private List<String> normalizeTopics(List<String> topics) {
         if (topics == null || topics.isEmpty()) return List.of();
         return topics.stream()
@@ -388,9 +380,4 @@ public class CommunityServiceImpl implements CommunityService {
         return java.util.Arrays.stream(value.split(",")).filter(s -> !s.isBlank()).map(String::trim).toList();
     }
 
-    private List<Long> parseIds(String json) {
-        if (json == null || json.isBlank()) return List.of();
-        try { return objectMapper.readValue(json, new TypeReference<List<Long>>() {}); }
-        catch (Exception ignored) { return Collections.emptyList(); }
-    }
 }

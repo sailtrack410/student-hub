@@ -1,7 +1,5 @@
 package com.studenthub.modules.workorder.controller.dto;
 
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.studenthub.modules.workorder.entity.WorkOrderEntity;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -10,10 +8,8 @@ import java.util.List;
 
 @Schema(description = "工单概要")
 public record WorkOrderSummaryResponse(
-        @JsonSerialize(using = ToStringSerializer.class)
         @Schema(description = "工单 ID") Long orderId,
         @Schema(description = "工单号") String orderNo,
-        @JsonSerialize(using = ToStringSerializer.class)
         @Schema(description = "关联申请 ID") Long requestId,
         @Schema(description = "工单标题") String title,
         @Schema(description = "工单状态") String status,
