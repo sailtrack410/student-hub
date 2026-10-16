@@ -11,6 +11,12 @@ public interface IdentityAuthService {
     LoginResponse wechatLogin(String code);
 
     /**
+     * QQ 登录：用客户端 QQ SDK 授权的 accessToken 反查 QQ 身份后登录，
+     * 首次登录自动创建学生基础账号；openId 仅作反查结果一致性比对，不作身份依据。
+     */
+    LoginResponse qqLogin(String accessToken, String openId);
+
+    /**
      * 开发测试专用：使用固定 openid 登录，首次自动建号，之后复用同一账号，便于本地联调。
      */
     LoginResponse devWechatLogin();
