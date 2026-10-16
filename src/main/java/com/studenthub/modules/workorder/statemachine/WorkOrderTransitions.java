@@ -5,17 +5,44 @@ import com.studenthub.exception.BusinessException;
 
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * 工单状态机：PENDING_DISPATCH → ASSIGNED → PROCESSING → ONSITE_PHOTO_RECORDED
  * → PENDING_CONFIRMATION → COMPLETED；
  * REJECTED（调度驳回）与 CANCELLED（申请人撤销）为终态。
+ * 状态中文文案与「进行中」集合以本枚举为唯一来源，dashboard/screen 等聚合处不得再自建。
  */
 public final class WorkOrderTransitions {
 
     public enum Status {
-        PENDING_DISPATCH, ASSIGNED, PROCESSING, ONSITE_PHOTO_RECORDED,
-        PENDING_CONFIRMATION, COMPLETED, REJECTED, CANCELLED
+        PENDING_DISPATCH("待派单"),
+        ASSIGNED("已派单"),
+        PROCESSING("处理中"),
+        ONSITE_PHOTO_RECORDED("现场照片已记录"),
+        PENDING_CONFIRMATION("待确认"),
+        COMPLETED("已完成"),
+        REJECTED("已驳回"),
+        CANCELLED("已撤销");
+
+        private final String display;
+
+        Status(String display) {
+            this.display = display;
+        }
+
+        public String getDisplay() {
+            return display;
+        }
+    }
+
+    /** 进行中状态集合（未办结的中间态），供聚合统计复用。 */
+    public static Set<String> inProgressSet() {
+        return Stream.of(Status.PENDING_DISPATCH, Status.ASSIGNED, Status.PROCESSING,
+                        Status.ONSITE_PHOTO_RECORDED, Status.PENDING_CONFIRMATION)
+                .map(Status::name)
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     public enum Action {

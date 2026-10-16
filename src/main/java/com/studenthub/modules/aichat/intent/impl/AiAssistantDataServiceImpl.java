@@ -16,6 +16,7 @@ import com.studenthub.modules.servicecatalog.entity.ServiceItemEntity;
 import com.studenthub.modules.servicecatalog.mapper.ServiceItemMapper;
 import com.studenthub.modules.servicerequest.entity.ServiceRequestEntity;
 import com.studenthub.modules.servicerequest.mapper.ServiceRequestMapper;
+import com.studenthub.modules.workorder.statemachine.WorkOrderTransitions;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -38,12 +39,16 @@ public class AiAssistantDataServiceImpl implements AiAssistantDataService {
     /** 注入提示词的课程描述条数上限，避免一周课程过大导致生成超时 */
     private static final int SCHEDULE_CONTEXT_LIMIT = 40;
 
-    private static final Map<String, String> REQUEST_STATUS_TEXT = Map.of(
-            "SUBMITTED", "待受理",
-            "PROCESSING", "处理中",
-            "COMPLETED", "已完成",
-            "REJECTED", "未受理",
-            "CANCELLED", "已撤销");
+    private static final Map<String, String> REQUEST_STATUS_TEXT;
+
+    static {
+        // 工单状态文案以 WorkOrderTransitions.Status.display 为唯一来源，新增状态只改枚举
+        Map<String, String> texts = new LinkedHashMap<>();
+        for (WorkOrderTransitions.Status status : WorkOrderTransitions.Status.values()) {
+            texts.put(status.name(), status.getDisplay());
+        }
+        REQUEST_STATUS_TEXT = Map.copyOf(texts);
+    }
 
     private final JwBindingMapper jwBindingMapper;
     private final ScheduleCourseMapper courseMapper;
