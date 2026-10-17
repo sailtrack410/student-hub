@@ -271,7 +271,7 @@
 - `CommunityPostResponse`：postId, sectionId, sectionName, sectionIcon, authorId, authorName, avatarUrl, authorLevel(列表场景 null，个人中心 profile 下发), authorBadgeCode(佩戴勋章编码), title, content, imageUrls, thumbnailUrls, topics, commentCount, likeCount, liked, createdAt
 - `CommunityCommentResponse`：commentId, parentCommentId, authorId, authorName, avatarUrl, content, imageUrls, thumbnailUrls, likeCount, liked, pinned, author, createdAt
 - 帖子详情 → `{ post: CommunityPostResponse, comments: CommunityCommentResponse[] }`
-- `CommunityAuthorProfileResponse`：userId, displayName, avatarUrl, level, levelName, totalExp(等级/经验实时重算，与成长档案同口径), wornBadgeCode(佩戴勋章编码，未佩戴 null), isFollowing(关注体系 Phase 3 落地前恒 false), college, major, className, gender, posts
+- `CommunityAuthorProfileResponse`：userId, displayName, avatarUrl, level, levelName, totalExp(等级/经验实时重算，与成长档案同口径), wornBadgeCode(佩戴勋章编码，未佩戴 null；作者 showMedals=false 且非本人时为 null), isFollowing(是否已关注该作者，user_follow 实时查询), college/major/className(作者 showAcademicInfo=false 且非本人时置空), gender, posts
 - `DirectMessageResponse`：messageId, senderId, receiverId, senderAvatarUrl, content, imageUrls, thumbnailUrls, referenceCard, createdAt
 - `DirectMessageReferenceCard`：type(POST), id, title, thumbnail(首图缩略图签名路径，无图 null)；发送时传 referenceType+referenceId 生成快照落库，源帖删除后仍回显
 - `DirectConversationResponse`：peerId, peerName, avatarUrl, lastContent, lastAt
@@ -308,6 +308,43 @@
 - `CategorySummaryResponse`：processNoticeUnread, interactionUnread, announcementUnread, aiTodoCount, totalUnread
 - AI 会话取最近 20 个活跃会话；lastTime 为创建/最后活跃时间，当前 AI 无未读概念（固定 0）
 
+### 社交关系 `/api/app/users`, `/api/app/profile`
+
+| 方法 路径 | 说明 | 鉴权 | 请求 |
+|---|---|---|---|
+| GET `/api/app/users/{userId}/card` | 用户轻量级身份名片：经验条、关注态、勋章 4 格预览（受对方 showMedals 控制） | 登录 | 无 |
+| POST `/api/app/users/{userId}/follow` | 关注用户；不可关注自己，重复关注幂等返回当前态 | 登录 | 无 |
+| DELETE `/api/app/users/{userId}/follow` | 取消关注；未关注时幂等 | 登录 | 无 |
+| GET `/api/app/profile/stats` | 四维社交统计：累计获赞（帖子+评论，仅 ENABLED 内容）、互关好友、关注数、粉丝数 | 登录 | 无 |
+| GET `/api/app/profile/privacy` | 查询隐私设置（缺省全公开） | 登录 | 无 |
+| PUT `/api/app/profile/privacy` | 修改隐私设置 | 登录 | body: showAcademicInfo, showMedals |
+
+- 关注/取关返回 `FollowResponse`：targetUserId, following, isMutualFollowing
+- 名片 `UserCardResponse`：userId, uid, displayName, avatarUrl, gender, identityType, level, levelName, currentExp, nextLevelExp, isFollowing, isMutualFollowing, unlockedBadgeCount, totalBadgeCount, previewBadges: [{badgeCode, name, iconUrl}]
+- 统计 `SocialStatsResponse`：likesCount, mutualFollowCount, followingCount, followersCount
+- 隐私 `PrivacySettingsResponse`：showAcademicInfo（false 时他人主页学业字段置空）, showMedals（false 时不展示勋章）
+
+### 我的设备 `/api/app/devices`
+
+登录成功按 UA+客户端类型生成稳定设备指纹登记（同设备再登录换绑会话）；踢线=删除对应会话。
+
+| 方法 路径 | 说明 | 鉴权 | 请求 |
+|---|---|---|---|
+| GET `/api/app/devices` | 在线设备列表，isCurrent 标识当前请求设备 | 登录 | 无 |
+| DELETE `/api/app/devices/{deviceId}` | 踢除设备：该设备会话立即失效；当前设备不允许在此下线（走 /logout） | 登录 | 无 |
+| POST `/api/app/devices/logout-others` | 一键退出其他所有设备 | 登录 | 无 |
+
+- `DeviceResponse`：deviceId, deviceName, osType, osVersion, ipAddress, isCurrent, lastActiveAt
+- 退出其他设备返回 `{ revokedCount: n }`
+
+### 首页聚合 `/api/app/home`
+
+| 方法 路径 | 说明 | 鉴权 | 请求 |
+|---|---|---|---|
+| GET `/api/app/home/dashboard` | 首页综合仪表盘（BFF）：问候语、学业信息条（校区/星期/周次）、下一节课（ONGOING/UPCOMING）、最新 APP 公告、最紧迫进行中申请、未读总数；单项失败各自兜底 | 登录 | 无 |
+
+- `HomeDashboardResponse`：greeting, academicInfo{campusName, weekDay, academicWeek, formattedDate}, nextSchedule{courseName, teacher, location, startSection, endSection, timeRange, status}(可 null), announcement{id, title, tag, url}(可 null), inProgressRequest{requestId, orderNo, itemName, currentStatus, submittedAt}(可 null), unreadMessageCount
+
 ### AI 助手 `/api/app/ai`（以下均需权限 ai:chat）
 
 | 方法 路径 | 说明 | 鉴权 | 请求 |
@@ -317,6 +354,8 @@
 | GET `/api/app/ai/conversations/{conversationId}/messages` | 会话消息（仅属主），按时间正序 | 登录+ai:chat | 无 |
 | POST `/api/app/ai/conversations/{conversationId}/messages` | 发送消息并返回助手回复；AI 不可用时降级回复 | 登录+ai:chat | body: content(≤2000，带附件时可空), attachments: [{type: IMAGE/DOCUMENT, fileId}](IMAGE≤4、DOCUMENT≤2)；旧 images: Long[] 仍兼容，与 attachments 同传时以 attachments 为准 |
 | POST `/api/app/ai/speech/transcribe` | 语音转写（mp3/aac/m4a/wav） | 登录+ai:chat | body: fileId |
+| POST `/api/app/ai/conversations/{conversationId}/chat-stream` | App 端 SSE 流式对话：delta=增量文本，done=结束（含完整消息与 actions 卡片），error=失败原因 | 登录+ai:chat | body 同普通发送：content, attachments |
+| GET `/api/app/ai/recommendations` | 空态 2×2 场景推荐（查课表/查进度/办事指引/校园生活） | 登录+ai:chat | 无 |
 
 - `AiConversationResponse`：conversationId, title, createdAt
 - `AiMessageResponse`：messageId, role: USER/ASSISTANT, content, images: Long[], degraded(降级标记), actions: [{type: SERVICE_APPLY/REQUEST_DETAIL/REQUEST_LIST/SCHEDULE, label, itemCode, itemId, url}], suggestions(服务端暂固定 null，前端预留), createdAt

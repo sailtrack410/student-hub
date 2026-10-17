@@ -35,4 +35,11 @@ public interface SessionStore {
      * 删除指定用户的全部在线会话（管理端停用账号后强制下线）；返回删除的会话数。
      */
     int deleteUserSessions(Long userId);
+
+    /**
+     * 按会话摘要删除单个会话（设备管理踢线用，API需求清单 3.2）；
+     * 会话不存在时静默返回。默认空实现兼容未升级的存储（如测试用 InMemory）。
+     */
+    default void deleteSessionByHash(String tokenHash) {
+    }
 }

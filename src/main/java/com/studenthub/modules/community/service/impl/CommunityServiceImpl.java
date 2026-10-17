@@ -32,6 +32,7 @@ import com.studenthub.modules.jwauth.entity.JwBindingEntity;
 import com.studenthub.modules.jwauth.mapper.JwBindingMapper;
 import com.studenthub.modules.notification.service.NotificationService;
 import com.studenthub.modules.notification.service.dto.NotificationSendCommand;
+import com.studenthub.modules.social.service.SocialService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -61,6 +62,7 @@ public class CommunityServiceImpl implements CommunityService {
     private final NotificationService notificationService;
     private final CommunityModerationService communityModerationService;
     private final com.studenthub.modules.achievement.service.AchievementService achievementService;
+    private final SocialService socialService;
 
     @Override
     public List<CommunitySectionResponse> sections(Long campusId) {
@@ -297,14 +299,29 @@ public class CommunityServiceImpl implements CommunityService {
         String college = firstNonBlank(binding == null ? null : binding.getCollege(), author.getCollege(), "学院未填写");
         String major = firstNonBlank(binding == null ? null : binding.getMajor(), "专业未填写");
         String className = firstNonBlank(binding == null ? null : binding.getClassName(), "班级未填写");
+        // 隐私脱敏（API需求清单 二-5）：作者关闭"公开年级与专业"时学业字段置空；关闭"公开我的勋章"时不展示佩戴勋章。
+        // 本人查看自己主页始终全量。
+        boolean selfView = user.userId().equals(authorId);
+        if (!selfView && !socialService.showAcademicInfo(authorId)) {
+            college = null;
+            major = null;
+            className = null;
+        }
+        String wornBadge = selfView || socialService.showMedals(authorId) ? author.getWornBadgeCode() : null;
         String gender = firstNonBlank(author.getGender(), "性别未填写");
         // 等级/经验与作者本人成长档案同口径实时重算（AchievementService 单点）
         int totalExp = achievementService.totalExpOf(authorId);
         int level = com.studenthub.modules.achievement.service.AchievementService.levelOf(totalExp);
+        boolean isFollowing = followMapperCountSafe(user.userId(), authorId);
         return new CommunityAuthorProfileResponse(author.getId(), author.getDisplayName(), avatarUrl(author),
                 level, com.studenthub.modules.achievement.service.AchievementService.levelName(level), totalExp,
-                author.getWornBadgeCode(), false,
+                wornBadge, isFollowing,
                 college, major, className, gender, posts);
+    }
+
+    /** 关注态查询（user_follow 落地后接入作者主页 isFollowing，需求清单 二-5） */
+    private boolean followMapperCountSafe(Long viewerId, Long authorId) {
+        return socialService.isFollowing(viewerId, authorId);
     }
 
     private String firstNonBlank(String value, String fallback) {
