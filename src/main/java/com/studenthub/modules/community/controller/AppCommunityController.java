@@ -87,6 +87,14 @@ public class AppCommunityController {
         return Result.success(communityService.pinComment(currentUserProvider.requireCurrentUser(), commentId));
     }
 
+    @DeleteMapping("/posts/{postId}")
+    @Operation(summary = "删除作者自己发布的帖子", description = "仅原作者可删；帖子与全部评论同步逻辑删除，因发帖获得的经验值按经验可回收原则自动扣减。",
+            operationId = "deleteCommunityPost")
+    public Result<Void> deletePost(@PathVariable Long postId) {
+        communityService.deletePost(currentUserProvider.requireCurrentUser(), postId);
+        return Result.success(null);
+    }
+
     @DeleteMapping("/comments/{commentId}")
     @Operation(summary = "删除自己的评论", operationId = "deleteCommunityComment")
     public Result<Void> deleteComment(@PathVariable Long commentId) {

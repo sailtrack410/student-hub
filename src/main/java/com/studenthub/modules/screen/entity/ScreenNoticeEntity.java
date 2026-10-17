@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 /**
  * 现场终端信息要闻：NOTICE 通知 / NEWS 要闻 / ACTIVITY 活动，仅公开内容，无个人数据。
@@ -23,4 +24,8 @@ public class ScreenNoticeEntity {
     private LocalDate publishDate;
     private Integer sortOrder;
     private Boolean enabled;
+    private String channel;
+    private String publishStatus;
+    private LocalDateTime publishAt;
+    private String author;
 }

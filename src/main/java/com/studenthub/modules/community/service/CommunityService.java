@@ -12,6 +12,8 @@ public interface CommunityService {
     PageResult<CommunityPostResponse> pagePosts(AuthenticatedUser user, Long sectionId, String keyword, long pageNum, long pageSize, String sort);
     CommunityPostDetailResponse detail(AuthenticatedUser user, Long postId);
     CommunityPostResponse publish(AuthenticatedUser user, CreateCommunityPostRequest request);
+    /** 作者删帖（需求清单 7.2）：仅原作者可删，帖子与评论同步逻辑删除，经验由重算机制自动回收 */
+    void deletePost(AuthenticatedUser user, Long postId);
     CommunityCommentResponse comment(AuthenticatedUser user, Long postId, CreateCommunityCommentRequest request);
     CommunityPostResponse togglePostLike(AuthenticatedUser user, Long postId);
     CommunityCommentResponse toggleCommentLike(AuthenticatedUser user, Long commentId);

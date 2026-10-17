@@ -256,6 +256,23 @@ public class CommunityServiceImpl implements CommunityService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public void deletePost(AuthenticatedUser user, Long postId) {
+        CommunityPostEntity post = requirePost(user, postId);
+        if (!user.userId().equals(post.getAuthorId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "只能删除自己发布的帖子");
+        }
+        // 帖子与全部评论同步逻辑删除；发帖/评论经验按"经验可回收"由 AchievementService 业务重算自动扣减
+        post.setStatus("DELETED");
+        postMapper.updateById(post);
+        commentMapper.update(null, new LambdaUpdateWrapper<CommunityCommentEntity>()
+                .eq(CommunityCommentEntity::getPostId, post.getId())
+                .ne(CommunityCommentEntity::getStatus, "DELETED")
+                .set(CommunityCommentEntity::getStatus, "DELETED"));
+        log.info("社区帖子已由作者删除, postId={}, authorId={}", postId, user.userId());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void deleteComment(AuthenticatedUser user, Long commentId) {
         CommunityCommentEntity comment = requireComment(commentId);
         if (!user.userId().equals(comment.getAuthorId())) {
