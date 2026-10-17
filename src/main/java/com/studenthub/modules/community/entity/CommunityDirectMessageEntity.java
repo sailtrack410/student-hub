@@ -19,5 +19,8 @@ public class CommunityDirectMessageEntity extends BaseEntity {
     private Long receiverId;
     private String content;
     private String imageFileIds;
+    private String referenceType;
+    private Long referenceId;
+    private String referenceCard;
     private LocalDateTime readAt;
 }

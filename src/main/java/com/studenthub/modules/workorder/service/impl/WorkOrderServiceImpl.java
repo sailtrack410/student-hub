@@ -422,7 +422,10 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         List<String> completionPhotoUrls = JsonIds.parse(order.getCompletionPhotoFileIds()).stream()
                 .map(this::signPhoto).filter(java.util.Objects::nonNull).toList();
         if (completionPhotoUrls.isEmpty() && completionPhotoUrl != null) completionPhotoUrls = List.of(completionPhotoUrl);
-        return WorkOrderDetailResponse.from(order, requestNo, requesterName, requesterPhone,
+        // 师傅电话：处理人联系方式，供报修人一键拨打（需求清单 二-2）
+        UserEntity assignee = order.getAssigneeId() == null ? null : userMapper.selectById(order.getAssigneeId());
+        String assigneePhone = assignee == null ? null : assignee.getPhone();
+        return WorkOrderDetailResponse.from(order, requestNo, requesterName, requesterPhone, assigneePhone,
                 formDataNode, schemaNode, repairAddress,
                 arrivalPhotoUrl, completionPhotoUrl, completionPhotoUrls);
     }

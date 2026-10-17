@@ -17,6 +17,7 @@ public record WorkOrderDetailResponse(
         @Schema(description = "工单状态") String status,
         @Schema(description = "优先级") String priority,
         @Schema(description = "当前处理人", nullable = true) String assigneeName,
+        @Schema(description = "处理人联系电话（师傅电话，一键拨打用）", nullable = true) String assigneePhone,
         @Schema(description = "申请人", nullable = true) String requesterName,
         @Schema(description = "报修人联系方式", nullable = true) String requesterPhone,
         @Schema(description = "报修地址", nullable = true) String repairAddress,
@@ -37,16 +38,17 @@ public record WorkOrderDetailResponse(
 
     /**
      * 静态工厂：附属查询结果（requesterName/requesterPhone/formData/repairAddress/照片签名地址等）
-     * 由 service 组装后传入，DTO 只负责装配字段，避免 service 手拼 26 参构造器。
+     * 由 service 组装后传入，DTO 只负责装配字段，避免 service 手拼构造器。
      */
     public static WorkOrderDetailResponse from(WorkOrderEntity order, String requestNo,
                                                String requesterName, String requesterPhone,
+                                               String assigneePhone,
                                                JsonNode formData, JsonNode formSchema,
                                                String repairAddress,
                                                String arrivalPhotoUrl, String completionPhotoUrl,
                                                List<String> completionPhotoUrls) {
         return new WorkOrderDetailResponse(order.getId(), order.getOrderNo(), order.getRequestId(), requestNo,
-                order.getTitle(), order.getStatus(), order.getPriority(), order.getAssigneeName(),
+                order.getTitle(), order.getStatus(), order.getPriority(), order.getAssigneeName(), assigneePhone,
                 requesterName, requesterPhone, repairAddress, formData, formSchema,
                 Boolean.TRUE.equals(order.getPhotoWorkflowRequired()), arrivalPhotoUrl, completionPhotoUrl,
                 completionPhotoUrls == null ? List.of() : completionPhotoUrls,

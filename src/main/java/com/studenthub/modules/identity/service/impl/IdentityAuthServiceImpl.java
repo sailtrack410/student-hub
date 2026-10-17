@@ -5,7 +5,9 @@ import com.studenthub.common.ErrorCode;
 import com.studenthub.common.util.PhoneNumbers;
 import com.studenthub.exception.BusinessException;
 import com.studenthub.modules.identity.controller.dto.CurrentUserResponse;
+import com.studenthub.modules.identity.controller.dto.GrowthSummary;
 import com.studenthub.modules.identity.controller.dto.LoginResponse;
+import com.studenthub.modules.jwauth.entity.JwBindingEntity;
 import com.studenthub.modules.identity.entity.RoleEntity;
 import com.studenthub.modules.identity.entity.UserEntity;
 import com.studenthub.modules.identity.entity.UserRoleEntity;
@@ -65,6 +67,8 @@ public class IdentityAuthServiceImpl implements IdentityAuthService {
     private final AuthenticatedUserFactory authenticatedUserFactory;
     private final com.studenthub.modules.file.mapper.FileStorageMapper fileStorageMapper;
     private final org.springframework.beans.factory.ObjectProvider<com.studenthub.integration.wechat.WechatPhoneNumberClient> phoneClientProvider;
+    private final com.studenthub.modules.achievement.service.AchievementService achievementService;
+    private final com.studenthub.modules.jwauth.mapper.JwBindingMapper jwBindingMapper;
 
     @Override
     public LoginResponse login(String username, String password) {
@@ -153,7 +157,31 @@ public class IdentityAuthServiceImpl implements IdentityAuthService {
 
     @Override
     public CurrentUserResponse currentUser() {
-        return CurrentUserResponse.from(currentUserProvider.requireCurrentUser());
+        AuthenticatedUser user = currentUserProvider.requireCurrentUser();
+        UserEntity entity = userMapper.selectById(user.userId());
+        String uid = null;
+        String wornBadgeCode = null;
+        if (entity != null) {
+            wornBadgeCode = entity.getWornBadgeCode();
+            JwBindingEntity binding = jwBindingMapper.findByUserId(user.userId());
+            uid = binding != null ? binding.getJwStudentNo() : null;
+        }
+        int exp = achievementService.totalExpOf(user.userId());
+        int level = com.studenthub.modules.achievement.service.AchievementService.levelOf(exp);
+        Integer nextLevelExp = null;
+        Integer expToNext = null;
+        if (level < com.studenthub.modules.achievement.service.AchievementService.maxLevel()) {
+            nextLevelExp = com.studenthub.modules.achievement.service.AchievementService.levelExp(level + 1);
+            expToNext = nextLevelExp - exp;
+        }
+        GrowthSummary growth = new GrowthSummary(uid, level,
+                com.studenthub.modules.achievement.service.AchievementService.levelName(level),
+                exp, nextLevelExp, expToNext, wornBadgeCode);
+        return new CurrentUserResponse(user.userId(), user.campusId(), user.defaultOrganizationId(),
+                user.username(), user.displayName(), user.identityType(), user.authorizationStatus(),
+                user.roleCodes(), user.roleScopes(), user.permissionCodes(),
+                user.avatarFileId() == null ? null : "/api/common/files/view/" + user.avatarFileId(),
+                user.phone(), growth);
     }
 
     @Override
