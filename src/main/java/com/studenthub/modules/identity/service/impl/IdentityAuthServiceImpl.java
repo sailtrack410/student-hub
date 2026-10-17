@@ -68,6 +68,7 @@ public class IdentityAuthServiceImpl implements IdentityAuthService {
     private final com.studenthub.modules.file.mapper.FileStorageMapper fileStorageMapper;
     private final org.springframework.beans.factory.ObjectProvider<com.studenthub.integration.wechat.WechatPhoneNumberClient> phoneClientProvider;
     private final com.studenthub.modules.achievement.service.AchievementService achievementService;
+    private final com.studenthub.modules.device.service.DeviceSessionService deviceSessionService;
     private final com.studenthub.modules.jwauth.mapper.JwBindingMapper jwBindingMapper;
 
     @Override
@@ -275,6 +276,7 @@ public class IdentityAuthServiceImpl implements IdentityAuthService {
         AuthenticatedUser authenticatedUser = authenticatedUserFactory.build(user);
         // App 端使用长期 TTL（配合滑动续期实现免登录），Web/管理端保持短 TTL
         SessionToken token = sessionStore.create(authenticatedUser, sessionClientPolicy.creationTtl());
+        registerDeviceQuietly(user.getId(), token.accessToken());
 
         UserEntity loginUpdate = new UserEntity();
         loginUpdate.setId(user.getId());
@@ -285,6 +287,26 @@ public class IdentityAuthServiceImpl implements IdentityAuthService {
         log.info("用户登录成功, userId={}, roles={}", user.getId(), authenticatedUser.roleCodes());
         return new LoginResponse(token.accessToken(), token.expiresAt(), newUser,
                 CurrentUserResponse.from(authenticatedUser));
+    }
+
+    /** 登录设备登记（API需求清单 3.x）：失败不影响登录主流程 */
+    private void registerDeviceQuietly(Long userId, String rawToken) {
+        try {
+            var attributes = org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+            if (!(attributes instanceof org.springframework.web.context.request.ServletRequestAttributes servlet)) {
+                return;
+            }
+            jakarta.servlet.http.HttpServletRequest request = servlet.getRequest();
+            String clientType = sessionClientPolicy.isAppClient(request) ? "APP" : "WEB";
+            String ip = request.getHeader("X-Forwarded-For");
+            if (ip == null || ip.isBlank()) {
+                ip = request.getHeader("X-Real-IP");
+            }
+            deviceSessionService.register(userId, rawToken, request.getHeader("User-Agent"), clientType,
+                    ip == null || ip.isBlank() ? request.getRemoteAddr() : ip.split(",")[0].trim());
+        } catch (RuntimeException exception) {
+            log.warn("登录设备登记失败（不影响登录）, userId={}, error={}", userId, exception.getMessage());
+        }
     }
 
 

@@ -145,6 +145,14 @@ public class RedisSessionStore implements SessionStore {
         return count;
     }
 
+    @Override
+    public void deleteSessionByHash(String tokenHash) {
+        if (tokenHash == null || tokenHash.isBlank()) {
+            return;
+        }
+        redisTemplate.delete(sessionKey(tokenHash));
+    }
+
     private String sessionKey(String tokenHash) {
         return KEY_PREFIX + tokenHash;
     }
