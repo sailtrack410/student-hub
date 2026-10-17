@@ -14,7 +14,7 @@ public record CurrentUserResponse(
         Long campusId,
         @Schema(description = "默认组织 ID", example = "10")
         Long defaultOrganizationId,
-        @Schema(description = "平台用户名", example = "wx_user_abc123")
+        @Schema(description = "平台用户名", example = "wechat_user_abc123")
         String username,
         @Schema(description = "用户展示名称", example = "微信用户")
         String displayName,

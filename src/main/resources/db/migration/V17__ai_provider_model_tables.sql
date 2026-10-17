@@ -57,8 +57,9 @@ INSERT INTO ai_default_model (id, type_code, model_id, created_by, updated_by)
 VALUES (1, 'CHAT', 1, 0, 0);
 
 -- ai_config 降级为纯全局设置（总开关 + 超时 + 限流），连接类字段移交 ai_provider/ai_model
-ALTER TABLE ai_config
-    DROP COLUMN provider,
-    DROP COLUMN base_url,
-    DROP COLUMN api_key,
-    DROP COLUMN model;
+-- 拆成单子句逐条执行：MySQL 的多子句 `DROP COLUMN a, DROP COLUMN b` 在 H2 中
+-- 会把 "DROP" 解析为列名导致集成测试库初始化失败
+ALTER TABLE ai_config DROP COLUMN provider;
+ALTER TABLE ai_config DROP COLUMN base_url;
+ALTER TABLE ai_config DROP COLUMN api_key;
+ALTER TABLE ai_config DROP COLUMN model;
