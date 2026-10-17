@@ -74,7 +74,9 @@ public class ScreenAdminServiceImpl implements ScreenAdminService {
     public AdminNoticeResponse create(NoticeUpsertRequest request, Long operatorId) {
         ScreenNoticeEntity entity = new ScreenNoticeEntity();
         applyUpsert(entity, request);
-        entity.setPublishStatus(resolveInitialStatus(request));
+        String status = resolveInitialStatus(request);
+        entity.setPublishStatus(status);
+        applyPublishAt(entity, request, status);
         if (entity.getPublishDate() == null) {
             entity.setPublishDate(java.time.LocalDate.now());
         }
@@ -90,7 +92,9 @@ public class ScreenAdminServiceImpl implements ScreenAdminService {
     public AdminNoticeResponse update(Long id, NoticeUpsertRequest request, Long operatorId) {
         ScreenNoticeEntity entity = requireNotice(id);
         applyUpsert(entity, request);
-        entity.setPublishStatus(resolveInitialStatus(request));
+        String status = resolveInitialStatus(request);
+        entity.setPublishStatus(status);
+        applyPublishAt(entity, request, status);
         noticeMapper.updateById(entity);
         return AdminNoticeResponse.from(entity, TYPE_TEXT.getOrDefault(entity.getNoticeType(), "通知"));
     }
@@ -174,5 +178,10 @@ public class ScreenAdminServiceImpl implements ScreenAdminService {
             default -> throw new BusinessException(ErrorCode.INVALID_PARAMETER,
                     "action 仅支持 PUBLISH/SCHEDULE/DRAFT/OFFLINE");
         };
+    }
+
+    /** 定时时间只随 SCHEDULE 动作生效：否则清空，防止换动作后残留旧 publishAt 干扰扫描 */
+    private void applyPublishAt(ScreenNoticeEntity entity, NoticeUpsertRequest request, String status) {
+        entity.setPublishAt("SCHEDULED".equals(status) ? request.publishAt() : null);
     }
 }

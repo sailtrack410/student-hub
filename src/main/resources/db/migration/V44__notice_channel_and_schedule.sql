@@ -1,13 +1,13 @@
 -- 公告渠道拆分（API需求清单 4.2）：同一张 screen_notice 表承载终端大屏与 App 公告两个渠道，
 -- 存量数据默认 SCREEN 渠道不受影响；发布状态 + 定时发布时间支持"先建稿、到点自动上线"。
--- H2 兼容：单子句 ALTER、无列 COMMENT。
-ALTER TABLE screen_notice ADD COLUMN IF NOT EXISTS channel VARCHAR(16) NOT NULL DEFAULT 'SCREEN';
-ALTER TABLE screen_notice ADD COLUMN IF NOT EXISTS publish_status VARCHAR(16) NOT NULL DEFAULT 'PUBLISHED';
-ALTER TABLE screen_notice ADD COLUMN IF NOT EXISTS publish_at DATETIME NULL;
-ALTER TABLE screen_notice ADD COLUMN IF NOT EXISTS author VARCHAR(64) NULL;
+-- MySQL/H2 双兼容：单子句 ALTER、无列 COMMENT、无 IF NOT EXISTS（MySQL ADD COLUMN 不支持该子句）。
+ALTER TABLE screen_notice ADD COLUMN channel VARCHAR(16) NOT NULL DEFAULT 'SCREEN';
+ALTER TABLE screen_notice ADD COLUMN publish_status VARCHAR(16) NOT NULL DEFAULT 'PUBLISHED';
+ALTER TABLE screen_notice ADD COLUMN publish_at DATETIME NULL;
+ALTER TABLE screen_notice ADD COLUMN author VARCHAR(64) NULL;
 
--- 定时发布扫描索引（H2 兼容写法）
-CREATE INDEX IF NOT EXISTS idx_screen_notice_schedule ON screen_notice (publish_status, publish_at);
+-- 定时发布扫描索引
+CREATE INDEX idx_screen_notice_schedule ON screen_notice (publish_status, publish_at);
 
 -- App 公告权限点（默认绑定平台管理员，参照 V38 community:moderate 模式）
 INSERT IGNORE INTO sys_permission
