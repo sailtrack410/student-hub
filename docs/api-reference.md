@@ -251,7 +251,7 @@
 - `CommunityPostResponse`：postId, sectionId, sectionName, sectionIcon, authorId, authorName, avatarUrl, authorLevel(列表场景 null，个人中心 profile 下发), authorBadgeCode(佩戴勋章编码), title, content, imageUrls, thumbnailUrls, topics, commentCount, likeCount, liked, createdAt
 - `CommunityCommentResponse`：commentId, parentCommentId, authorId, authorName, avatarUrl, content, imageUrls, thumbnailUrls, likeCount, liked, pinned, author, createdAt
 - 帖子详情 → `{ post: CommunityPostResponse, comments: CommunityCommentResponse[] }`
-- `CommunityAuthorProfileResponse`：userId, displayName, avatarUrl, college, major, className, gender, posts
+- `CommunityAuthorProfileResponse`：userId, displayName, avatarUrl, level, levelName, totalExp(等级/经验实时重算，与成长档案同口径), wornBadgeCode(佩戴勋章编码，未佩戴 null), isFollowing(关注体系 Phase 3 落地前恒 false), college, major, className, gender, posts
 - `DirectMessageResponse`：messageId, senderId, receiverId, senderAvatarUrl, content, imageUrls, thumbnailUrls, createdAt
 - `DirectConversationResponse`：peerId, peerName, avatarUrl, lastContent, lastAt
 
