@@ -381,6 +381,8 @@ public class ScreenServiceImpl implements ScreenService {
     public ScreenNoticeResponse notices() {
         List<ScreenNoticeEntity> list = noticeMapper.selectList(new LambdaQueryWrapper<ScreenNoticeEntity>()
                 .eq(ScreenNoticeEntity::getEnabled, true)
+                .eq(ScreenNoticeEntity::getChannel, "SCREEN")
+                .eq(ScreenNoticeEntity::getPublishStatus, "PUBLISHED")
                 .orderByAsc(ScreenNoticeEntity::getSortOrder)
                 .orderByDesc(ScreenNoticeEntity::getPublishDate)
                 .last("LIMIT 20"));

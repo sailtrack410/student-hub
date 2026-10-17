@@ -17,7 +17,9 @@ public final class RequestTransitions {
     }
 
     public enum Action {
-        SUBMIT, DISPATCH, START, ARRIVAL_PHOTO, COMPLETION_PHOTO, COMPLETE, CONFIRM, REOPEN, REJECT, CANCEL, EVALUATE
+        SUBMIT, DISPATCH, START, ARRIVAL_PHOTO, COMPLETION_PHOTO, COMPLETE, CONFIRM, REOPEN, REJECT, CANCEL, EVALUATE,
+        /** 用户催单：纯记录型动作，不改变状态；2 小时限频由业务层实现 */
+        URGE
     }
 
     private static final Map<Action, Set<Status>> ALLOWED_FROM = Map.ofEntries(
@@ -31,7 +33,8 @@ public final class RequestTransitions {
             Map.entry(Action.REOPEN, Set.of(Status.PROCESSING)),
             Map.entry(Action.REJECT, Set.of(Status.SUBMITTED, Status.PROCESSING)),
             Map.entry(Action.CANCEL, Set.of(Status.SUBMITTED, Status.PROCESSING)),
-            Map.entry(Action.EVALUATE, Set.of(Status.COMPLETED)));
+            Map.entry(Action.EVALUATE, Set.of(Status.COMPLETED)),
+            Map.entry(Action.URGE, Set.of(Status.SUBMITTED, Status.PROCESSING)));
 
     private RequestTransitions() {
     }
@@ -50,7 +53,7 @@ public final class RequestTransitions {
                 case COMPLETE -> Status.COMPLETED;
                 case REJECT -> Status.REJECTED;
                 case CANCEL -> Status.CANCELLED;
-                case SUBMIT, EVALUATE -> current;
+                case SUBMIT, EVALUATE, URGE -> current;
             };
         }
         throw new BusinessException(ErrorCode.REQUEST_STATE_INVALID);

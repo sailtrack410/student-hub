@@ -8,6 +8,7 @@ import com.studenthub.modules.servicerequest.controller.dto.ServiceRequestDetail
 import com.studenthub.modules.servicerequest.controller.dto.ServiceRequestSummaryResponse;
 import com.studenthub.modules.servicerequest.controller.dto.ServiceRequestCancelRequest;
 import com.studenthub.modules.servicerequest.controller.dto.SubmitServiceRequestRequest;
+import com.studenthub.modules.servicerequest.controller.dto.UrgeResponse;
 import com.studenthub.modules.servicerequest.service.ServiceRequestService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -68,5 +69,13 @@ public class AppServiceRequestController {
                                                        @RequestBody @Valid ServiceRequestCancelRequest request) {
         return Result.success(serviceRequestService.cancel(
                 currentUserProvider.requireCurrentUser(), requestId, request.reason()));
+    }
+
+    @PostMapping("/{requestId}/urge")
+    @Operation(summary = "催单", description = "提醒当前接单师傅尽快处理；单条申请每 2 小时仅允许催单 1 次，冷却期内返回 urged=false 与剩余秒数。",
+            operationId = "urgeServiceRequest")
+    @PreAuthorize("hasAuthority('service-request:view:self')")
+    public Result<UrgeResponse> urge(@PathVariable Long requestId) {
+        return Result.success(serviceRequestService.urge(currentUserProvider.requireCurrentUser(), requestId));
     }
 }
