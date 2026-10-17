@@ -8,6 +8,7 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
+import java.util.Map;
 
 @Mapper
 public interface CommunityDirectMessageMapper extends BaseMapper<CommunityDirectMessageEntity> {
@@ -26,6 +27,11 @@ public interface CommunityDirectMessageMapper extends BaseMapper<CommunityDirect
     @Select("SELECT COUNT(*) FROM community_direct_message WHERE campus_id = #{campusId} "
             + "AND receiver_id = #{userId} AND deleted = 0 AND read_at IS NULL")
     long unreadCount(@Param("campusId") Long campusId, @Param("userId") Long userId);
+
+    @Select("SELECT sender_id AS senderId, COUNT(*) AS cnt FROM community_direct_message "
+            + "WHERE campus_id = #{campusId} AND receiver_id = #{userId} AND deleted = 0 AND read_at IS NULL "
+            + "GROUP BY sender_id")
+    List<Map<String, Object>> unreadByPeer(@Param("campusId") Long campusId, @Param("userId") Long userId);
 
     @Update("UPDATE community_direct_message SET read_at = CURRENT_TIMESTAMP "
             + "WHERE campus_id = #{campusId} AND receiver_id = #{userId} AND sender_id = #{withUserId} "
