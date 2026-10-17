@@ -33,7 +33,9 @@ public record CurrentUserResponse(
         @Schema(description = "头像文件访问路径（未签名，展示时需换取签名地址）", nullable = true)
         String avatarPath,
         @Schema(description = "联系电话", nullable = true, example = "15700000000")
-        String phone) {
+        String phone,
+        @Schema(description = "成长与佩戴信息（等级/经验实时重算）", nullable = true)
+        GrowthSummary growth) {
 
     public static CurrentUserResponse from(AuthenticatedUser user) {
         return new CurrentUserResponse(
@@ -48,6 +50,7 @@ public record CurrentUserResponse(
                 user.roleScopes(),
                 user.permissionCodes(),
                 user.avatarFileId() == null ? null : "/api/common/files/view/" + user.avatarFileId(),
-                user.phone());
+                user.phone(),
+                null);
     }
 }

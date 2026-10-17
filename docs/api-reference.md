@@ -221,8 +221,8 @@
 | POST `/api/app/work-orders/{orderId}/confirm` | 报修人确认工单完成 | 登录+service-request:view:self | 无 |
 | POST `/api/app/work-orders/{orderId}/reject-confirmation` | 报修人退回完工确认 | 登录+service-request:view:self | body: reason |
 
-- `WorkOrderSummaryResponse`：orderId, orderNo, requestId, title, status, priority, assigneeName, createdAt, assignedAt, completedAt, completeRemark, photoWorkflowRequired, confirmationRejectReason, arrivalPhotoUrl, completionPhotoUrl, completionPhotoUrls
-- `WorkOrderDetailResponse`：在概要基础上加 requestNo, requesterName, requesterPhone, repairAddress, formData, formSchema, completionSubmittedAt, confirmedAt, startedAt
+- `WorkOrderSummaryResponse`：orderId, orderNo, requestId, title, status, priority, assigneeName, assigneePhone(师傅电话), createdAt, assignedAt, completedAt, completeRemark, photoWorkflowRequired, confirmationRejectReason, arrivalPhotoUrl, completionPhotoUrl, completionPhotoUrls
+- `WorkOrderDetailResponse`：在概要基础上加 requestNo, requesterName, requesterPhone, assigneePhone(师傅电话，一键拨打), repairAddress, formData, formSchema, completionSubmittedAt, confirmedAt, startedAt
 
 ### 校园社区 `/api/app/community`
 
@@ -241,7 +241,7 @@
 | POST `/api/app/community/reports` | 举报帖子/评论/私信/用户；服务端保存内容快照 | 登录 | body: targetType: POST/COMMENT/MESSAGE/USER, targetId, reasonCode: AD/ABUSE/PORN/POLITICS/PRIVACY/OTHER, reasonDetail |
 | GET `/api/app/community/authors/{authorId}` | 查看作者主页（资料+帖子） | 登录 | 无 |
 | GET `/api/app/community/messages` | 查询与指定用户的私信 | 登录 | query: withUserId |
-| POST `/api/app/community/messages` | 发送私信 | 登录 | body: receiverId, content(≤2000), imageFileIds |
+| POST `/api/app/community/messages` | 发送私信 | 登录 | body: receiverId, content(≤2000), imageFileIds, referenceType(POST，可空), referenceId(可空) |
 | POST `/api/app/community/messages/read` | 标记私信会话已读 | 登录 | query: withUserId |
 | GET `/api/app/community/messages/contacts` | 私信会话列表 | 登录 | 无 |
 | GET `/api/app/community/unread-count` | 社区未读数（通知+私信） | 登录 | 无 |
@@ -252,7 +252,8 @@
 - `CommunityCommentResponse`：commentId, parentCommentId, authorId, authorName, avatarUrl, content, imageUrls, thumbnailUrls, likeCount, liked, pinned, author, createdAt
 - 帖子详情 → `{ post: CommunityPostResponse, comments: CommunityCommentResponse[] }`
 - `CommunityAuthorProfileResponse`：userId, displayName, avatarUrl, level, levelName, totalExp(等级/经验实时重算，与成长档案同口径), wornBadgeCode(佩戴勋章编码，未佩戴 null), isFollowing(关注体系 Phase 3 落地前恒 false), college, major, className, gender, posts
-- `DirectMessageResponse`：messageId, senderId, receiverId, senderAvatarUrl, content, imageUrls, thumbnailUrls, createdAt
+- `DirectMessageResponse`：messageId, senderId, receiverId, senderAvatarUrl, content, imageUrls, thumbnailUrls, referenceCard, createdAt
+- `DirectMessageReferenceCard`：type(POST), id, title, thumbnail(首图缩略图签名路径，无图 null)；发送时传 referenceType+referenceId 生成快照落库，源帖删除后仍回显
 - `DirectConversationResponse`：peerId, peerName, avatarUrl, lastContent, lastAt
 
 ### 消息通知 `/api/app/notifications`
@@ -358,7 +359,8 @@
 | POST `/api/common/auth/logout` | 使当前 Bearer Token 立即失效 | 需登录 | 无 |
 
 - `LoginResponse`：accessToken(不透明令牌), expiresAt, isNewUser, user(CurrentUserResponse)
-- `CurrentUserResponse`：userId, campusId, defaultOrganizationId, username, displayName, identityType: STUDENT/TEACHER/LOGISTICS/ADMIN, authorizationStatus: BASIC/PENDING/AUTHORIZED/REJECTED, roles: String[], roleScopes: [{roleCode, organizationId, dataScope}], permissions: String[], avatarPath, phone
+- `CurrentUserResponse`：userId, campusId, defaultOrganizationId, username, displayName, identityType: STUDENT/TEACHER/LOGISTICS/ADMIN, authorizationStatus: BASIC/PENDING/AUTHORIZED/REJECTED, roles: String[], roleScopes: [{roleCode, organizationId, dataScope}], permissions: String[], avatarPath, phone, growth: GrowthSummary（`GET /auth/me` 下发；登录响应中为 null）
+- `GrowthSummary`：uid(教务学号/工号，未认证 null), level(1-9), levelName, currentExp, nextLevelExp(满级 null), expToNext(满级 null), wornBadgeCode(未佩戴 null)；等级经验实时重算
 
 ### 系统 `/api/common/system`
 

@@ -7,8 +7,11 @@ import com.studenthub.exception.BusinessException;
 import com.studenthub.modules.community.controller.dto.DirectMessageResponse;
 import com.studenthub.modules.community.controller.dto.SendDirectMessageRequest;
 import com.studenthub.modules.community.controller.dto.DirectConversationResponse;
+import com.studenthub.modules.community.controller.dto.DirectMessageReferenceCard;
 import com.studenthub.modules.community.entity.CommunityDirectMessageEntity;
+import com.studenthub.modules.community.entity.CommunityPostEntity;
 import com.studenthub.modules.community.mapper.CommunityDirectMessageMapper;
+import com.studenthub.modules.community.mapper.CommunityPostMapper;
 import com.studenthub.modules.community.service.DirectMessageService;
 import com.studenthub.modules.identity.entity.UserEntity;
 import com.studenthub.modules.identity.mapper.UserMapper;
@@ -28,6 +31,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class DirectMessageServiceImpl implements DirectMessageService {
     private final CommunityDirectMessageMapper messageMapper;
+    private final CommunityPostMapper postMapper;
     private final UserMapper userMapper;
     private final FileStorageService fileStorageService;
     private final FileStorageMapper fileStorageMapper;
@@ -55,10 +59,38 @@ public class DirectMessageServiceImpl implements DirectMessageService {
         entity.setReceiverId(peer.getId());
         entity.setContent(content);
         entity.setImageFileIds(imageIds.isEmpty() ? null : JsonIds.write(imageIds));
+        DirectMessageReferenceCard referenceCard = resolveReferenceCard(request, user.campusId());
+        if (referenceCard != null) {
+            entity.setReferenceType(referenceCard.type());
+            entity.setReferenceId(referenceCard.id());
+            entity.setReferenceCard(writeCard(referenceCard));
+        }
         messageMapper.insert(entity);
         DirectMessageResponse response = toResponse(entity);
         webSocketHandler.publish(peer.getId(), response);
         return response;
+    }
+
+    /** 关联卡片：仅支持 POST，源帖须同校区且在线；快照（标题/首图）落库，源帖删除后仍可展示 */
+    private DirectMessageReferenceCard resolveReferenceCard(SendDirectMessageRequest request, Long campusId) {
+        if (!"POST".equalsIgnoreCase(request.referenceType()) || request.referenceId() == null) {
+            return null;
+        }
+        CommunityPostEntity post = postMapper.selectById(request.referenceId());
+        if (post == null || !campusId.equals(post.getCampusId()) || !"ENABLED".equals(post.getStatus())) {
+            return null;
+        }
+        List<Long> firstImage = JsonIds.parse(post.getImageFileIds()).stream().limit(1).toList();
+        String thumbnail = firstImage.isEmpty() ? null : fileStorageService.signThumbnailPath(firstImage.get(0));
+        return new DirectMessageReferenceCard("POST", post.getId(), post.getTitle(), thumbnail);
+    }
+
+    private String writeCard(DirectMessageReferenceCard card) {
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(card);
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     @Override

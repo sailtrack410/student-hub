@@ -12,6 +12,8 @@ import com.studenthub.exception.BusinessException;
 import com.studenthub.modules.evaluation.controller.dto.EvaluationResponse;
 import com.studenthub.modules.evaluation.entity.ServiceEvaluationEntity;
 import com.studenthub.modules.evaluation.mapper.ServiceEvaluationMapper;
+import com.studenthub.modules.identity.entity.UserEntity;
+import com.studenthub.modules.identity.mapper.UserMapper;
 import com.studenthub.modules.identity.security.AuthenticatedUser;
 import com.studenthub.modules.notification.service.NotificationService;
 import com.studenthub.modules.notification.service.dto.NotificationSendCommand;
@@ -59,6 +61,7 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
     private final WorkOrderService workOrderService;
     private final NotificationService notificationService;
     private final com.studenthub.modules.file.service.FileStorageService fileStorageService;
+    private final UserMapper userMapper;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -173,6 +176,7 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
             completionPhotoUrls = List.of(fileStorageService.signViewPath(order.getCompletionPhotoFileId()));
         }
         WorkOrderSummaryResponse workOrder = order == null ? null : WorkOrderSummaryResponse.from(order,
+                assigneePhone(order),
                 order.getArrivalPhotoFileId() == null ? null : fileStorageService.signViewPath(order.getArrivalPhotoFileId()),
                 order.getCompletionPhotoFileId() == null ? null : fileStorageService.signViewPath(order.getCompletionPhotoFileId()),
                 completionPhotoUrls);
@@ -189,6 +193,13 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
         JsonNode formData = enrichImageUrls(entity.getId(), parseFormData(entity.getFormData()), item);
         return ServiceRequestDetailResponse.from(entity, itemIcon, slaHours,
                 formData, workOrder, evaluationResponse, timeline);
+    }
+
+    /** 师傅电话：工单处理人联系方式（需求清单 二-2，供"联系师傅"一键拨打） */
+    private String assigneePhone(WorkOrderEntity order) {
+        if (order == null || order.getAssigneeId() == null) return null;
+        UserEntity assignee = userMapper.selectById(order.getAssigneeId());
+        return assignee == null ? null : assignee.getPhone();
     }
 
     /** 图片字段值替换为短时签名访问路径，供小程序直接展示 */

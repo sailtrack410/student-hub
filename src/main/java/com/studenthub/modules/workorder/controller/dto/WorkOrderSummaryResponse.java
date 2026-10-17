@@ -15,6 +15,7 @@ public record WorkOrderSummaryResponse(
         @Schema(description = "工单状态") String status,
         @Schema(description = "优先级") String priority,
         @Schema(description = "当前处理人", nullable = true) String assigneeName,
+        @Schema(description = "处理人联系电话（师傅电话）", nullable = true) String assigneePhone,
         @Schema(description = "创建时间") LocalDateTime createdAt,
         @Schema(description = "派单时间", nullable = true) LocalDateTime assignedAt,
         @Schema(description = "完成时间", nullable = true) LocalDateTime completedAt,
@@ -37,8 +38,13 @@ public record WorkOrderSummaryResponse(
 
     public static WorkOrderSummaryResponse from(WorkOrderEntity entity, String arrivalPhotoUrl,
                                                 String completionPhotoUrl, List<String> completionPhotoUrls) {
+        return from(entity, null, arrivalPhotoUrl, completionPhotoUrl, completionPhotoUrls);
+    }
+
+    public static WorkOrderSummaryResponse from(WorkOrderEntity entity, String assigneePhone, String arrivalPhotoUrl,
+                                                String completionPhotoUrl, List<String> completionPhotoUrls) {
         return new WorkOrderSummaryResponse(entity.getId(), entity.getOrderNo(), entity.getRequestId(),
-                entity.getTitle(), entity.getStatus(), entity.getPriority(), entity.getAssigneeName(),
+                entity.getTitle(), entity.getStatus(), entity.getPriority(), entity.getAssigneeName(), assigneePhone,
                 entity.getCreatedAt(), entity.getAssignedAt(), entity.getCompletedAt(), entity.getCompleteRemark(),
                 Boolean.TRUE.equals(entity.getPhotoWorkflowRequired()), entity.getConfirmationRejectReason(),
                 arrivalPhotoUrl, completionPhotoUrl, completionPhotoUrls == null ? List.of() : completionPhotoUrls);
