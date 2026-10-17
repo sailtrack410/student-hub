@@ -40,13 +40,14 @@ public class AppCommunityController {
     }
 
     @GetMapping("/posts")
-    @Operation(summary = "分页查询社区帖子", operationId = "pageCommunityPosts")
+    @Operation(summary = "分页查询社区帖子", description = "sort=LATEST(默认,时间倒序)|HOT(点赞数→评论数→时间倒序)。", operationId = "pageCommunityPosts")
     public Result<PageResult<CommunityPostResponse>> posts(
             @RequestParam(required = false) Long sectionId,
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "1") long pageNum,
-            @RequestParam(defaultValue = "10") long pageSize) {
-        return Result.success(communityService.pagePosts(currentUserProvider.requireCurrentUser(), sectionId, keyword, pageNum, pageSize));
+            @RequestParam(defaultValue = "10") long pageSize,
+            @RequestParam(required = false) String sort) {
+        return Result.success(communityService.pagePosts(currentUserProvider.requireCurrentUser(), sectionId, keyword, pageNum, pageSize, sort));
     }
 
     @GetMapping("/posts/{postId}")
