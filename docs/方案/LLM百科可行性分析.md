@@ -20,7 +20,7 @@
 
 | 检查项 | 现状 | 结论 |
 |---|---|---|
-| 项目是否已有 Markdown 语料习惯 | 评测语料 `docs/rag-eval/corpus/*.md` 全是 Markdown | 一致 |
+| 项目是否已有 Markdown 语料习惯 | 评测语料 `docs/评测/RAG/corpus/*.md` 全是 Markdown | 一致 |
 | 小程序侧渲染能力 | `student-hub-weapp/utils/markdown.js` 已有轻量 md→HTML | 可复用思路 |
 | Java 侧渲染能力 | **无**（无 commonmark/flexmark 依赖） | 需新增或前端渲染 |
 | 文档切分能力 | `KnowledgeDocumentParser` 已支持 `md` 解析（按 `#` 标题分节） | **可直接复用** |
@@ -191,7 +191,7 @@ LLM 调用不能无上限。需按次/按日限额、单次 token 预算、失�
 
 ## 五、与既有规划的关系
 
-本方案是 `docs/rag-retrieval-plan.md` 的**补充层，不是替代**：
+本方案是 `docs/方案/RAG检索准确率优化方案.md` 的**补充层，不是替代**：
 
 - RAG 负责**覆盖面**（长尾、细节、原文引用、时效性）
 - Wiki 负责**高频问题的确定性**（口径稳定、可人工校订、可溯源）

@@ -1,0 +1,8 @@
+# Nginx 部署资料中不应入库的内容
+# 证书与私钥按 README 放到本目录的 certs/ 下，禁止提交仓库
+certs/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx

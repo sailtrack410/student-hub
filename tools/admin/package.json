@@ -1,0 +1,9 @@
+{
+  "name": "studenthub-admin-tools",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json && python3 ../build_admin_assets.py",
+    "check": "tsc -p tsconfig.json --noEmit && python3 ../build_admin_assets.py --check"
+  },
+  "devDependencies": { "typescript": "5.9.3" }
+}

@@ -24,6 +24,7 @@ app/android/local.properties
 # 构建产物 / 会话工作目录（大体积，绝不入库）
 dist/
 outputs/
+artifacts/
 .playwright-mcp/
 .workbuddy/
 app/.flutter-plugins

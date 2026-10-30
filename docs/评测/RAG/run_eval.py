@@ -5,7 +5,7 @@
 线上服务评测，以及对比两次运行结果。
 
 用法（请先 cd 到本目录）：
-  cd docs/rag-eval
+  cd docs/评测/RAG
 
   # 离线自检：关键词基线，不需要服务，用于验证评测集本身可判分
   python3 run_eval.py --strategy keyword
@@ -24,7 +24,7 @@
   地址永远阻断。
 
 数据文件：
-- corpus.json    由 corpus/*.md 合并生成（见 README），供脚本单文件读取
+- corpus.json    由 corpus/*.md 合并生成（见 评测说明.md），供脚本单文件读取
 - eval-set.json  评测问题与金标
 
 设计说明：
@@ -132,7 +132,7 @@ def load_json(name):
         with open(name, encoding="utf-8") as fh:
             return json.load(fh)
     except FileNotFoundError:
-        raise ValueError(f"缺少数据文件 {name}（请在 docs/rag-eval 目录下运行）")
+        raise ValueError(f"缺少数据文件 {name}（请在 docs/评测/RAG 目录下运行）")
 
 
 def build_units(corpus):
