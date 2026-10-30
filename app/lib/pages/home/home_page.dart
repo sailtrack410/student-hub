@@ -136,6 +136,10 @@ class _HomePageState extends State<HomePage>
           }
           showSystemNotification(event.title, event.content);
           final messenger = ScaffoldMessenger.maybeOf(context);
+          // 清掉上一条未到期的弹层再弹新的：ScaffoldMessenger 默认排队，
+          // 连发多条通知时会逐条回弹（用户划掉后下一条又浮上来），
+          // 这里改为「只保留最新一条」。
+          messenger?.clearSnackBars();
           messenger?.showSnackBar(
             SnackBar(
               behavior: SnackBarBehavior.floating,

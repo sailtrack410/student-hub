@@ -915,13 +915,15 @@ class CommunityApi {
   }
 
   /// 评论点赞 (POST /api/app/community/comments/{commentId}/like)
+  ///
+  /// apiClient 成功时已剥掉 Result 外层、返回 data（即评论对象本身），
+  /// 这里校验 data 里的 liked/likeCount 字段而非不存在的 success 外层。
   Future<bool> toggleCommentLikeRaw(String commentId) async {
     try {
-      final res = await apiClient.post(
-        '/api/app/community/comments/$commentId/like',
-        body: {},
+      final data = _responseMap(
+        await apiClient.post('/api/app/community/comments/$commentId/like', body: {}),
       );
-      return res is Map<String, dynamic> ? res['success'] == true : true;
+      return data != null && data['liked'] is bool && data['likeCount'] is num;
     } catch (_) {
       return false;
     }

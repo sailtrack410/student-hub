@@ -86,6 +86,10 @@ class CommunitySocket {
   int _generation = 0;
   String? _connectionToken;
 
+  /// 已分发过的通知 id 环形缓冲（outbox 重投/多会话去重）。
+  static const int _maxSeenNotifications = 200;
+  final Set<String> _seenNotificationIds = <String>{};
+
   Stream<DirectMessage> get messages => _messages.stream;
   Stream<bool> get connectionStatus => _status.stream;
   Stream<ChatTypingEvent> get typingEvents => _typing.stream;
@@ -195,16 +199,29 @@ class CommunitySocket {
           }
         case 'NOTIFICATION':
           if (!_notifications.isClosed) {
-            _notifications.add(
-              AppNotificationEvent(
-                notificationId: data['notificationId']?.toString() ?? '',
-                type: data['notificationType']?.toString() ?? '',
-                title: data['title']?.toString() ?? '新通知',
-                content: data['content']?.toString() ?? '',
-                relatedType: data['relatedType']?.toString(),
-                relatedId: data['relatedId']?.toString(),
-              ),
+            final event = AppNotificationEvent(
+              notificationId: data['notificationId']?.toString() ?? '',
+              type: data['notificationType']?.toString() ?? '',
+              title: data['title']?.toString() ?? '新通知',
+              content: data['content']?.toString() ?? '',
+              relatedType: data['relatedType']?.toString(),
+              relatedId: data['relatedId']?.toString(),
             );
+            // 同一条通知可能经 outbox 重投/多会话送达，按 notificationId 去重，
+            // 避免首页 SnackBar 队列被重复事件塞满。
+            if (event.notificationId.isNotEmpty &&
+                _seenNotificationIds.contains(event.notificationId)) {
+              return;
+            }
+            if (event.notificationId.isNotEmpty) {
+              _seenNotificationIds.add(event.notificationId);
+              if (_seenNotificationIds.length > _maxSeenNotifications) {
+                _seenNotificationIds.remove(
+                  _seenNotificationIds.first,
+                );
+              }
+            }
+            _notifications.add(event);
           }
         case 'DELIVERED':
         case 'READ':
