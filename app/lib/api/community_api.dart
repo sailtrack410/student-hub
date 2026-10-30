@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/community_models.dart';
-import '../models/user_session.dart';
 import 'location_api.dart';
 import 'api_client.dart';
 
@@ -602,7 +601,10 @@ class CommunityApi {
   }
 
   /// 静态快捷方法：发表评论
-  static Future<CommunityComment> createComment({
+  ///
+  /// 失败返回 null：调用方必须提示失败并保留输入，不得本地捏造评论伪装成功
+  /// （刷新即消失的「假发表成功」）。
+  static Future<CommunityComment?> createComment({
     required String postId,
     required String content,
     String? parentCommentId,
@@ -615,20 +617,8 @@ class CommunityApi {
         parentCommentId: parentCommentId,
       );
     } catch (_) {}
-
-    return CommunityComment(
-      id:
-          raw?['commentId']?.toString() ??
-          'comment_${DateTime.now().millisecondsSinceEpoch}',
-      parentCommentId: parentCommentId,
-      authorName:
-          raw?['authorName']?.toString() ?? UserSession.currentUserName ?? '同学',
-      avatarPath: _absoluteUrl(raw?['avatarUrl']?.toString()),
-      authorLevel: raw?['authorLevel']?.toString() ?? '',
-      content: raw?['content']?.toString() ?? content,
-      timeAgo: '刚刚',
-      likeCount: 0,
-    );
+    if (raw == null || raw['commentId'] == null) return null;
+    return _mapComment(raw);
   }
 
   /// 静态快捷方法：删除作者自己的帖子

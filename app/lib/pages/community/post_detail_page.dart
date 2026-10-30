@@ -37,6 +37,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
   CommunityComment? _replyTo;
   final Map<String, int> _replyDisplayCounts = <String, int>{};
   bool _loadingComments = false;
+  bool _sendingComment = false;
   bool _unavailable = false;
   bool _loadingBookmark = true;
   late final CommunityInteractionStore _interactions;
@@ -169,16 +170,38 @@ class _PostDetailPageState extends State<PostDetailPage> {
   }
 
   void _handleToggleCommentLike(int index) async {
-    final c = _comments[index];
-    setState(() => _comments[index] = _optimisticLike(c));
+    final c = _sortedComments[index];
+    setState(() => _replaceComment(c, _optimisticLike(c)));
     final confirmed = await CommunityApi.toggleCommentLike(
       postId: _post.id,
       commentId: c.id,
     );
     if (!confirmed && mounted) {
-      setState(() => _comments[index] = c);
+      setState(() => _replaceComment(c, c));
       _showInteractionMessage('点赞失败，已恢复原状态，请重试');
     }
+  }
+
+  void _replaceComment(CommunityComment old, CommunityComment replacement) {
+    final index = _comments.indexWhere((comment) => comment.id == old.id);
+    if (index < 0) return;
+    _comments[index] = replacement;
+  }
+
+  /// 当前排序下的顶层评论视图：最热 = 点赞数降序（同数按 id 数值新在前），
+  /// 最新 = 按服务端时间序倒转。原 _comments 保持时间正序不变。
+  List<CommunityComment> get _sortedComments {
+    if (!_isSortByHot) {
+      return _comments.reversed.toList(growable: false);
+    }
+    final sorted = _comments.toList()
+      ..sort((a, b) {
+        final byLikes = b.likeCount.compareTo(a.likeCount);
+        if (byLikes != 0) return byLikes;
+        // 同点赞数：id 是服务端自增 long，按数值比较避免字符串位数错序。
+        return (int.tryParse(b.id) ?? 0).compareTo(int.tryParse(a.id) ?? 0);
+      });
+    return sorted;
   }
 
   void _toggleReplyLike(CommunityComment reply) async {
@@ -455,10 +478,12 @@ class _PostDetailPageState extends State<PostDetailPage> {
   }
 
   void _submitComment() async {
+    if (_sendingComment) return;
     final text = _commentInputController.text.trim();
     if (text.isEmpty) return;
 
     final replyParent = _replyTo;
+    setState(() => _sendingComment = true);
     final comment = await CommunityApi.createComment(
       postId: _post.id,
       content: text,
@@ -466,6 +491,13 @@ class _PostDetailPageState extends State<PostDetailPage> {
     );
 
     if (!mounted) return;
+    setState(() => _sendingComment = false);
+
+    // 接口失败：不插入评论、不增加计数、保留输入内容，仅提示。
+    if (comment == null) {
+      _showInteractionMessage('发送失败，请重试');
+      return;
+    }
 
     setState(() {
       if (replyParent != null) {
@@ -1039,7 +1071,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                         separatorBuilder: (_, _) =>
                             const Divider(height: 16, color: Color(0xFFF1F5F9)),
                         itemBuilder: (context, index) {
-                          final c = _comments[index];
+                          final c = _sortedComments[index];
                           return GestureDetector(
                             onTap: () => _startReply(c),
                             behavior: HitTestBehavior.opaque,
@@ -1477,7 +1509,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                 ),
                 if (_isComposing)
                   GestureDetector(
-                    onTap: _submitComment,
+                    onTap: _sendingComment ? null : _submitComment,
                     child: Container(
                       constraints: const BoxConstraints(
                         minWidth: 48,
@@ -1489,12 +1521,15 @@ class _PostDetailPageState extends State<PostDetailPage> {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF2563EB),
+                        // 发送中降为浅色且不可点，防止连点重复提交
+                        color: _sendingComment
+                            ? const Color(0xFF93B4F5)
+                            : const Color(0xFF2563EB),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Text(
-                        '发送',
-                        style: TextStyle(
+                      child: Text(
+                        _sendingComment ? '发送中' : '发送',
+                        style: const TextStyle(
                           fontFamily: 'Noto Sans SC',
                           color: Colors.white,
                           fontSize: 12,
