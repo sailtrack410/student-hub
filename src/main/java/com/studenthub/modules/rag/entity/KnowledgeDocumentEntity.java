@@ -23,4 +23,10 @@ public class KnowledgeDocumentEntity extends BaseEntity {
     private Integer chunkCount;
     private String errorMessage;
     private LocalDateTime indexedAt;
+    private String indexToken;
+    private Integer indexAttempts;
+    private Integer processedChunks;
+    private Integer totalChunks;
+    private LocalDateTime indexLeaseUntil;
+    private LocalDateTime nextAttemptAt;
 }

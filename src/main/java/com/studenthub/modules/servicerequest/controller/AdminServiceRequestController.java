@@ -4,6 +4,7 @@ import com.studenthub.common.PageResult;
 import com.studenthub.common.Result;
 import com.studenthub.modules.identity.security.CurrentUserProvider;
 import com.studenthub.modules.servicerequest.controller.dto.AdminReviewRequest;
+import com.studenthub.modules.servicerequest.controller.dto.AdminServiceRequestDetailResponse;
 import com.studenthub.modules.servicerequest.controller.dto.AdminServiceRequestPageQuery;
 import com.studenthub.modules.servicerequest.controller.dto.AdminServiceRequestSummaryResponse;
 import com.studenthub.modules.servicerequest.service.AdminServiceRequestService;
@@ -33,6 +34,14 @@ public class AdminServiceRequestController {
     @Operation(summary = "分页查询服务申请", description = "全平台数据范围，可按状态过滤。", operationId = "pageAdminServiceRequests")
     public Result<PageResult<AdminServiceRequestSummaryResponse>> page(AdminServiceRequestPageQuery query) {
         return Result.success(adminServiceRequestService.page(query));
+    }
+
+    @GetMapping("/{requestId}")
+    @Operation(summary = "查询审批详情",
+            description = "返回申请人（脱敏手机号）、申请表单与图片材料、工单 SLA/照片、评价和状态时间线。",
+            operationId = "getAdminServiceRequestDetail")
+    public Result<AdminServiceRequestDetailResponse> detail(@PathVariable Long requestId) {
+        return Result.success(adminServiceRequestService.detail(requestId));
     }
 
     @PostMapping("/{requestId}/review")

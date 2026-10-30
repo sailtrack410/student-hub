@@ -21,6 +21,7 @@ public class AchievementBadgeEntity extends BaseEntity {
     private String category;
     private String rarity;
     private String description;
+    private String iconUrl;
     private String metricCode;
     private Integer metricThreshold;
     private Integer rewardExp;

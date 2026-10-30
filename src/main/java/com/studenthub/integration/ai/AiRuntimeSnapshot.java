@@ -27,5 +27,15 @@ public record AiRuntimeSnapshot(
         int hourlyMessageLimit,
         int historyWindow,
         int maxMessageCharacters,
+        int maxContextTokens,
+        int contextSafetyMarginTokens,
+        int maxOutputTokens,
+        double historyTokenRatio,
+        double ragTokenRatio,
+        double attachmentTokenRatio,
+        boolean summaryEnabled,
+        double summaryTriggerRatio,
+        int summaryKeepRecentTurns,
+        double tokenEstimateCharsPerToken,
         int version) {
 }

@@ -66,7 +66,7 @@ public class OpenAiCompatibleProvider implements AiProvider {
                     .headers(ctx.headers())
                     .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)))
                     .build();
-            HttpResponse<String> response = ctx.httpClient().send(httpRequest, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = sendCancellable(ctx.httpClient(), httpRequest, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() / 100 != 2) {
                 log.error("AI provider HTTP {}, body={}", response.statusCode(), abbreviate(response.body()));
                 throw new BusinessException(ErrorCode.AI_PROVIDER_ERROR, "供应商返回 HTTP " + response.statusCode());
@@ -103,9 +103,14 @@ public class OpenAiCompatibleProvider implements AiProvider {
                     .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)))
                     .build();
             HttpResponse<java.io.InputStream> response =
-                    ctx.httpClient().send(httpRequest, HttpResponse.BodyHandlers.ofInputStream());
+                    sendCancellable(ctx.httpClient(), httpRequest, HttpResponse.BodyHandlers.ofInputStream());
+            try (java.io.InputStream bodyStream = response.body();
+                 AutoCloseable cancellation = AiCallCancellation.onCancel(() -> {
+                     try { bodyStream.close(); } catch (java.io.IOException ignored) { }
+                 })) {
+            AiCallCancellation.checkCurrent();
             if (response.statusCode() / 100 != 2) {
-                String body = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
+                String body = new String(bodyStream.readAllBytes(), StandardCharsets.UTF_8);
                 log.error("AI provider stream HTTP {}, body={}", response.statusCode(), abbreviate(body));
                 throw new BusinessException(ErrorCode.AI_PROVIDER_ERROR, "供应商返回 HTTP " + response.statusCode());
             }
@@ -113,9 +118,10 @@ public class OpenAiCompatibleProvider implements AiProvider {
             Integer promptTokens = null;
             Integer completionTokens = null;
             try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
+                    new InputStreamReader(bodyStream, StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
+                    AiCallCancellation.checkCurrent();
                     if (!line.startsWith("data:")) continue;
                     String data = line.substring(5).trim();
                     if (data.isEmpty()) continue;
@@ -133,12 +139,31 @@ public class OpenAiCompatibleProvider implements AiProvider {
                     }
                 }
             }
+            AiCallCancellation.checkCurrent();
             onDone.accept(model, promptTokens, completionTokens);
+            }
+        } catch (java.util.concurrent.CancellationException exception) {
+            throw exception;
         } catch (BusinessException exception) {
             throw exception;
         } catch (Exception exception) {
+            AiCallCancellation.checkCurrent();
             log.error("AI provider 流式调用失败, model={}, protocol={}", request.model(), ctx.protocol(), exception);
             throw new BusinessException(ErrorCode.AI_PROVIDER_ERROR);
+        }
+    }
+
+    private static <T> HttpResponse<T> sendCancellable(HttpClient client, HttpRequest request,
+                                                       HttpResponse.BodyHandler<T> handler) throws Exception {
+        AiCallCancellation.checkCurrent();
+        var future = client.sendAsync(request, handler);
+        try (AutoCloseable cancellation = AiCallCancellation.onCancel(() -> future.cancel(true))) {
+            try { return future.get(); }
+            catch (InterruptedException exception) {
+                future.cancel(true);
+                Thread.currentThread().interrupt();
+                throw new java.util.concurrent.CancellationException("AI 请求已取消");
+            }
         }
     }
 

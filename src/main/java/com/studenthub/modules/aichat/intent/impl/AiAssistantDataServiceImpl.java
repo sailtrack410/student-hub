@@ -1,21 +1,14 @@
 package com.studenthub.modules.aichat.intent.impl;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studenthub.modules.aichat.controller.dto.AiActionResponse;
 import com.studenthub.modules.aichat.intent.AiAssistantDataService;
 import com.studenthub.modules.aichat.intent.AiAssistantResolved;
-import com.studenthub.modules.jwauth.entity.JwBindingEntity;
-import com.studenthub.modules.jwauth.mapper.JwBindingMapper;
 import com.studenthub.modules.schedule.calendar.SemesterCalendar;
-import com.studenthub.modules.schedule.entity.ScheduleCourseEntity;
-import com.studenthub.modules.schedule.entity.ScheduleSemesterEntity;
-import com.studenthub.modules.schedule.mapper.ScheduleCourseMapper;
-import com.studenthub.modules.schedule.mapper.ScheduleSemesterMapper;
-import com.studenthub.modules.servicecatalog.entity.ServiceItemEntity;
-import com.studenthub.modules.servicecatalog.mapper.ServiceItemMapper;
-import com.studenthub.modules.servicerequest.entity.ServiceRequestEntity;
-import com.studenthub.modules.servicerequest.mapper.ServiceRequestMapper;
+import com.studenthub.modules.jwauth.query.JwBindingQuery;
+import com.studenthub.modules.schedule.query.ScheduleQuery;
+import com.studenthub.modules.servicecatalog.query.ServiceCatalogQuery;
+import com.studenthub.modules.servicerequest.query.ServiceRequestQuery;
 import com.studenthub.modules.workorder.statemachine.WorkOrderTransitions;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -50,41 +43,41 @@ public class AiAssistantDataServiceImpl implements AiAssistantDataService {
         REQUEST_STATUS_TEXT = Map.copyOf(texts);
     }
 
-    private final JwBindingMapper jwBindingMapper;
-    private final ScheduleCourseMapper courseMapper;
-    private final ScheduleSemesterMapper semesterMapper;
-    private final ServiceRequestMapper requestMapper;
-    private final ServiceItemMapper itemMapper;
+    private final JwBindingQuery jwBindingQuery;
+    private final ScheduleQuery scheduleQuery;
+    private final ServiceRequestQuery requestQuery;
+    private final ServiceCatalogQuery catalogQuery;
     private final ObjectMapper objectMapper;
 
     @Override
     public AiAssistantResolved resolveSchedule(Long userId, LocalDate date, Integer dayOfWeek) {
-        JwBindingEntity binding = jwBindingMapper.findByUserId(userId);
-        List<ScheduleCourseEntity> courses = courseMapper.selectByUserId(userId);
-        List<ScheduleSemesterEntity> semesters = semesterMapper.selectByUserId(userId);
+        String lastSemesterCode = jwBindingQuery.lastSemesterCode(userId);
+        ScheduleQuery.Snapshot snapshot = scheduleQuery.forUser(userId);
+        List<ScheduleQuery.Course> courses = snapshot.courses();
+        List<ScheduleQuery.Semester> semesters = snapshot.semesters();
         LocalDate today = LocalDate.now();
 
         // 确定要查的学期。有具体日期时按“学期锚点覆盖范围”精确匹配（绕开教务 code 学期位歧义）；
         // 无具体日期时用最后一次同步学期，其次取登记表里最新的学期。
-        ScheduleSemesterEntity chosen = null;
+        ScheduleQuery.Semester chosen = null;
         if (date != null) {
             chosen = pickSemesterForDate(semesters, date);
         } else {
             // 无具体日期（“本周/周X”）：按今天落点选学期，其次最后一次同步，再次取编码最新
             chosen = pickSemesterForDate(semesters, today);
             if (chosen == null) {
-                String preferred = binding != null ? binding.getLastSemesterCode() : null;
+                String preferred = lastSemesterCode;
                 if (preferred != null) {
                     chosen = semesters.stream()
-                            .filter(s -> preferred.equals(s.getSemesterCode()))
+                            .filter(s -> preferred.equals(s.semesterCode()))
                             .findFirst()
                             .orElse(null);
                 }
             }
             if (chosen == null) {
                 chosen = semesters.stream()
-                        .filter(s -> s.getSemesterCode() != null)
-                        .max(java.util.Comparator.comparing(ScheduleSemesterEntity::getSemesterCode))
+                        .filter(s -> s.semesterCode() != null)
+                        .max(java.util.Comparator.comparing(ScheduleQuery.Semester::semesterCode))
                         .orElse(null);
             }
         }
@@ -104,21 +97,22 @@ public class AiAssistantDataServiceImpl implements AiAssistantDataService {
         }
 
         // 已登记学期为空、但库里有课程（极端旧数据）：退回最后一次同步学期并按课程反查
-        if (chosen == null && binding != null && binding.getLastSemesterCode() != null) {
-            final String fallbackCode = binding.getLastSemesterCode();
-            List<ScheduleCourseEntity> fallbackCourses = courses.stream()
-                    .filter(c -> fallbackCode.equals(c.getSemesterCode()))
+        if (chosen == null && lastSemesterCode != null) {
+            final String fallbackCode = lastSemesterCode;
+            List<ScheduleQuery.Course> fallbackCourses = courses.stream()
+                    .filter(c -> fallbackCode.equals(c.semesterCode()))
                     .toList();
             if (fallbackCourses.isEmpty()) {
                 return AiAssistantResolved.of("该用户尚未同步过课表，无法提供课表信息。",
                         List.of(new AiActionResponse("SCHEDULE", "去查看/同步课表", "SCHEDULE-VIEW", null,
                                 "/pages/schedule/index")));
             }
-            chosen = new ScheduleSemesterEntity();
-            chosen.setSemesterCode(fallbackCode);
-            chosen.setSemesterName(fallbackCourses.get(0).getSemesterName());
-            chosen.setFirstMonday(SemesterCalendar.firstMonday(fallbackCode, fallbackCourses.get(0).getSemesterName()));
-            chosen.setTotalWeeks(Math.min(Math.max(SemesterCalendar.maxWeekOf(fallbackCourses), 1), 30));
+            String semesterName = fallbackCourses.get(0).semesterName();
+            int totalWeeks = fallbackCourses.stream()
+                    .mapToInt(c -> SemesterCalendar.maxWeekIn(c.weeks())).max().orElse(1);
+            chosen = new ScheduleQuery.Semester(fallbackCode, semesterName,
+                    SemesterCalendar.firstMonday(fallbackCode, semesterName),
+                    Math.min(Math.max(totalWeeks, 1), 30));
         }
         if (chosen == null) {
             return AiAssistantResolved.of("该用户尚未同步过课表，无法提供课表信息。",
@@ -126,15 +120,15 @@ public class AiAssistantDataServiceImpl implements AiAssistantDataService {
                             "/pages/schedule/index")));
         }
 
-        final String code = chosen.getSemesterCode();
-        LocalDate firstMonday = chosen.getFirstMonday() != null
-                ? chosen.getFirstMonday()
-                : SemesterCalendar.firstMonday(code, chosen.getSemesterName());
+        final String code = chosen.semesterCode();
+        LocalDate firstMonday = chosen.firstMonday() != null
+                ? chosen.firstMonday()
+                : SemesterCalendar.firstMonday(code, chosen.semesterName());
 
-        List<ScheduleCourseEntity> current = courses.stream()
-                .filter(course -> code != null && code.equals(course.getSemesterCode()))
-                .sorted(Comparator.comparing(ScheduleCourseEntity::getDayOfWeek)
-                        .thenComparing(ScheduleCourseEntity::getStartSection))
+        List<ScheduleQuery.Course> current = courses.stream()
+                .filter(course -> code != null && code.equals(course.semesterCode()))
+                .sorted(Comparator.comparing(ScheduleQuery.Course::dayOfWeek)
+                        .thenComparing(ScheduleQuery.Course::startSection))
                 .toList();
 
         // 把问法转换成“周次 + 各天的集合”
@@ -163,19 +157,19 @@ public class AiAssistantDataServiceImpl implements AiAssistantDataService {
             }
         }
 
-        List<ScheduleCourseEntity> matched = current.stream()
+        List<ScheduleQuery.Course> matched = current.stream()
                 .filter(course -> {
                     // 周次未定位（学期锚点缺失且日期无法换算）时退回只看周几
                     if (!weekScoped) {
-                        return course.getDayOfWeek() != null && targetDays.contains(course.getDayOfWeek());
+                        return course.dayOfWeek() != null && targetDays.contains(course.dayOfWeek());
                     }
-                    return course.getDayOfWeek() != null
-                            && targetDays.contains(course.getDayOfWeek())
-                            && SemesterCalendar.activeAtWeek(course.getWeeks(), course.getWeekParity(), week);
+                    return course.dayOfWeek() != null
+                            && targetDays.contains(course.dayOfWeek())
+                            && SemesterCalendar.activeAtWeek(course.weeks(), course.weekParity(), week);
                 })
                 .toList();
 
-        int totalWeeks = chosen.getTotalWeeks() == null ? 30 : Math.max(chosen.getTotalWeeks(), 1);
+        int totalWeeks = chosen.totalWeeks() == null ? 30 : Math.max(chosen.totalWeeks(), 1);
         if (date != null && (week < 1 || week > totalWeeks)) {
             return AiAssistantResolved.of(scopeText + "：该日期不在「"
                             + semesterLabel(semesters, courses, code) + "」的教学周内。",
@@ -195,7 +189,7 @@ public class AiAssistantDataServiceImpl implements AiAssistantDataService {
         StringBuilder context = new StringBuilder();
         context.append("用户课表（").append(scopeText).append("）。\n");
         int shown = 0;
-        for (ScheduleCourseEntity course : matched) {
+        for (ScheduleQuery.Course course : matched) {
             if (shown >= SCHEDULE_CONTEXT_LIMIT) {
                 context.append("……（其余课程略，共 ").append(matched.size()).append(" 条）\n");
                 break;
@@ -208,28 +202,28 @@ public class AiAssistantDataServiceImpl implements AiAssistantDataService {
                         "/pages/schedule/index")));
     }
 
-    private static ScheduleSemesterEntity pickSemesterForDate(List<ScheduleSemesterEntity> semesters, LocalDate date) {
+    private static ScheduleQuery.Semester pickSemesterForDate(List<ScheduleQuery.Semester> semesters, LocalDate date) {
         return semesters.stream()
-                .filter(s -> s.getFirstMonday() != null)
+                .filter(s -> s.firstMonday() != null)
                 .filter(s -> {
-                    int total = s.getTotalWeeks() == null ? 16 : Math.max(s.getTotalWeeks(), 1);
-                    return !date.isBefore(s.getFirstMonday())
-                            && date.isBefore(s.getFirstMonday().plusDays(total * 7L));
+                    int total = s.totalWeeks() == null ? 16 : Math.max(s.totalWeeks(), 1);
+                    return !date.isBefore(s.firstMonday())
+                            && date.isBefore(s.firstMonday().plusDays(total * 7L));
                 })
-                .max(java.util.Comparator.comparing(ScheduleSemesterEntity::getFirstMonday))
+                .max(java.util.Comparator.comparing(ScheduleQuery.Semester::firstMonday))
                 .orElse(null);
     }
 
-    private static String semesterLabel(List<ScheduleSemesterEntity> semesters,
-                                        List<ScheduleCourseEntity> courses, String code) {
+    private static String semesterLabel(List<ScheduleQuery.Semester> semesters,
+                                        List<ScheduleQuery.Course> courses, String code) {
         return semesters.stream()
-                .filter(s -> code.equals(s.getSemesterCode()))
-                .map(ScheduleSemesterEntity::getSemesterName)
+                .filter(s -> code.equals(s.semesterCode()))
+                .map(ScheduleQuery.Semester::semesterName)
                 .filter(java.util.Objects::nonNull)
                 .findFirst()
                 .orElseGet(() -> courses.stream()
-                        .filter(c -> code.equals(c.getSemesterCode()))
-                        .map(ScheduleCourseEntity::getSemesterName)
+                        .filter(c -> code.equals(c.semesterCode()))
+                        .map(ScheduleQuery.Course::semesterName)
                         .filter(java.util.Objects::nonNull)
                         .findFirst()
                         .orElse(code));
@@ -237,17 +231,11 @@ public class AiAssistantDataServiceImpl implements AiAssistantDataService {
 
     @Override
     public AiAssistantResolved resolveMyRequests(Long userId, String statusFilter) {
-        LambdaQueryWrapper<ServiceRequestEntity> query = new LambdaQueryWrapper<ServiceRequestEntity>()
-                .eq(ServiceRequestEntity::getRequesterId, userId)
-                .orderByDesc(ServiceRequestEntity::getSubmittedAt)
-                .last("LIMIT " + REQUEST_LIMIT);
-        if ("IN_PROGRESS".equals(statusFilter)) {
-            query.in(ServiceRequestEntity::getStatus, List.of("SUBMITTED", "PROCESSING"));
-        } else if ("COMPLETED".equals(statusFilter)) {
-            query.eq(ServiceRequestEntity::getStatus, "COMPLETED");
-        }
-
-        List<ServiceRequestEntity> requests = requestMapper.selectList(query);
+        ServiceRequestQuery.StatusFilter filter = "IN_PROGRESS".equals(statusFilter)
+                ? ServiceRequestQuery.StatusFilter.IN_PROGRESS
+                : "COMPLETED".equals(statusFilter) ? ServiceRequestQuery.StatusFilter.COMPLETED
+                : ServiceRequestQuery.StatusFilter.ALL;
+        List<ServiceRequestQuery.Request> requests = requestQuery.recentForUser(userId, filter, REQUEST_LIMIT);
         if (requests.isEmpty()) {
             String hint = statusFilter == null ? "你目前还没有提交过申请。"
                     : statusFilter.equals("COMPLETED") ? "没有已完成的申请。" : "没有进行中的申请。";
@@ -260,20 +248,20 @@ public class AiAssistantDataServiceImpl implements AiAssistantDataService {
         context.append("用户最近的服务申请（").append(requests.size()).append("条）：\n");
         List<AiActionResponse> actions = new ArrayList<>();
         int index = 0;
-        for (ServiceRequestEntity request : requests) {
+        for (ServiceRequestQuery.Request request : requests) {
             context.append("- ").append(index + 1).append(". ")
-                    .append(nullTo(request.getItemName()))
-                    .append("｜").append(nullTo(request.getTitle()))
-                    .append("｜状态:").append(statusText(request.getStatus()))
-                    .append("｜编号:").append(nullTo(request.getRequestNo()));
-            if (request.getSubmittedAt() != null) {
-                context.append("｜提交于").append(DT.format(request.getSubmittedAt()));
+                    .append(nullTo(request.itemName()))
+                    .append("｜").append(nullTo(request.title()))
+                    .append("｜状态:").append(statusText(request.status()))
+                    .append("｜编号:").append(nullTo(request.requestNo()));
+            if (request.submittedAt() != null) {
+                context.append("｜提交于").append(DT.format(request.submittedAt()));
             }
             context.append("\n");
             if (index < 3) {
                 actions.add(new AiActionResponse("REQUEST_DETAIL",
-                        "查看「" + nullTo(request.getItemName()) + "」详情", null, request.getId(),
-                        "/pages/request/detail?id=" + request.getId()));
+                        "查看「" + nullTo(request.itemName()) + "」详情", null, request.id(),
+                        "/pages/request/detail?id=" + request.id()));
             }
             index++;
         }
@@ -287,18 +275,14 @@ public class AiAssistantDataServiceImpl implements AiAssistantDataService {
             return AiAssistantResolved.of("用户想查看课表。",
                     List.of(new AiActionResponse("SCHEDULE", "去查看课表", itemCode, null, "/pages/schedule/index")));
         }
-        ServiceItemEntity item = itemMapper.selectOne(new LambdaQueryWrapper<ServiceItemEntity>()
-                .eq(ServiceItemEntity::getItemCode, itemCode)
-                .eq(ServiceItemEntity::getCampusId, campusId)
-                .eq(ServiceItemEntity::getStatus, "ENABLED")
-                .last("LIMIT 1"));
+        ServiceCatalogQuery.Item item = catalogQuery.enabledItem(itemCode, campusId);
         if (item == null) {
             return AiAssistantResolved.of("该服务暂不可用。", List.of());
         }
-        return AiAssistantResolved.of("用户想办理的服务：" + nullTo(item.getItemName())
-                        + "（服务项编码 " + itemCode + "，id=" + item.getId() + "）。",
-                List.of(new AiActionResponse("SERVICE_APPLY", "去" + nullTo(item.getItemName()),
-                        itemCode, item.getId(), "/pages/service/apply?itemId=" + item.getId())));
+        return AiAssistantResolved.of("用户想办理的服务：" + nullTo(item.itemName())
+                        + "（服务项编码 " + itemCode + "，id=" + item.id() + "）。",
+                List.of(new AiActionResponse("SERVICE_APPLY", "去" + nullTo(item.itemName()),
+                        itemCode, item.id(), "/pages/service/apply?itemId=" + item.id())));
     }
 
     @Override
@@ -318,13 +302,13 @@ public class AiAssistantDataServiceImpl implements AiAssistantDataService {
         return REQUEST_STATUS_TEXT.getOrDefault(status, status == null ? "-" : status);
     }
 
-    private static String describeCourse(ScheduleCourseEntity course) {
-        return "- " + course.getCourseName()
-                + "｜老师:" + nullTo(course.getTeacher())
-                + "｜地点:" + nullTo(course.getLocation())
-                + "｜第" + course.getStartSection() + "-" + course.getEndSection() + "节"
-                + "｜周次:" + nullTo(course.getWeeks())
-                + parityText(course.getWeekParity())
+    private static String describeCourse(ScheduleQuery.Course course) {
+        return "- " + course.courseName()
+                + "｜老师:" + nullTo(course.teacher())
+                + "｜地点:" + nullTo(course.location())
+                + "｜第" + course.startSection() + "-" + course.endSection() + "节"
+                + "｜周次:" + nullTo(course.weeks())
+                + parityText(course.weekParity())
                 + "\n";
     }
 

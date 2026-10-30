@@ -5,6 +5,7 @@ import com.studenthub.common.Result;
 import com.studenthub.exception.BusinessException;
 import com.studenthub.modules.servicecatalog.controller.dto.CatalogCategoryResponse;
 import com.studenthub.modules.servicecatalog.controller.dto.ServiceCategoryCreateRequest;
+import com.studenthub.modules.servicecatalog.controller.dto.ServiceHandlerOrganizationResponse;
 import com.studenthub.modules.servicecatalog.controller.dto.ServiceItemAdminResponse;
 import com.studenthub.modules.servicecatalog.controller.dto.ServiceItemStatusUpdateRequest;
 import com.studenthub.modules.servicecatalog.controller.dto.ServiceItemUpsertRequest;
@@ -57,6 +58,13 @@ public class AdminServiceCatalogController {
         return Result.success(serviceCatalogService.createCategory(request));
     }
 
+    @GetMapping("/organizations")
+    @Operation(summary = "受理组织选项", description = "服务项编辑页选择处理组织，返回启用状态的组织。",
+            operationId = "listServiceHandlerOrganizations")
+    public Result<List<ServiceHandlerOrganizationResponse>> handlerOrganizations() {
+        return Result.success(serviceCatalogService.handlerOrganizations(DEFAULT_CAMPUS_ID));
+    }
+
     @PostMapping("/items")
     @Operation(summary = "创建服务项", description = "按表单字段定义创建一个启用状态的服务项。", operationId = "createServiceItem")
     public Result<Long> createItem(@RequestBody @Valid ServiceItemUpsertRequest request) {
@@ -70,6 +78,13 @@ public class AdminServiceCatalogController {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER, "更新服务项必须提供 itemId");
         }
         return Result.success(serviceCatalogService.upsertItem(request));
+    }
+
+    @PostMapping("/items/{itemId}/copy")
+    @Operation(summary = "复制服务项", description = "以现有服务项为模板创建停用状态的副本（编码自动追加 -COPY）。",
+            operationId = "copyServiceItem")
+    public Result<Long> copyItem(@PathVariable Long itemId) {
+        return Result.success(serviceCatalogService.copyItem(itemId));
     }
 
     @PostMapping("/items/{itemId}/status")

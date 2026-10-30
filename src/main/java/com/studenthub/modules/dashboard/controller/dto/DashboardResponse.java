@@ -4,7 +4,7 @@ import java.util.List;
 
 /**
  * 管理端工作台聚合数据。
- * KPI 四项 + 近 7 天工单趋势 + 分类占比 + 最新工单。
+ * KPI + 今日待办 + 快捷入口 + 日期范围内的工单趋势/分类占比/最新工单。
  */
 public record DashboardResponse(
         long pendingWorkOrders,
@@ -19,12 +19,25 @@ public record DashboardResponse(
         long weekResolvedWorkOrders,
         double resolveRatePercent,
         long dailyAvgNew,
+        String rangeStart,
+        String rangeEnd,
+        long todoTotal,
+        List<TodoItem> todos,
+        List<QuickEntry> quickEntries,
         List<TrendPoint> trend,
         List<CategorySlice> categories,
         List<LatestOrder> latestOrders
 ) {
 
-    /** 近 7 天单日双柱：新增 / 已解决 */
+    /** 今日待办队列：count 为 0 时前端可弱化展示。 */
+    public record TodoItem(String key, String label, long count, String route, String permission, String tone) {
+    }
+
+    /** 快捷入口元数据，前端按当前账号权限过滤。 */
+    public record QuickEntry(String key, String label, String route, String permission) {
+    }
+
+    /** 日期范围内单日双柱：新增 / 已解决 */
     public record TrendPoint(String day, long created, long resolved) {
     }
 

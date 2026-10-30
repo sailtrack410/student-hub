@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import com.studenthub.modules.systemconfig.service.ScheduledTaskStateService;
 import java.util.stream.Collectors;
 
 /** 课表定时同步入口：先采集调课通知（全校一条请求），再按班级分组逐班异步调度采样任务 */
@@ -20,12 +21,16 @@ import java.util.stream.Collectors;
 public class ScheduleSyncTimer {
 
     private final JwBindingMapper jwBindingMapper;
+    private final ScheduledTaskStateService scheduledTaskStateService;
     private final ScheduleSyncWorker worker;
     private final ScheduleSyncProperties properties;
     private final ScheduleAdjustmentSyncService adjustmentSyncService;
 
     @Scheduled(cron = "${studenthub.schedule-sync.cron:0 0 7-21/2 * * *}")
     public void run() {
+        if (!scheduledTaskStateService.isEnabled(ScheduleSyncTimer.class, "run")) {
+            return;
+        }
         if (!properties.isEnabled()) {
             return;
         }

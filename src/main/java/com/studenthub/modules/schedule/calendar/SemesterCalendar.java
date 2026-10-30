@@ -34,8 +34,10 @@ public final class SemesterCalendar {
         }
         int year = parts[0];
         int term = parts[1];
-        // 与课表页一致：第一学期≈8月1日所在周，第二学期≈次年2月1日所在周（周末顺延到周一）
-        int month = term == 1 ? 8 : 2;
+        // 与教务周次口径一致：第一学期≈9月1日、第二学期≈次年3月1日；
+        // with(MONDAY) 取锚点日期所在自然周的周一（教务周次按该周记为第1周）。
+        // 锚点定在 8 月/2 月会把“本周”前移约 4 周落到空周上，课程看起来全部消失。
+        int month = term == 1 ? 9 : 3;
         int anchorYear = term == 1 ? year : year + 1;
         LocalDate anchor = LocalDate.of(anchorYear, month, 1);
         DayOfWeek dow = anchor.getDayOfWeek();

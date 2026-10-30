@@ -1,7 +1,9 @@
 package com.studenthub.modules.workorder.controller.dto;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.studenthub.modules.servicerequest.controller.dto.RequestLogResponse;
 import com.studenthub.modules.workorder.entity.WorkOrderEntity;
+import com.studenthub.modules.workorder.service.WorkOrderSla;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
@@ -34,7 +36,14 @@ public record WorkOrderDetailResponse(
         @Schema(description = "派单时间", nullable = true) LocalDateTime assignedAt,
         @Schema(description = "开始时间", nullable = true) LocalDateTime startedAt,
         @Schema(description = "完成时间", nullable = true) LocalDateTime completedAt,
-        @Schema(description = "完成说明", nullable = true) String completeRemark) {
+        @Schema(description = "完成说明", nullable = true) String completeRemark,
+        @Schema(description = "SLA 承诺时限（小时）") Integer slaHours,
+        @Schema(description = "SLA 截止时间", nullable = true) LocalDateTime dueAt,
+        @Schema(description = "SLA 剩余小时数（负数表示已超时；终态为空）", nullable = true) Double remainingHours,
+        @Schema(description = "是否已超时") boolean overdue,
+        @Schema(description = "是否即将超时（4 小时内）") boolean dueSoon,
+        @Schema(description = "已超时小时数", nullable = true) Double overdueHours,
+        @Schema(description = "处理时间线（申请全生命周期日志）", nullable = true) List<RequestLogResponse> timeline) {
 
     /**
      * 静态工厂：附属查询结果（requesterName/requesterPhone/formData/repairAddress/照片签名地址等）
@@ -46,7 +55,10 @@ public record WorkOrderDetailResponse(
                                                JsonNode formData, JsonNode formSchema,
                                                String repairAddress,
                                                String arrivalPhotoUrl, String completionPhotoUrl,
-                                               List<String> completionPhotoUrls) {
+                                               List<String> completionPhotoUrls,
+                                               List<RequestLogResponse> timeline) {
+        LocalDateTime now = LocalDateTime.now();
+        Double remaining = WorkOrderSla.remainingHours(order, now);
         return new WorkOrderDetailResponse(order.getId(), order.getOrderNo(), order.getRequestId(), requestNo,
                 order.getTitle(), order.getStatus(), order.getPriority(), order.getAssigneeName(), assigneePhone,
                 requesterName, requesterPhone, repairAddress, formData, formSchema,
@@ -54,6 +66,11 @@ public record WorkOrderDetailResponse(
                 completionPhotoUrls == null ? List.of() : completionPhotoUrls,
                 order.getCompletionSubmittedAt(), order.getConfirmedAt(), order.getConfirmationRejectReason(),
                 order.getCreatedAt(), order.getAssignedAt(), order.getStartedAt(), order.getCompletedAt(),
-                order.getCompleteRemark());
+                order.getCompleteRemark(),
+                WorkOrderSla.effectiveSlaHours(order), WorkOrderSla.effectiveDueAt(order),
+                remaining == null ? null : WorkOrderSla.round1(remaining),
+                WorkOrderSla.overdue(order, now), WorkOrderSla.dueSoon(order, now),
+                WorkOrderSla.overdueHours(order, now),
+                timeline == null ? List.of() : timeline);
     }
 }

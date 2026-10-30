@@ -32,5 +32,6 @@ public class ScheduleCourseEntity extends BaseEntity {
     private String weeks;
     /** 0=每周, 1=单周, 2=双周 */
     private Integer weekParity;
+    private String timeRange;
     private String rawText;
 }

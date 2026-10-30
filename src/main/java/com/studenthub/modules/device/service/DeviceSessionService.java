@@ -20,4 +20,12 @@ public interface DeviceSessionService {
 
     /** 一键退出其他设备；返回踢掉的会话数 */
     int logoutOthers(AuthenticatedUser user, String currentRawToken);
+
+    /**
+     * 执行单用户同时在线设备上限：保留最新设备，踢除最旧会话与登记行。
+     *
+     * @param maxDevices 上限，&lt;=0 表示不限制
+     * @return 被踢除的设备数
+     */
+    int enforceDeviceLimit(Long userId, int maxDevices);
 }

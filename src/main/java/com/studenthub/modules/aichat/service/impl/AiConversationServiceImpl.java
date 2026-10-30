@@ -1,6 +1,8 @@
 package com.studenthub.modules.aichat.service.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studenthub.modules.aichat.controller.dto.AiActionResponse;
+import com.studenthub.modules.aichat.controller.dto.AiSourceResponse;
 import com.studenthub.modules.aichat.intent.AiAssistantDataService;
 import com.studenthub.modules.aichat.intent.AiAssistantResolved;
 import com.studenthub.modules.aichat.intent.AiIntent;
@@ -26,6 +28,9 @@ import com.studenthub.modules.aichat.mapper.AiMessageMapper;
 import com.studenthub.modules.aichat.service.AiConversationService;
 import com.studenthub.modules.aichat.service.AiSpeechService;
 import com.studenthub.modules.aichat.service.CampusAssistantPrompts;
+import com.studenthub.modules.aichat.service.context.AiContextAssembler;
+import com.studenthub.modules.aichat.service.context.ConversationSummaryService;
+import com.studenthub.modules.rag.controller.dto.RagTestResponse;
 import com.studenthub.modules.file.service.FileStorageService;
 import com.studenthub.service.AiChatService;
 import lombok.RequiredArgsConstructor;
@@ -55,6 +60,7 @@ public class AiConversationServiceImpl implements AiConversationService {
     /** 单份文档注入提示词的字符上限，超出截断 */
     private static final int MAX_DOCUMENT_CHARACTERS = 8000;
 
+    private final com.studenthub.modules.aichat.service.execution.AiRequestExecutionService requestExecution;
     private final AiConversationMapper conversationMapper;
     private final AiMessageMapper messageMapper;
     private final com.studenthub.modules.rag.service.KnowledgeDocumentParser documentParser;
@@ -65,6 +71,10 @@ public class AiConversationServiceImpl implements AiConversationService {
     private final AiAssistantDataService assistantDataService;
     private final FileStorageService fileStorageService;
     private final ObjectProvider<com.studenthub.modules.rag.service.KnowledgeBaseService> knowledgeBaseService;
+    private final AiContextAssembler contextAssembler;
+    private final ConversationSummaryService conversationSummaryService;
+    private final ObjectMapper objectMapper;
+    private final com.studenthub.modules.aichat.security.AiSecurityGuard securityGuard;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -97,8 +107,13 @@ public class AiConversationServiceImpl implements AiConversationService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public AiMessageResponse sendMessage(AuthenticatedUser user, Long conversationId, SendMessageRequest request) {
+        requireOwnedConversation(user.userId(), conversationId);
+        return requestExecution.execute(user.userId(), conversationId, request,
+                () -> sendMessageOnce(user, conversationId, request));
+    }
+
+    private AiMessageResponse sendMessageOnce(AuthenticatedUser user, Long conversationId, SendMessageRequest request) {
         Long userId = user.userId();
         AiConversationEntity conversation = requireOwnedConversation(userId, conversationId);
         String content = request.content() == null ? "" : request.content().trim();
@@ -110,6 +125,8 @@ public class AiConversationServiceImpl implements AiConversationService {
         if (content.length() > currentMaxMessageCharacters()) {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER, "消息长度超过限制");
         }
+        // I04 安全策略：敏感词拦截 + 分钟级限流 + 单用户每日配额（策略关闭时全部放行）
+        securityGuard.checkUserMessage(userId, content);
         long sentLastHour = messageMapper.countUserMessagesSince(userId, LocalDateTime.now().minusHours(1));
         if (sentLastHour >= currentHourlyMessageLimit()) {
             log.info("AI 消息触发限流, userId={}", userId);
@@ -133,45 +150,70 @@ public class AiConversationServiceImpl implements AiConversationService {
                 : AiIntentMatch.fallback();        AiAssistantResolved resolved = resolveForIntent(intent, user);
 
         long start = System.currentTimeMillis();
-        String reply;
+        String reply = null;
         String model = null;
+        Integer promptTokens = null;
+        Integer completionTokens = null;
         Integer tokenUsage = null;
         String errorCode = null;
         String actionsJson = assistantDataService.serializeActions(resolved == null ? null : resolved.actions());
         String directTimeReply = currentTimeReply(content);
+        AiContextAssembler.Bundle bundle = null;
+        List<AiSourceResponse> sources = List.of();
         if (directTimeReply != null) {
             reply = directTimeReply;
             model = "system";
         } else {
+            bundle = contextAssembler.assemble(conversation, content,
+                    resolved == null ? null : resolved.contextText(), documentText, imageDataUrls,
+                    userMessage.getId(), false);
+            sources = toSources(bundle.sources());
+            BusinessException failure = null;
+            boolean success = false;
             try {
-                var ragService = imageIds.isEmpty() ? knowledgeBaseService.getIfAvailable() : null;
-                String ragContext = ragService == null ? null : ragService.assistantContext(content);
-                String mergedContext = resolved == null ? ragContext : resolved.contextText();
-                if (resolved != null && ragContext != null) mergedContext = resolved.contextText() + "\n\n【公共知识库资料】\n" + ragContext;
-                if (documentText != null) {
-                    mergedContext = mergedContext == null ? documentText : mergedContext + "\n\n" + documentText;
-                }
-                List<AiMessage> prompt = buildPrompt(content, conversation.getId(),
-                        mergedContext, imageDataUrls, userMessage.getId());
-                AiChatResponse response = imageIds.isEmpty()
-                        ? aiChatService.chat(prompt)
-                        : aiChatService.chatVision(prompt);
-                reply = response.content();
-                model = response.model();
-                Integer promptTokens = response.promptTokens();
-                Integer completionTokens = response.completionTokens();
-                tokenUsage = promptTokens == null && completionTokens == null
-                        ? null : (promptTokens == null ? 0 : promptTokens) + (completionTokens == null ? 0 : completionTokens);
+                ChatCall call = callChatOnce(bundle.messages(), !imageIds.isEmpty());
+                reply = call.reply();
+                model = call.model();
+                promptTokens = call.promptTokens();
+                completionTokens = call.completionTokens();
+                success = true;
             } catch (BusinessException exception) {
-                log.warn("AI 调用失败, conversationId={}, code={}", conversation.getId(), exception.getCode());
+                com.studenthub.integration.ai.AiCallCancellation.checkCurrent();
+                failure = exception;
+            }
+            // 供应商报上下文超限：压缩历史/知识库预算后重试一次
+            if (!success && imageIds.isEmpty() && isContextLength(failure)) {
+                log.warn("上下文超限，压缩后重试, conversationId={}, estimated={}",
+                        conversation.getId(), bundle.estimatedTokens());
+                bundle = contextAssembler.assemble(conversation, content,
+                        resolved == null ? null : resolved.contextText(), documentText, imageDataUrls,
+                        userMessage.getId(), true);
+                sources = toSources(bundle.sources());
+                try {
+                    ChatCall call = callChatOnce(bundle.messages(), false);
+                    reply = call.reply();
+                    model = call.model();
+                    promptTokens = call.promptTokens();
+                    completionTokens = call.completionTokens();
+                    success = true;
+                } catch (BusinessException retryException) {
+                    com.studenthub.integration.ai.AiCallCancellation.checkCurrent();
+                    failure = retryException;
+                }
+            }
+            if (!success) {
+                BusinessException exception = failure;
+                log.warn("AI 调用失败, conversationId={}, code={}",
+                        conversation.getId(), exception == null ? null : exception.getCode());
                 // 查到确定性数据/入口时优先给本地兜底回复；否则退回统一降级文案
                 if (resolved != null && resolved.actions() != null && !resolved.actions().isEmpty()) {
                     reply = localFallbackReply(intent, resolved);
                 } else {
                     reply = CampusAssistantPrompts.DEGRADED_REPLY;
-                    errorCode = exception.getCode();
+                    errorCode = exception == null ? ErrorCode.AI_PROVIDER_ERROR.getCode() : exception.getCode();
                 }
             }
+            tokenUsage = sumTokens(promptTokens, completionTokens);
         }
 
         AiMessageEntity assistantMessage = new AiMessageEntity();
@@ -180,14 +222,20 @@ public class AiConversationServiceImpl implements AiConversationService {
         assistantMessage.setContent(reply);
         assistantMessage.setActions(actionsJson);
         assistantMessage.setModel(model);
-        assistantMessage.setPromptVersion(CampusAssistantPrompts.PROMPT_VERSION);
+        assistantMessage.setPromptVersion(com.studenthub.modules.aichat.security.AiPromptRuntime.promptVersion());
         assistantMessage.setTokenUsage(tokenUsage);
+        assistantMessage.setPromptTokens(promptTokens);
+        assistantMessage.setCompletionTokens(completionTokens);
+        assistantMessage.setSources(serializeSources(sources));
         assistantMessage.setCostMs((int) Math.min(Integer.MAX_VALUE, System.currentTimeMillis() - start));
         assistantMessage.setErrorCode(errorCode);
         assistantMessage.setStatus(errorCode == null ? MESSAGE_STATUS_OK : MESSAGE_STATUS_FAILED);
         messageMapper.insert(assistantMessage);
 
-        touchConversation(conversation);
+        recordContextUsage(conversation, promptTokens, bundle == null ? null : bundle.estimatedTokens());
+        if (bundle != null && bundle.summaryUpToMessageId() != null) {
+            conversationSummaryService.summarizeAsync(conversation.getId(), bundle.summaryUpToMessageId());
+        }
         return AiMessageResponse.from(assistantMessage);
     }
 
@@ -195,9 +243,32 @@ public class AiConversationServiceImpl implements AiConversationService {
     public void sendMessageStream(AuthenticatedUser user, Long conversationId, SendMessageRequest request,
                                   java.util.function.Consumer<String> onDelta,
                                   java.util.function.Consumer<AiMessageResponse> onDone,
-                                  java.util.function.Consumer<String> onError) {
-        long start = System.currentTimeMillis();
+                                  java.util.function.Consumer<com.studenthub.modules.aichat.controller.dto.AiStreamError> onError) {
+        AiMessageResponse response;
         try {
+            requireOwnedConversation(user.userId(), conversationId);
+            response = requestExecution.execute(user.userId(), conversationId, request,
+                    () -> sendMessageStreamOnce(user, conversationId, request, onDelta));
+        } catch (java.util.concurrent.CancellationException exception) {
+            throw exception;
+        } catch (BusinessException exception) {
+            onError.accept(new com.studenthub.modules.aichat.controller.dto.AiStreamError(
+                    exception.getCode(), exception.getMessage()));
+            return;
+        } catch (RuntimeException exception) {
+            log.warn("AI 流式对话异常, conversationId={}", conversationId, exception);
+            onError.accept(new com.studenthub.modules.aichat.controller.dto.AiStreamError(
+                    ErrorCode.AI_PROVIDER_ERROR.getCode(), "AI 调用失败，请发起新问题"));
+            return;
+        }
+        // execute 已完成消息及幂等结果的事务提交；此后客户端才接收 done。
+        onDone.accept(response);
+    }
+
+    private AiMessageResponse sendMessageStreamOnce(AuthenticatedUser user, Long conversationId,
+                                                  SendMessageRequest request,
+                                                  java.util.function.Consumer<String> onDelta) {
+        long start = System.currentTimeMillis();
             // 校验与用户消息落库复用非流式链路（先走一遍快速校验，避免流式开始后才发现非法）
             AiConversationEntity conversation = requireOwnedConversation(user.userId(), conversationId);
             String content = request.content() == null ? "" : request.content().trim();
@@ -209,6 +280,8 @@ public class AiConversationServiceImpl implements AiConversationService {
             if (content.length() > currentMaxMessageCharacters()) {
                 throw new BusinessException(ErrorCode.INVALID_PARAMETER, "消息长度超过限制");
             }
+            // I04 安全策略：与同步链路保持一致（策略关闭时全部放行）
+            securityGuard.checkUserMessage(user.userId(), content);
             long sentLastHour = messageMapper.countUserMessagesSince(user.userId(), LocalDateTime.now().minusHours(1));
             if (sentLastHour >= currentHourlyMessageLimit()) {
                 throw new BusinessException(ErrorCode.AI_RATE_LIMITED);
@@ -228,32 +301,31 @@ public class AiConversationServiceImpl implements AiConversationService {
             AiAssistantResolved resolved = resolveForIntent(intent, user);
             String actionsJson = assistantDataService.serializeActions(resolved == null ? null : resolved.actions());
 
-            String reply;
+            String reply = null;
             String model = null;
+            Integer promptTokens = null;
+            Integer completionTokens = null;
             Integer tokenUsage = null;
             String errorCode = null;
             String directTimeReply = currentTimeReply(content);
+            AiContextAssembler.Bundle bundle = null;
+            List<AiSourceResponse> sources = List.of();
             if (directTimeReply != null) {
                 reply = directTimeReply;
                 model = "system";
                 onDelta.accept(reply);
             } else {
+                bundle = contextAssembler.assemble(conversation, content,
+                        resolved == null ? null : resolved.contextText(), documentText, imageDataUrls,
+                        userMessage.getId(), false);
+                sources = toSources(bundle.sources());
+                StringBuilder streamed = new StringBuilder();
+                BusinessException failure = null;
+                boolean success = false;
                 try {
-                    var ragService = imageIds.isEmpty() ? knowledgeBaseService.getIfAvailable() : null;
-                    String ragContext = ragService == null ? null : ragService.assistantContext(content);
-                    String mergedContext = resolved == null ? ragContext : resolved.contextText();
-                    if (resolved != null && ragContext != null) {
-                        mergedContext = resolved.contextText() + "\n\n【公共知识库资料】\n" + ragContext;
-                    }
-                    if (documentText != null) {
-                        mergedContext = mergedContext == null ? documentText : mergedContext + "\n\n" + documentText;
-                    }
-                    List<AiMessage> prompt = buildPrompt(content, conversation.getId(),
-                            mergedContext, imageDataUrls, userMessage.getId());
-                    StringBuilder streamed = new StringBuilder();
                     if (imageIds.isEmpty()) {
                         AiChatService.StreamDone[] done = new AiChatService.StreamDone[1];
-                        aiChatService.chatStream(prompt,
+                        aiChatService.chatStream(bundle.messages(),
                                 delta -> {
                                     streamed.append(delta);
                                     onDelta.accept(delta);
@@ -261,34 +333,66 @@ public class AiConversationServiceImpl implements AiConversationService {
                                 streamDone -> done[0] = streamDone);
                         if (done[0] != null) {
                             model = done[0].model();
-                            Integer promptTokens = done[0].promptTokens();
-                            Integer completionTokens = done[0].completionTokens();
-                            tokenUsage = promptTokens == null && completionTokens == null
-                                    ? null : (promptTokens == null ? 0 : promptTokens) + (completionTokens == null ? 0 : completionTokens);
+                            promptTokens = done[0].promptTokens();
+                            completionTokens = done[0].completionTokens();
                         }
                         reply = streamed.toString();
                     } else {
-                        // 视觉消息不支持流式，一次性推送
-                        AiChatResponse response = aiChatService.chatVision(prompt);
-                        reply = response.content();
-                        model = response.model();
+                        ChatCall call = callChatOnce(bundle.messages(), true);
+                        reply = call.reply();
+                        model = call.model();
+                        promptTokens = call.promptTokens();
+                        completionTokens = call.completionTokens();
                         onDelta.accept(reply);
-                        Integer promptTokens = response.promptTokens();
-                        Integer completionTokens = response.completionTokens();
-                        tokenUsage = promptTokens == null && completionTokens == null
-                                ? null : (promptTokens == null ? 0 : promptTokens) + (completionTokens == null ? 0 : completionTokens);
                     }
+                    success = true;
                 } catch (BusinessException exception) {
-                    log.warn("AI 流式调用失败, conversationId={}, code={}", conversation.getId(), exception.getCode());
+                    com.studenthub.integration.ai.AiCallCancellation.checkCurrent();
+                    failure = exception;
+                }
+                // 只有还没吐出任何增量时才压缩重试，避免前端收到重复内容
+                if (!success && imageIds.isEmpty() && streamed.length() == 0 && isContextLength(failure)) {
+                    log.warn("流式上下文超限，压缩后重试, conversationId={}, estimated={}",
+                            conversation.getId(), bundle.estimatedTokens());
+                    bundle = contextAssembler.assemble(conversation, content,
+                            resolved == null ? null : resolved.contextText(), documentText, imageDataUrls,
+                            userMessage.getId(), true);
+                    sources = toSources(bundle.sources());
+                    try {
+                        AiChatService.StreamDone[] done = new AiChatService.StreamDone[1];
+                        StringBuilder retried = new StringBuilder();
+                        aiChatService.chatStream(bundle.messages(),
+                                delta -> {
+                                    retried.append(delta);
+                                    onDelta.accept(delta);
+                                },
+                                streamDone -> done[0] = streamDone);
+                        if (done[0] != null) {
+                            model = done[0].model();
+                            promptTokens = done[0].promptTokens();
+                            completionTokens = done[0].completionTokens();
+                        }
+                        reply = retried.toString();
+                        success = true;
+                    } catch (BusinessException retryException) {
+                        com.studenthub.integration.ai.AiCallCancellation.checkCurrent();
+                        failure = retryException;
+                    }
+                }
+                if (!success) {
+                    BusinessException exception = failure;
+                    log.warn("AI 流式调用失败, conversationId={}, code={}",
+                            conversation.getId(), exception == null ? null : exception.getCode());
                     if (resolved != null && resolved.actions() != null && !resolved.actions().isEmpty()) {
                         reply = localFallbackReply(intent, resolved);
                         onDelta.accept(reply);
                     } else {
                         reply = CampusAssistantPrompts.DEGRADED_REPLY;
-                        errorCode = exception.getCode();
+                        errorCode = exception == null ? ErrorCode.AI_PROVIDER_ERROR.getCode() : exception.getCode();
                         onDelta.accept(reply);
                     }
                 }
+                tokenUsage = sumTokens(promptTokens, completionTokens);
             }
 
             AiMessageEntity assistantMessage = new AiMessageEntity();
@@ -297,20 +401,98 @@ public class AiConversationServiceImpl implements AiConversationService {
             assistantMessage.setContent(reply);
             assistantMessage.setActions(actionsJson);
             assistantMessage.setModel(model);
-            assistantMessage.setPromptVersion(CampusAssistantPrompts.PROMPT_VERSION);
+            assistantMessage.setPromptVersion(com.studenthub.modules.aichat.security.AiPromptRuntime.promptVersion());
             assistantMessage.setTokenUsage(tokenUsage);
+            assistantMessage.setPromptTokens(promptTokens);
+            assistantMessage.setCompletionTokens(completionTokens);
+            assistantMessage.setSources(serializeSources(sources));
             assistantMessage.setCostMs((int) Math.min(Integer.MAX_VALUE, System.currentTimeMillis() - start));
             assistantMessage.setErrorCode(errorCode);
             assistantMessage.setStatus(errorCode == null ? MESSAGE_STATUS_OK : MESSAGE_STATUS_FAILED);
             messageMapper.insert(assistantMessage);
-            touchConversation(conversation);
-            onDone.accept(AiMessageResponse.from(assistantMessage));
-        } catch (BusinessException exception) {
-            onError.accept(exception.getMessage() == null ? "AI 调用失败" : exception.getMessage());
-        } catch (RuntimeException exception) {
-            log.warn("AI 流式对话异常, conversationId={}", conversationId, exception);
-            onError.accept("AI 调用失败");
+            recordContextUsage(conversation, promptTokens, bundle == null ? null : bundle.estimatedTokens());
+            if (bundle != null && bundle.summaryUpToMessageId() != null) {
+                conversationSummaryService.summarizeAsync(conversation.getId(), bundle.summaryUpToMessageId());
+            }
+            return AiMessageResponse.from(assistantMessage);
+    }
+
+    private record ChatCall(String reply, String model, Integer promptTokens, Integer completionTokens) {
+    }
+
+    private ChatCall callChatOnce(List<AiMessage> messages, boolean vision) {
+        if (vision) {
+            AiChatResponse response = aiChatService.chatVision(messages);
+            return new ChatCall(response.content(), response.model(),
+                    response.promptTokens(), response.completionTokens());
         }
+        AiChatResponse response = aiChatService.chat(messages);
+        return new ChatCall(response.content(), response.model(),
+                response.promptTokens(), response.completionTokens());
+    }
+
+    private Integer sumTokens(Integer promptTokens, Integer completionTokens) {
+        if (promptTokens == null && completionTokens == null) {
+            return null;
+        }
+        return (promptTokens == null ? 0 : promptTokens) + (completionTokens == null ? 0 : completionTokens);
+    }
+
+    /** 供应商上下文超限的兜底识别（各协议文案不同，统一按关键字判断）。 */
+    private boolean isContextLength(BusinessException exception) {
+        if (exception == null || exception.getMessage() == null) {
+            return false;
+        }
+        String message = exception.getMessage().toLowerCase(java.util.Locale.ROOT);
+        return message.contains("context length")
+                || message.contains("context_length")
+                || message.contains("maximum context")
+                || message.contains("too many tokens")
+                || message.contains("prompt is too long")
+                || (message.contains("context") && message.contains("exceed"))
+                || (message.contains("token") && message.contains("exceed"));
+    }
+
+    private List<AiSourceResponse> toSources(List<RagTestResponse.RagHit> hits) {
+        if (hits == null || hits.isEmpty()) {
+            return List.of();
+        }
+        List<AiSourceResponse> sources = new ArrayList<>(hits.size());
+        for (RagTestResponse.RagHit hit : hits) {
+            String snippet = hit.content() == null ? null : hit.content();
+            if (snippet != null && snippet.length() > 200) {
+                snippet = snippet.substring(0, 200) + "…";
+            }
+            sources.add(new AiSourceResponse(hit.fileName(), hit.page(), hit.titlePath(), hit.score(), snippet));
+        }
+        return sources;
+    }
+
+    private String serializeSources(List<AiSourceResponse> sources) {
+        if (sources == null || sources.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(sources);
+        } catch (Exception exception) {
+            return null;
+        }
+    }
+
+    /** 记录会话上下文占用；promptTokens 超过窗口 90% 时标记 compact，提示下一轮摘要。 */
+    private void recordContextUsage(AiConversationEntity conversation, Integer promptTokens, Integer estimatedTokens) {
+        int used = promptTokens != null ? promptTokens : (estimatedTokens == null ? 0 : estimatedTokens);
+        var snapshot = AiRuntimeConfig.current();
+        int maxContext = snapshot != null ? snapshot.maxContextTokens() : 60000;
+        AiConversationEntity update = new AiConversationEntity();
+        update.setId(conversation.getId());
+        update.setLastPromptTokens(used);
+        update.setLastContextTokens(estimatedTokens == null ? used : estimatedTokens);
+        if (maxContext > 0 && used > maxContext * 0.9) {
+            update.setCompactCount((conversation.getCompactCount() == null ? 0 : conversation.getCompactCount()) + 1);
+        }
+        update.setVersion(conversation.getVersion());
+        conversationMapper.updateById(update);
     }
 
     private String currentTimeReply(String content) {
@@ -442,7 +624,7 @@ public class AiConversationServiceImpl implements AiConversationService {
     private List<AiMessage> buildPrompt(String currentContent, Long conversationId, String contextText,
                                        List<String> imageDataUrls, Long currentUserMessageId) {
         List<AiMessage> prompt = new ArrayList<>();
-        prompt.add(new AiMessage("system", CampusAssistantPrompts.SYSTEM_PROMPT));
+        prompt.add(new AiMessage("system", com.studenthub.modules.aichat.security.AiPromptRuntime.systemPrompt()));
         if (contextText != null && !contextText.isBlank()) {
             prompt.add(new AiMessage("system",
                     "以下是系统为你查询到的、仅供本次回答使用的用户数据（仅针对当前登录用户本人，"

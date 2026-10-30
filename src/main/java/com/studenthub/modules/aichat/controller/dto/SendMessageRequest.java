@@ -17,7 +17,13 @@ public record SendMessageRequest(
         @Schema(description = "[兼容旧版] 图片文件 ID 列表；与 attachments 同时传时以 attachments 为准", nullable = true, deprecated = true)
         List<Long> images,
         @Schema(description = "多模态附件列表（IMAGE/DOCUMENT），fileId 先经 /api/app/files 上传；IMAGE 最多 4 张，DOCUMENT 最多 2 份", nullable = true)
-        List<Attachment> attachments) {
+        List<Attachment> attachments,
+        @Schema(description = "本次提问唯一标识；流式回退与重试复用相同值，可空兼容旧客户端")
+        @Size(max = 96) String clientRequestId) {
+
+    public SendMessageRequest(String content, List<Long> images, List<Attachment> attachments) {
+        this(content, images, attachments, null);
+    }
 
     public static final int MAX_IMAGES = 4;
     public static final int MAX_DOCUMENTS = 2;

@@ -42,4 +42,14 @@ public interface SessionStore {
      */
     default void deleteSessionByHash(String tokenHash) {
     }
+
+    /**
+     * 判断指定会话摘要是否仍在线（管理端设备列表「在线/离线」状态用）。
+     *
+     * <p>只读探测：不续期、不刷新活跃时间；会话不存在或已过期返回 false。
+     * 默认空实现按离线处理，兼容未升级的自定义存储；memory/redis 实现均已覆盖。</p>
+     */
+    default boolean existsSessionByHash(String tokenHash) {
+        return false;
+    }
 }

@@ -93,14 +93,15 @@ public class ScheduleServiceImpl implements ScheduleService {
             entity.setEndSection(entry.endSection());
             entity.setWeeks(entry.weeks());
             entity.setWeekParity(entry.weekParity());
+            entity.setTimeRange(entry.timeRange());
             entity.setRawText(entry.rawText());
             personal.add(entity);
         }
         final String syncSemesterCode = page.semesterCode();
         final String syncSemesterName = page.semesterName();
         final LocalDate firstMonday = SemesterCalendar.firstMonday(syncSemesterCode, syncSemesterName);
-        final int totalWeeks = personal.isEmpty() ? 16
-                : Math.min(Math.max(SemesterCalendar.maxWeekOf(personal), 1), 30);
+        final int totalWeeks = page.totalWeeks() != null ? page.totalWeeks()
+                : personal.isEmpty() ? 25 : Math.max(SemesterCalendar.maxWeekOf(personal), 20);
         transactionTemplate.executeWithoutResult(status -> {
             // 个人课表按学期覆盖：同一学期重新导入时替换旧数据，其它学期保留
             courseMapper.deleteByUserIdAndSemester(user.userId(), syncSemesterCode);
@@ -215,8 +216,8 @@ public class ScheduleServiceImpl implements ScheduleService {
         }
         Integer totalWeeks = chosen != null ? chosen.getTotalWeeks() : null;
         if (totalWeeks == null) {
-            totalWeeks = current.isEmpty() ? 16
-                    : Math.min(Math.max(SemesterCalendar.maxWeekOf(current), 1), 30);
+            totalWeeks = current.isEmpty() ? 25
+                    : Math.max(SemesterCalendar.maxWeekOf(current), 20);
         }
 
         String chosenName = requested == null ? null
@@ -236,7 +237,12 @@ public class ScheduleServiceImpl implements ScheduleService {
         for (int dayOfWeek = 1; dayOfWeek <= 7; dayOfWeek++) {
             List<ScheduleWeekViewResponse.CourseView> courses = new ArrayList<>();
             for (ScheduleCourseEntity course : buckets.get(dayOfWeek - 1)) {
-                String timeRange = SectionTimes.rangeOf(course.getStartSection(), course.getEndSection());
+                if (!SemesterCalendar.activeAtWeek(course.getWeeks(), course.getWeekParity(), context.week())) {
+                    continue;
+                }
+                String timeRange = course.getTimeRange() != null && !course.getTimeRange().isBlank()
+                        ? course.getTimeRange()
+                        : SectionTimes.rangeOf(course.getStartSection(), course.getEndSection());
                 courses.add(new ScheduleWeekViewResponse.CourseView(
                         course.getCourseName(), course.getTeacher(), course.getLocation(),
                         course.getStartSection(), course.getEndSection(), timeRange));
@@ -245,7 +251,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                     context.weekStart().plusDays(dayOfWeek - 1L), courses));
         }
         return new ScheduleWeekViewResponse(context.semesterCode(), context.semesterName(),
-                context.week(), context.weekStart(), context.currentWeek(), days);
+                context.week(), context.weekStart(), context.currentWeek(), context.totalWeeks(), days);
     }
 
     @Override
@@ -328,7 +334,8 @@ public class ScheduleServiceImpl implements ScheduleService {
 
     /** 周展开共用上下文：学期、锚点、课程集（个人课表缺失时回落班级缓存，1.7） */
     private record WeekContext(String semesterCode, String semesterName, int week,
-                               LocalDate weekStart, int currentWeek, List<ScheduleCourseEntity> courses) {
+                               LocalDate weekStart, int currentWeek, int totalWeeks,
+                               List<ScheduleCourseEntity> courses) {
     }
 
     private WeekContext resolveWeekContext(AuthenticatedUser user, String semesterCode, Integer week) {
@@ -359,10 +366,12 @@ public class ScheduleServiceImpl implements ScheduleService {
         }
         int maxWeek = base.totalWeeks() != null ? base.totalWeeks() : 25;
         if (requestedWeek > maxWeek) {
-            requestedWeek = maxWeek;
+            throw new com.studenthub.exception.BusinessException(
+                    com.studenthub.common.ErrorCode.INVALID_PARAMETER,
+                    "周次超出本学期范围，请选择第1–" + maxWeek + "周");
         }
         LocalDate weekStart = firstMonday != null ? firstMonday.plusWeeks(requestedWeek - 1L) : LocalDate.now();
-        return new WeekContext(code, base.semesterName(), requestedWeek, weekStart, currentWeek, courses);
+        return new WeekContext(code, base.semesterName(), requestedWeek, weekStart, currentWeek, maxWeek, courses);
     }
 
     /** 班级缓存行转个人课程行（字段同构，班级行缺 personal 维度则透传） */
@@ -376,6 +385,7 @@ public class ScheduleServiceImpl implements ScheduleService {
         course.setEndSection(entity.getEndSection());
         course.setWeeks(entity.getWeeks());
         course.setWeekParity(entity.getWeekParity());
+        course.setTimeRange(entity.getTimeRange());
         course.setSemesterCode(entity.getSemesterCode());
         course.setSemesterName(entity.getSemesterName());
         return course;

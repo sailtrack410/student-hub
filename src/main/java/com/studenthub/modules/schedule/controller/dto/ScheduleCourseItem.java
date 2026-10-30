@@ -13,7 +13,8 @@ public record ScheduleCourseItem(
         int startSection,
         int endSection,
         String weeks,
-        int weekParity) {
+        int weekParity,
+        String timeRange) {
 
     public static ScheduleCourseItem from(ScheduleCourseEntity entity) {
         return new ScheduleCourseItem(
@@ -24,6 +25,7 @@ public record ScheduleCourseItem(
                 entity.getStartSection(),
                 entity.getEndSection(),
                 entity.getWeeks(),
-                entity.getWeekParity());
+                entity.getWeekParity(),
+                entity.getTimeRange());
     }
 }

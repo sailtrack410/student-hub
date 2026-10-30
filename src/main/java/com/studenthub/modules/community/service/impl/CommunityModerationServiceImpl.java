@@ -6,20 +6,30 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studenthub.common.ErrorCode;
 import com.studenthub.common.PageResult;
 import com.studenthub.exception.BusinessException;
+import com.studenthub.common.util.JsonIds;
+import com.studenthub.modules.community.controller.dto.AdminCommunityBatchAppealHandleRequest;
+import com.studenthub.modules.community.controller.dto.AdminCommunityBatchReportHandleRequest;
+import com.studenthub.modules.community.controller.dto.AdminCommunityBatchResult;
 import com.studenthub.modules.community.controller.dto.AdminCommunityContentActionRequest;
 import com.studenthub.modules.community.controller.dto.AdminCommunityReportHandleRequest;
 import com.studenthub.modules.community.controller.dto.AdminCommunityReportPageQuery;
 import com.studenthub.modules.community.controller.dto.AdminCommunityReportResponse;
 import com.studenthub.modules.community.controller.dto.AdminCommunityReportSummaryResponse;
 import com.studenthub.modules.community.controller.dto.AdminCommunitySanctionRequest;
+import com.studenthub.modules.community.controller.dto.CommunityAppealResponse;
+import com.studenthub.modules.community.controller.dto.CreateCommunityAppealRequest;
 import com.studenthub.modules.community.controller.dto.CreateCommunityReportRequest;
+import com.studenthub.modules.community.entity.CommunityAppealEntity;
 import com.studenthub.modules.community.entity.CommunityCommentEntity;
 import com.studenthub.modules.community.entity.CommunityDirectMessageEntity;
+import com.studenthub.modules.community.entity.CommunityModerationTemplateEntity;
 import com.studenthub.modules.community.entity.CommunityPostEntity;
 import com.studenthub.modules.community.entity.CommunityReportEntity;
 import com.studenthub.modules.community.entity.CommunityUserSanctionEntity;
+import com.studenthub.modules.community.mapper.CommunityAppealMapper;
 import com.studenthub.modules.community.mapper.CommunityCommentMapper;
 import com.studenthub.modules.community.mapper.CommunityDirectMessageMapper;
+import com.studenthub.modules.community.mapper.CommunityModerationTemplateMapper;
 import com.studenthub.modules.community.mapper.CommunityPostMapper;
 import com.studenthub.modules.community.mapper.CommunityReportMapper;
 import com.studenthub.modules.community.mapper.CommunityUserSanctionMapper;
@@ -27,7 +37,9 @@ import com.studenthub.modules.community.service.CommunityModerationService;
 import com.studenthub.modules.identity.entity.UserEntity;
 import com.studenthub.modules.identity.mapper.UserMapper;
 import com.studenthub.modules.identity.security.AuthenticatedUser;
+import com.studenthub.modules.identity.campus.AdminCampusContextService;
 import com.studenthub.modules.identity.security.CurrentUserProvider;
+import com.studenthub.modules.file.service.FileStorageService;
 import com.studenthub.modules.notification.service.NotificationService;
 import com.studenthub.modules.notification.service.dto.NotificationSendCommand;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +47,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -65,6 +78,7 @@ public class CommunityModerationServiceImpl implements CommunityModerationServic
     private static final String BAN = "BAN";
     private static final String TARGET_POST = "POST";
     private static final String TARGET_COMMENT = "COMMENT";
+    private static final String TARGET_SANCTION = "SANCTION";
     private static final String ACTION_ACCEPT = "ACCEPT";
     private static final String ACTION_REJECT = "REJECT";
     private static final String CONTENT_NONE = "NONE";
@@ -77,8 +91,11 @@ public class CommunityModerationServiceImpl implements CommunityModerationServic
     private static final Set<String> CONTENT_ACTIONS = Set.of(CONTENT_NONE, CONTENT_HIDE, CONTENT_DELETE);
     /** 单个用户每日举报上限，防止举报功能被滥用 */
     private static final int DAILY_REPORT_LIMIT = 20;
+    /** 评论举报人数达到该值自动删除 */
+    private static final int COMMENT_REPORT_DELETE_THRESHOLD = 10;
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
 
+    private final CommunityAppealMapper appealMapper;
     private final CommunityReportMapper reportMapper;
     private final CommunityUserSanctionMapper sanctionMapper;
     private final CommunityPostMapper postMapper;
@@ -87,6 +104,9 @@ public class CommunityModerationServiceImpl implements CommunityModerationServic
     private final UserMapper userMapper;
     private final NotificationService notificationService;
     private final CurrentUserProvider currentUserProvider;
+    private final AdminCampusContextService campusContextService;
+    private final CommunityModerationTemplateMapper templateMapper;
+    private final FileStorageService fileStorageService;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -128,9 +148,138 @@ public class CommunityModerationServiceImpl implements CommunityModerationServic
         entity.setReasonDetail(request.reasonDetail());
         entity.setSnapshot(writeJson(snapshot.payload()));
         entity.setStatus(PENDING);
+        // 审核 SLA：24h 内必须给出结论（V71）
+        entity.setDueAt(LocalDateTime.now(ZONE).plusHours(24));
         reportMapper.insert(entity);
+        applyReportCounters(targetType, request.targetId());
         log.info("社区举报已提交, reportId={}, reporterId={}, target={}#{}, reason={}",
                 entity.getId(), user.userId(), targetType, request.targetId(), reasonCode);
+    }
+
+    /**
+     * 举报计数与权重：评论每被举报一次权重 -3（点赞 +1），举报人数达 10 自动删除并通知作者；
+     * 帖子只累计举报数（不做自动删除，由治理端人工处置）。
+     */
+    private void applyReportCounters(String targetType, Long targetId) {
+        long reports = reportMapper.selectCount(new LambdaQueryWrapper<CommunityReportEntity>()
+                .eq(CommunityReportEntity::getTargetType, targetType)
+                .eq(CommunityReportEntity::getTargetId, targetId)
+                .ne(CommunityReportEntity::getStatus, REJECTED));
+        if (TARGET_COMMENT.equals(targetType)) {
+            CommunityCommentEntity comment = commentMapper.selectById(targetId);
+            if (comment == null) {
+                return;
+            }
+            CommunityCommentEntity update = new CommunityCommentEntity();
+            update.setId(comment.getId());
+            update.setReportCount((int) reports);
+            update.setWeight(Math.max(0, (comment.getWeight() == null ? 0 : comment.getWeight()) - 3));
+            update.setVersion(comment.getVersion());
+            if (reports >= COMMENT_REPORT_DELETE_THRESHOLD && !DELETED.equals(comment.getStatus())) {
+                update.setStatus(DELETED);
+                update.setHiddenReason("REPORT_LIMIT");
+                notificationService.send(new NotificationSendCommand(comment.getAuthorId(), NOTIFICATION_TYPE,
+                        "评论已被删除",
+                        "你的评论因多名用户举报已被删除，如有异议可在社区申诉中提交复核。",
+                        "COMMUNITY_POST", comment.getPostId()));
+            }
+            commentMapper.updateById(update);
+        } else if (TARGET_POST.equals(targetType)) {
+            CommunityPostEntity post = postMapper.selectById(targetId);
+            if (post == null) {
+                return;
+            }
+            CommunityPostEntity update = new CommunityPostEntity();
+            update.setId(post.getId());
+            update.setReportCount((int) reports);
+            update.setVersion(post.getVersion());
+            postMapper.updateById(update);
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public CommunityAppealResponse submitAppeal(AuthenticatedUser user, CreateCommunityAppealRequest request) {
+        String targetType = request.targetType() == null || request.targetType().isBlank()
+                ? TARGET_POST : normalize(request.targetType());
+        if (!TARGET_POST.equals(targetType) && !TARGET_COMMENT.equals(targetType)
+                && !TARGET_SANCTION.equals(targetType)) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "申诉对象仅支持 POST / COMMENT / SANCTION");
+        }
+        boolean unavailable;
+        String pendingMessage = "该对象已有待处理的申诉";
+        if (TARGET_POST.equals(targetType)) {
+            CommunityPostEntity post = postMapper.selectByIdIncludingDeleted(request.targetId());
+            if (post == null || !user.campusId().equals(post.getCampusId())
+                    || !user.userId().equals(post.getAuthorId())) {
+                throw new BusinessException(ErrorCode.NOT_FOUND, "帖子不存在或无权申诉");
+            }
+            unavailable = (post.getDeleted() != null && post.getDeleted() == 1)
+                    || !ENABLED.equals(post.getStatus());
+            if (!unavailable) {
+                throw new BusinessException(ErrorCode.INVALID_PARAMETER, "帖子状态正常，无需申诉");
+            }
+        } else if (TARGET_COMMENT.equals(targetType)) {
+            CommunityCommentEntity comment = commentMapper.selectById(request.targetId());
+            if (comment == null || !user.userId().equals(comment.getAuthorId())) {
+                throw new BusinessException(ErrorCode.NOT_FOUND, "评论不存在或无权申诉");
+            }
+            unavailable = !ENABLED.equals(comment.getStatus());
+            if (!unavailable) {
+                throw new BusinessException(ErrorCode.INVALID_PARAMETER, "评论状态正常，无需申诉");
+            }
+        } else {
+            CommunityUserSanctionEntity sanction = sanctionMapper.selectById(request.targetId());
+            if (sanction == null || !user.userId().equals(sanction.getUserId())) {
+                throw new BusinessException(ErrorCode.NOT_FOUND, "处罚记录不存在或无权申诉");
+            }
+            unavailable = ACTIVE.equals(sanction.getStatus());
+            if (!unavailable) {
+                throw new BusinessException(ErrorCode.INVALID_PARAMETER, "该处罚已失效，无需申诉");
+            }
+        }
+        Long pending = appealMapper.selectCount(new LambdaQueryWrapper<CommunityAppealEntity>()
+                .eq(CommunityAppealEntity::getUserId, user.userId())
+                .eq(CommunityAppealEntity::getTargetType, targetType)
+                .eq(CommunityAppealEntity::getTargetId, request.targetId())
+                .eq(CommunityAppealEntity::getStatus, PENDING));
+        if (pending != null && pending > 0) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, pendingMessage);
+        }
+        String reasonCode = normalize(request.reasonCode());
+        String reasonDetail = request.reason() == null ? "" : request.reason().trim();
+        String reason = reasonDetail.isBlank() ? reasonLabel(reasonCode) : reasonDetail;
+        CommunityAppealEntity entity = new CommunityAppealEntity();
+        entity.setCampusId(user.campusId());
+        entity.setUserId(user.userId());
+        entity.setTargetType(targetType);
+        entity.setTargetId(request.targetId());
+        entity.setReason(reason.isBlank() ? "其他" : reason);
+        entity.setReasonCode(reasonCode);
+        if (request.evidenceFileIds() != null && !request.evidenceFileIds().isEmpty()) {
+            try {
+                entity.setEvidenceFileIds(objectMapper.writeValueAsString(request.evidenceFileIds()));
+            } catch (Exception ignored) {
+                entity.setEvidenceFileIds(null);
+            }
+        }
+        entity.setStatus(PENDING);
+        // 申诉复核 SLA：24h 内给出结论（V71）
+        entity.setDueAt(LocalDateTime.now(ZONE).plusHours(24));
+        appealMapper.insert(entity);
+        log.info("申诉已提交, appealId={}, target={}#{}, userId={}",
+                entity.getId(), targetType, request.targetId(), user.userId());
+        return new CommunityAppealResponse(entity.getId(), PENDING);
+    }
+
+    private String reasonLabel(String reasonCode) {
+        if (reasonCode == null) return "其他";
+        return switch (reasonCode) {
+            case "MISJUDGED" -> "内容被误判";
+            case "FIXED" -> "已修改违规内容";
+            case "ACCOUNT" -> "账号被盗用";
+            default -> "其他";
+        };
     }
 
     @Override
@@ -176,8 +325,10 @@ public class CommunityModerationServiceImpl implements CommunityModerationServic
             throw new BusinessException(ErrorCode.INVALID_PARAMETER, "处理结论只能是 ACCEPT 或 REJECT");
         }
         Long adminId = currentUserProvider.requireCurrentUser().userId();
+        String note = resolveTemplateNote(request.note(), request.templateId(),
+                CommunityModerationTemplateEntity.TYPE_REPORT_NOTE);
         if (ACTION_ACCEPT.equals(action)) {
-            applyContentAction(report, request.contentAction(), request.note());
+            applyContentAction(report, request.contentAction(), note);
             if (isNotBlank(request.sanctionType())) {
                 String sanctionType = normalize(request.sanctionType());
                 if (!SANCTION_TYPES.contains(sanctionType)) {
@@ -185,21 +336,21 @@ public class CommunityModerationServiceImpl implements CommunityModerationServic
                 }
                 if (report.getTargetAuthorId() != null) {
                     createSanction(report.getCampusId(), report.getTargetAuthorId(), sanctionType,
-                            request.sanctionHours(), request.note(), report.getId(), adminId);
+                            request.sanctionHours(), note, report.getId(), adminId);
                 }
             }
         }
         report.setStatus(ACTION_ACCEPT.equals(action) ? ACCEPTED : REJECTED);
         report.setHandledBy(adminId);
         report.setHandledAt(LocalDateTime.now(ZONE));
-        report.setHandleNote(request.note());
+        report.setHandleNote(note);
         reportMapper.updateById(report);
 
         // 处理结果反馈给举报人，举报才有正反馈闭环
         String feedback = ACTION_ACCEPT.equals(action) ? "你的举报已核实，我们已处理相关内容，感谢你共同维护社区"
                 : "你的举报经核实未达到处理标准，如仍有疑问可联系校园服务台";
-        if (isNotBlank(request.note())) {
-            feedback = feedback + "（处理说明：" + request.note() + "）";
+        if (isNotBlank(note)) {
+            feedback = feedback + "（处理说明：" + note + "）";
         }
         notify(report.getReporterId(), "举报处理结果", feedback, report.getId());
         log.info("社区举报已处理, reportId={}, action={}, handledBy={}", reportId, action, adminId);
@@ -229,8 +380,10 @@ public class CommunityModerationServiceImpl implements CommunityModerationServic
             throw new BusinessException(ErrorCode.NOT_FOUND, "用户不存在");
         }
         Long adminId = currentUserProvider.requireCurrentUser().userId();
-        Long campusId = target.getCampusId() == null
-                ? currentUserProvider.requireCurrentUser().campusId() : target.getCampusId();
+        Long campusId = campusContextService.currentCampusId();
+        if (target.getCampusId() != null && !target.getCampusId().equals(campusId)) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "用户不存在或不属于当前校区");
+        }
         createSanction(campusId, userId, sanctionType, request.hours(), request.reason(), null, adminId);
     }
 
@@ -240,6 +393,9 @@ public class CommunityModerationServiceImpl implements CommunityModerationServic
         CommunityUserSanctionEntity sanction = sanctionMapper.selectById(sanctionId);
         if (sanction == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "处罚记录不存在");
+        }
+        if (sanction.getCampusId() != null && !sanction.getCampusId().equals(campusContextService.currentCampusId())) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "处罚记录不存在或不属于当前校区");
         }
         sanction.setStatus(REVOKED);
         sanctionMapper.updateById(sanction);
@@ -442,6 +598,13 @@ public class CommunityModerationServiceImpl implements CommunityModerationServic
     private AdminCommunityReportResponse toReportResponse(CommunityReportEntity report) {
         TargetBrief brief = resolveTargetBrief(report);
         UserEntity reporter = userMapper.selectById(report.getReporterId());
+        LocalDateTime dueAt = report.getDueAt() != null ? report.getDueAt()
+                : (report.getCreatedAt() == null ? null : report.getCreatedAt().plusHours(24));
+        long remaining = dueAt == null ? 0 : Duration.between(LocalDateTime.now(ZONE), dueAt).toMinutes();
+        long sameTarget = reportMapper.selectCount(new LambdaQueryWrapper<CommunityReportEntity>()
+                .eq(CommunityReportEntity::getTargetType, report.getTargetType())
+                .eq(CommunityReportEntity::getTargetId, report.getTargetId())
+                .ne(CommunityReportEntity::getStatus, REJECTED));
         return new AdminCommunityReportResponse(
                 report.getId(),
                 report.getTargetType(),
@@ -458,7 +621,71 @@ public class CommunityModerationServiceImpl implements CommunityModerationServic
                 report.getHandleNote(),
                 report.getHandledBy(),
                 report.getHandledAt(),
-                report.getCreatedAt());
+                report.getCreatedAt(),
+                dueAt,
+                PENDING.equals(report.getStatus()) && remaining < 0,
+                remaining,
+                sameTarget,
+                reportEvidence(report));
+    }
+
+    /** 举报证据聚合：帖子/评论图片的短时签名地址，供管理端集中查看 */
+    private List<String> reportEvidence(CommunityReportEntity report) {
+        String type = normalize(report.getTargetType());
+        String imageFileIds = null;
+        if (TARGET_POST.equals(type)) {
+            CommunityPostEntity post = postMapper.selectById(report.getTargetId());
+            imageFileIds = post == null ? null : post.getImageFileIds();
+        } else if (TARGET_COMMENT.equals(type)) {
+            CommunityCommentEntity comment = commentMapper.selectById(report.getTargetId());
+            imageFileIds = comment == null ? null : comment.getImageFileIds();
+        }
+        List<Long> ids = JsonIds.parse(imageFileIds);
+        return ids.isEmpty() ? List.of() : fileStorageService.signViewPaths(ids);
+    }
+
+    /** 模板正文优先于手填说明：两者都有时拼接，方便保留人工补充 */
+    private String resolveTemplateNote(String note, Long templateId, String templateType) {
+        if (templateId == null) {
+            return note;
+        }
+        CommunityModerationTemplateEntity template = templateMapper.selectById(templateId);
+        if (template == null || !templateType.equals(template.getTemplateType())) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "模板不存在或类型不匹配");
+        }
+        if (!isNotBlank(note)) {
+            return template.getContent();
+        }
+        return template.getContent() + " " + note;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public AdminCommunityBatchResult batchHandleReports(AdminCommunityBatchReportHandleRequest request) {
+        String action = normalize(request.action());
+        if (!ACTION_ACCEPT.equals(action) && !ACTION_REJECT.equals(action)) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "批量处理结论只能是 ACCEPT 或 REJECT");
+        }
+        java.util.LinkedHashSet<Long> ids = new java.util.LinkedHashSet<>(request.reportIds());
+        int updated = 0;
+        List<String> skipped = new java.util.ArrayList<>();
+        for (Long reportId : ids) {
+            if (reportId == null) {
+                continue;
+            }
+            try {
+                handleReport(reportId, new com.studenthub.modules.community.controller.dto
+                        .AdminCommunityReportHandleRequest(action, request.contentAction(), request.sanctionType(),
+                        request.sanctionHours(), request.note(), request.templateId()));
+                updated++;
+            } catch (BusinessException exception) {
+                if (skipped.size() < 100) {
+                    skipped.add("举报 #" + reportId + "：" + exception.getMessage());
+                }
+            }
+        }
+        return new AdminCommunityBatchResult(ids.size(), updated, skipped.size(),
+                skipped.size() > 20 ? skipped.subList(0, 20) : skipped);
     }
 
     private TargetBrief resolveTargetBrief(CommunityReportEntity report) {

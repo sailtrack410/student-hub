@@ -13,16 +13,16 @@ public final class SectionTimes {
 
     /** 每节起始时间（1-11 节） */
     private static final LocalTime[] STARTS = {
-            LocalTime.of(8, 30), LocalTime.of(9, 25), LocalTime.of(10, 20), LocalTime.of(11, 15),
-            LocalTime.of(14, 10), LocalTime.of(15, 5), LocalTime.of(16, 0), LocalTime.of(16, 55),
-            LocalTime.of(18, 50), LocalTime.of(19, 45), LocalTime.of(20, 40)
+            LocalTime.of(8, 30), LocalTime.of(9, 20), LocalTime.of(10, 25), LocalTime.of(11, 15),
+            LocalTime.of(14, 10), LocalTime.of(15, 0), LocalTime.of(16, 5), LocalTime.of(16, 55),
+            LocalTime.of(18, 30), LocalTime.of(19, 20), LocalTime.of(20, 10), LocalTime.of(21, 0)
     };
 
     /** 每节结束时间 */
     private static final LocalTime[] ENDS = {
-            LocalTime.of(9, 15), LocalTime.of(10, 10), LocalTime.of(11, 5), LocalTime.of(12, 0),
-            LocalTime.of(14, 55), LocalTime.of(15, 50), LocalTime.of(16, 45), LocalTime.of(17, 40),
-            LocalTime.of(19, 35), LocalTime.of(20, 30), LocalTime.of(21, 25)
+            LocalTime.of(9, 15), LocalTime.of(10, 5), LocalTime.of(11, 10), LocalTime.of(12, 0),
+            LocalTime.of(14, 55), LocalTime.of(15, 45), LocalTime.of(16, 50), LocalTime.of(17, 40),
+            LocalTime.of(19, 15), LocalTime.of(20, 5), LocalTime.of(20, 55), LocalTime.of(21, 45)
     };
 
     private static final List<String> TIME_RANGES = buildRanges();

@@ -1,3 +1,10 @@
+/*
+ * 旧版统一客户端（已迁移）。
+ *
+ * 管理端已改用原生 ES Module 核心层：`admin/js/core/api.js`（含 X-Campus-Id、401、Result 解包），
+ * index.html 不再加载本文件；保留原实现仅作回滚参考，避免旧缓存页面立刻失效。
+ * 新代码请 import 或使用 window.AdminApi（由 core/api.js 注入）。
+ */
 /* 管理台统一 API 客户端：所有请求走 Result 包装，失败必须抛错并提示，禁止静默吞掉。 */
 (function () {
     'use strict';

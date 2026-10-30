@@ -153,6 +153,14 @@ public class RedisSessionStore implements SessionStore {
         redisTemplate.delete(sessionKey(tokenHash));
     }
 
+    @Override
+    public boolean existsSessionByHash(String tokenHash) {
+        if (tokenHash == null || tokenHash.isBlank()) {
+            return false;
+        }
+        return Boolean.TRUE.equals(redisTemplate.hasKey(sessionKey(tokenHash)));
+    }
+
     private String sessionKey(String tokenHash) {
         return KEY_PREFIX + tokenHash;
     }

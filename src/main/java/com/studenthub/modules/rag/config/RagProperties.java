@@ -13,6 +13,8 @@ public class RagProperties {
     private int maxDocumentSizeMb = 30;
     private int maxParsedCharacters = 2_000_000;
     private int embeddingBatchSize = 16;
+    private int indexMaxAttempts = 3;
+    private int indexLeaseMinutes = 10;
     /** 词法召回候选数（向量与词法各自独立召回，不再互相截断）。 */
     private int lexicalCandidateLimit = 40;
     /** 向量召回候选数。 */

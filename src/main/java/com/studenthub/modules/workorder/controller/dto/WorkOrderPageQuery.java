@@ -10,5 +10,7 @@ public record WorkOrderPageQuery(
         @Schema(description = "页码，从 1 开始") @Min(1) Integer pageNum,
         @Schema(description = "每页条数，最大 50") @Min(1) @Max(50) Integer pageSize,
         @Schema(description = "按工单状态过滤，可选值 PENDING_DISPATCH/ASSIGNED/PROCESSING/COMPLETED/REJECTED/CANCELLED；PROCESSING 包含拍照与待确认节点",
-                nullable = true) String status) implements PageQuery {
+                nullable = true) String status,
+        @Schema(description = "只看已超时（进行中且已过 SLA 截止时间）", nullable = true) Boolean overdue,
+        @Schema(description = "只看即将超时（进行中且 4 小时内到期）", nullable = true) Boolean dueSoon) implements PageQuery {
 }

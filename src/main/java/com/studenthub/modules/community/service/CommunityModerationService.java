@@ -1,12 +1,16 @@
 package com.studenthub.modules.community.service;
 
 import com.studenthub.common.PageResult;
+import com.studenthub.modules.community.controller.dto.AdminCommunityBatchReportHandleRequest;
+import com.studenthub.modules.community.controller.dto.AdminCommunityBatchResult;
 import com.studenthub.modules.community.controller.dto.AdminCommunityContentActionRequest;
 import com.studenthub.modules.community.controller.dto.AdminCommunityReportHandleRequest;
 import com.studenthub.modules.community.controller.dto.AdminCommunityReportPageQuery;
 import com.studenthub.modules.community.controller.dto.AdminCommunityReportResponse;
 import com.studenthub.modules.community.controller.dto.AdminCommunityReportSummaryResponse;
 import com.studenthub.modules.community.controller.dto.AdminCommunitySanctionRequest;
+import com.studenthub.modules.community.controller.dto.CommunityAppealResponse;
+import com.studenthub.modules.community.controller.dto.CreateCommunityAppealRequest;
 import com.studenthub.modules.community.controller.dto.CreateCommunityReportRequest;
 import com.studenthub.modules.identity.security.AuthenticatedUser;
 
@@ -18,6 +22,9 @@ public interface CommunityModerationService {
 
     /** 小程序侧提交举报（帖子/评论/私信/用户），含重复举报与每日次数限制 */
     void submitReport(AuthenticatedUser user, CreateCommunityReportRequest request);
+
+    /** 作者提交内容申诉：仅限被隐藏/删除的本人帖子，进入人工复核队列 */
+    CommunityAppealResponse submitAppeal(AuthenticatedUser user, CreateCommunityAppealRequest request);
 
     /** 管理端举报队列分页 */
     PageResult<AdminCommunityReportResponse> pageReports(AdminCommunityReportPageQuery query);
@@ -33,6 +40,9 @@ public interface CommunityModerationService {
 
     /** 治理端恢复被下架内容 */
     void restoreContent(String targetType, Long targetId, AdminCommunityContentActionRequest request);
+
+    /** 举报批量处理（C03）：逐条判定，失败条目返回跳过原因 */
+    AdminCommunityBatchResult batchHandleReports(AdminCommunityBatchReportHandleRequest request);
 
     /** 治理端处罚用户（限制发言/禁止访问） */
     void sanctionUser(Long userId, AdminCommunitySanctionRequest request);

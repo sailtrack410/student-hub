@@ -35,6 +35,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * 社交关系实现：关注唯一对（重复关注幂等返回当前态）；隐私缺行=全公开（读不插行）。
@@ -102,26 +105,33 @@ public class SocialServiceImpl implements SocialService {
                 new LambdaQueryWrapper<UserAchievementBadgeEntity>()
                         .eq(UserAchievementBadgeEntity::getUserId, targetUserId)
                         .isNotNull(UserAchievementBadgeEntity::getUnlockedAt));
-        long totalBadge = badgeMapper.selectCount(new LambdaQueryWrapper<AchievementBadgeEntity>()
-                .eq(AchievementBadgeEntity::getEnabled, true));
+        // 只统计启用勋章（方案B：停用/删除的勋章不计入已获得数量与名片预览）
+        List<AchievementBadgeEntity> enabledBadges = badgeMapper.selectList(
+                new LambdaQueryWrapper<AchievementBadgeEntity>()
+                        .eq(AchievementBadgeEntity::getEnabled, true));
+        Map<String, AchievementBadgeEntity> enabledByCode = enabledBadges.stream()
+                .collect(Collectors.toMap(AchievementBadgeEntity::getBadgeCode, Function.identity(),
+                        (left, right) -> left));
+        List<UserAchievementBadgeEntity> enabledUnlocked = unlocked.stream()
+                .filter(record -> enabledByCode.containsKey(record.getBadgeCode()))
+                .toList();
+        long totalBadge = enabledBadges.size();
         List<UserCardResponse.BadgePreview> previews = showMedals(targetUserId)
-                ? unlocked.stream()
+                ? enabledUnlocked.stream()
                         .sorted(Comparator.comparing(UserAchievementBadgeEntity::getUnlockedAt).reversed())
                         .limit(BADGE_PREVIEW_LIMIT)
                         .map(record -> {
-                            AchievementBadgeEntity badge = badgeMapper.selectOne(
-                                    new LambdaQueryWrapper<AchievementBadgeEntity>()
-                                            .eq(AchievementBadgeEntity::getBadgeCode, record.getBadgeCode()));
+                            AchievementBadgeEntity badge = enabledByCode.get(record.getBadgeCode());
                             return new UserCardResponse.BadgePreview(record.getBadgeCode(),
-                                    badge != null ? badge.getBadgeName() : record.getBadgeCode(),
-                                    "/api/common/assets/badges/" + record.getBadgeCode() + ".png");
+                                    badge.getBadgeName(), badge.getIconUrl());
                         }).toList()
                 : List.of();
 
         return new UserCardResponse(target.getId(), target.getUsername(), target.getDisplayName(),
                 avatarUrl(target), target.getGender(), target.getIdentityType(),
+                Boolean.TRUE.equals(target.getOfficial()), target.getOfficialTitle(),
                 level, AchievementService.levelName(level), totalExp, nextLevelExp,
-                following, mutual, unlocked.size(), totalBadge, previews);
+                following, mutual, enabledUnlocked.size(), totalBadge, previews);
     }
 
     @Override
@@ -199,8 +209,6 @@ public class SocialServiceImpl implements SocialService {
     }
 
     private String avatarUrl(UserEntity user) {
-        if (user == null || user.getAvatarUrl() == null || user.getAvatarUrl().isBlank()) return null;
-        try { return fileStorageService.signViewPath(Long.valueOf(user.getAvatarUrl())); }
-        catch (NumberFormatException ignored) { return null; }
+        return user == null ? null : fileStorageService.resolveAvatarUrl(user.getAvatarUrl());
     }
 }

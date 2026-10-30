@@ -32,7 +32,11 @@ public abstract class AbstractOAuthIdentityProvider<T> {
     protected final T properties;
     protected final ObjectMapper objectMapper;
 
-    private final RestClient restClient;
+    private final RestClient.Builder restClientBuilder;
+    private volatile RestClient restClient;
+    private volatile String currentBaseUrl;
+    private volatile int currentConnectTimeoutSeconds;
+    private volatile int currentReadTimeoutSeconds;
     private final ErrorCode loginFailedErrorCode;
     private final String platformName;
 
@@ -44,19 +48,12 @@ public abstract class AbstractOAuthIdentityProvider<T> {
                                             String baseUrl,
                                             int connectTimeoutSeconds,
                                             int readTimeoutSeconds) {
-        HttpClient httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(connectTimeoutSeconds))
-                .build();
-        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
-        requestFactory.setReadTimeout(Duration.ofSeconds(readTimeoutSeconds));
-        this.restClient = restClientBuilder.clone()
-                .requestFactory(requestFactory)
-                .baseUrl(baseUrl)
-                .build();
+        this.restClientBuilder = restClientBuilder;
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.loginFailedErrorCode = loginFailedErrorCode;
         this.platformName = platformName;
+        refreshClient(baseUrl, connectTimeoutSeconds, readTimeoutSeconds);
     }
 
     /** 异常收敛模板：BusinessException 原样上抛，其余记 error 后转登录失败错误码。 */
@@ -105,6 +102,34 @@ public abstract class AbstractOAuthIdentityProvider<T> {
         }
         Matcher matcher = JSONP_WRAPPER.matcher(body.trim());
         return matcher.matches() ? matcher.group(1) : body;
+    }
+
+    /**
+     * 管理端保存配置后热更新 RestClient（baseUrl/超时）。
+     * 使用 volatile + synchronized，调用方不需要关心并发刷新。
+     */
+    protected synchronized void refreshClient(String baseUrl, int connectTimeoutSeconds, int readTimeoutSeconds) {
+        if (StringUtils.hasText(baseUrl)
+                && baseUrl.equals(currentBaseUrl)
+                && connectTimeoutSeconds == currentConnectTimeoutSeconds
+                && readTimeoutSeconds == currentReadTimeoutSeconds) {
+            return;
+        }
+        String effectiveBaseUrl = StringUtils.hasText(baseUrl) ? baseUrl : currentBaseUrl;
+        int effectiveConnect = connectTimeoutSeconds > 0 ? connectTimeoutSeconds : currentConnectTimeoutSeconds;
+        int effectiveRead = readTimeoutSeconds > 0 ? readTimeoutSeconds : currentReadTimeoutSeconds;
+        HttpClient httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(Math.max(1, effectiveConnect)))
+                .build();
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+        requestFactory.setReadTimeout(Duration.ofSeconds(Math.max(1, effectiveRead)));
+        this.restClient = restClientBuilder.clone()
+                .requestFactory(requestFactory)
+                .baseUrl(effectiveBaseUrl)
+                .build();
+        this.currentBaseUrl = effectiveBaseUrl;
+        this.currentConnectTimeoutSeconds = Math.max(1, effectiveConnect);
+        this.currentReadTimeoutSeconds = Math.max(1, effectiveRead);
     }
 
     protected RestClient restClient() {

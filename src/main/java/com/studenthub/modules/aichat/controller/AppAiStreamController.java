@@ -21,8 +21,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /**
  * App AI 增强（API需求清单 6.x）：SSE 流式对话 + 空态场景推荐。
@@ -39,11 +37,7 @@ public class AppAiStreamController {
 
     private final AiConversationService aiConversationService;
     private final CurrentUserProvider currentUserProvider;
-    private final ExecutorService streamExecutor = Executors.newCachedThreadPool(r -> {
-        Thread t = new Thread(r, "app-ai-stream");
-        t.setDaemon(true);
-        return t;
-    });
+    private final com.studenthub.modules.aichat.service.execution.AiExecutionResources executionResources;
 
     @PostMapping(value = "/conversations/{conversationId}/chat-stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "App 端流式对话", description = "SSE 事件流：delta=增量文本，done=结束（含完整消息，actions 承载结构化卡片），error=失败原因。"
@@ -53,16 +47,11 @@ public class AppAiStreamController {
                                  @RequestBody @Valid SendMessageRequest request) {
         SseEmitter emitter = new SseEmitter(180_000L);
         var user = currentUserProvider.requireCurrentUser();
-        streamExecutor.execute(() -> aiConversationService.sendMessageStream(user, conversationId, request,
-                delta -> send(emitter, "delta", delta),
-                message -> {
-                    send(emitter, "done", message);
-                    emitter.complete();
-                },
-                error -> {
-                    send(emitter, "error", error);
-                    emitter.complete();
-                }));
+        var session = new com.studenthub.modules.aichat.service.execution.AiStreamSession(emitter, executionResources);
+        session.execute(() -> aiConversationService.sendMessageStream(user, conversationId, request,
+                delta -> session.send("delta", delta),
+                message -> session.complete("done", message),
+                error -> session.complete("error", error)));
         return emitter;
     }
 
@@ -82,11 +71,4 @@ public class AppAiStreamController {
                         "icon", "compass", "promptText", "新校区去老校区的校车发车时间表")));
     }
 
-    private void send(SseEmitter emitter, String event, Object data) {
-        try {
-            emitter.send(SseEmitter.event().name(event).data(data == null ? "" : data));
-        } catch (Exception ignored) {
-            // 客户端断开时 send 抛异常，忽略即可；emitter 由超时/complete 回收
-        }
-    }
 }

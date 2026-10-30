@@ -23,4 +23,6 @@ public class CommunitySectionEntity extends BaseEntity {
     private String bannerImage;
     private Integer sortOrder;
     private String status;
+    /** 推荐权重（V71）：数值越大越靠前，0 表示不额外推荐 */
+    private Integer recommendWeight;
 }

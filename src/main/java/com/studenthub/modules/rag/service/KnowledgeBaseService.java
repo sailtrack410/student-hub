@@ -15,7 +15,6 @@ import com.studenthub.modules.rag.mapper.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,7 +27,6 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j @Service @RequiredArgsConstructor
-@ConditionalOnBean(name = "ragJdbcTemplate")
 public class KnowledgeBaseService {
     private final KnowledgeBaseMapper baseMapper;
     private final KnowledgeDocumentMapper documentMapper;
@@ -41,17 +39,25 @@ public class KnowledgeBaseService {
     private final ObjectMapper objectMapper;
     @Qualifier("ragJdbcTemplate") private final JdbcTemplate vectorJdbc;
 
-    public List<KnowledgeBaseEntity> listBases() { return baseMapper.selectList(new LambdaQueryWrapper<KnowledgeBaseEntity>().orderByDesc(KnowledgeBaseEntity::getUpdatedAt)); }
-    public KnowledgeBaseEntity requireBase(Long id) { KnowledgeBaseEntity e=baseMapper.selectById(id); if(e==null) throw new BusinessException(ErrorCode.NOT_FOUND,"知识库不存在"); return e; }
-    @Transactional public KnowledgeBaseEntity create(Long operator, com.studenthub.modules.rag.controller.dto.KnowledgeBaseRequest r) {
-        KnowledgeBaseEntity e=new KnowledgeBaseEntity(); e.setName(r.name().trim()); e.setDescription(r.description()); e.setVisibility(StringUtils.hasText(r.visibility())?r.visibility():"INTERNAL"); e.setEnabled(r.enabled()==null||r.enabled()); e.setChunkSize(r.chunkSize()==null?800:r.chunkSize()); e.setChunkOverlap(r.chunkOverlap()==null?120:r.chunkOverlap()); e.setTopK(r.topK()==null?6:r.topK()); e.setScoreThreshold(r.scoreThreshold()==null?new java.math.BigDecimal("0.30"):r.scoreThreshold()); e.setSystemPrompt(r.systemPrompt()); e.setDocumentCount(0); e.setChunkCount(0); baseMapper.insert(e); return e;
+    /** RAG 未启用时管理端/公开接口统一返回「知识库服务未启用」，避免误连未配置数据库。 */
+    private void requireEnabled() {
+        if (!properties.isEnabled()) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "知识库服务未启用");
+        }
     }
-    @Transactional public KnowledgeBaseEntity update(Long id, com.studenthub.modules.rag.controller.dto.KnowledgeBaseRequest r) { KnowledgeBaseEntity e=requireBase(id); e.setName(r.name().trim()); e.setDescription(r.description()); if(StringUtils.hasText(r.visibility()))e.setVisibility(r.visibility()); if(r.enabled()!=null)e.setEnabled(r.enabled()); if(r.chunkSize()!=null)e.setChunkSize(r.chunkSize()); if(r.chunkOverlap()!=null)e.setChunkOverlap(r.chunkOverlap()); if(r.topK()!=null)e.setTopK(r.topK()); if(r.scoreThreshold()!=null)e.setScoreThreshold(r.scoreThreshold()); e.setSystemPrompt(r.systemPrompt()); baseMapper.updateById(e); return e; }
-    @Transactional public void delete(Long id) { requireBase(id); documentMapper.delete(new LambdaQueryWrapper<KnowledgeDocumentEntity>().eq(KnowledgeDocumentEntity::getKnowledgeBaseId,id)); vectorJdbc.update("DELETE FROM ai_knowledge_chunk WHERE knowledge_base_id=?",id); baseMapper.deleteById(id); }
+
+    public List<KnowledgeBaseEntity> listBases() { requireEnabled(); return baseMapper.selectList(new LambdaQueryWrapper<KnowledgeBaseEntity>().orderByDesc(KnowledgeBaseEntity::getUpdatedAt)); }
+    public KnowledgeBaseEntity requireBase(Long id) { requireEnabled(); KnowledgeBaseEntity e=baseMapper.selectById(id); if(e==null) throw new BusinessException(ErrorCode.NOT_FOUND,"知识库不存在"); return e; }
+    @Transactional public KnowledgeBaseEntity create(Long operator, com.studenthub.modules.rag.controller.dto.KnowledgeBaseRequest r) { requireEnabled();
+        KnowledgeBaseEntity e=new KnowledgeBaseEntity(); e.setName(r.name().trim()); e.setDescription(r.description()); e.setVisibility(StringUtils.hasText(r.visibility())?r.visibility():"INTERNAL"); e.setEnabled(r.enabled()==null||r.enabled()); e.setChunkSize(r.chunkSize()==null?800:r.chunkSize()); e.setChunkOverlap(r.chunkOverlap()==null?120:r.chunkOverlap()); e.setTopK(r.topK()==null?6:r.topK()); e.setScoreThreshold(r.scoreThreshold()==null?new java.math.BigDecimal("0.30"):r.scoreThreshold()); e.setSystemPrompt(r.systemPrompt()); e.setAssistantEnabled(r.assistantEnabled()==null||r.assistantEnabled()); e.setRagTokenBudget(r.ragTokenBudget()==null?3000:r.ragTokenBudget()); e.setAssistantPriority(r.assistantPriority()==null?0:r.assistantPriority()); e.setDocumentCount(0); e.setChunkCount(0); baseMapper.insert(e); return e;
+    }
+    @Transactional public KnowledgeBaseEntity update(Long id, com.studenthub.modules.rag.controller.dto.KnowledgeBaseRequest r) { KnowledgeBaseEntity e=requireBase(id); e.setName(r.name().trim()); e.setDescription(r.description()); if(StringUtils.hasText(r.visibility()))e.setVisibility(r.visibility()); if(r.enabled()!=null)e.setEnabled(r.enabled()); if(r.chunkSize()!=null)e.setChunkSize(r.chunkSize()); if(r.chunkOverlap()!=null)e.setChunkOverlap(r.chunkOverlap()); if(r.topK()!=null)e.setTopK(r.topK()); if(r.scoreThreshold()!=null)e.setScoreThreshold(r.scoreThreshold()); if(r.assistantEnabled()!=null)e.setAssistantEnabled(r.assistantEnabled()); if(r.ragTokenBudget()!=null)e.setRagTokenBudget(r.ragTokenBudget()); if(r.assistantPriority()!=null)e.setAssistantPriority(r.assistantPriority()); e.setSystemPrompt(r.systemPrompt()); baseMapper.updateById(e); return e; }
+    @Transactional public void delete(Long id) { requireBase(id); documentMapper.delete(new LambdaQueryWrapper<KnowledgeDocumentEntity>().eq(KnowledgeDocumentEntity::getKnowledgeBaseId,id)); vectorJdbc.update("DELETE FROM ai_knowledge_chunk WHERE knowledge_base_id=?",id); vectorJdbc.update("DELETE FROM ai_knowledge_chunk_stage WHERE knowledge_base_id=?",id); baseMapper.deleteById(id); }
     public List<KnowledgeDocumentEntity> documents(Long baseId) { requireBase(baseId); return documentMapper.selectList(new LambdaQueryWrapper<KnowledgeDocumentEntity>().eq(KnowledgeDocumentEntity::getKnowledgeBaseId,baseId).orderByDesc(KnowledgeDocumentEntity::getCreatedAt)); }
 
     @Transactional
     public KnowledgeDocumentEntity upload(Long operator, Long baseId, byte[] bytes, String name, String type) {
+        requireEnabled();
         KnowledgeBaseEntity base=requireBase(baseId);
         String contentHash = sha256(bytes);
         KnowledgeDocumentEntity duplicate = documentMapper.selectOne(new LambdaQueryWrapper<KnowledgeDocumentEntity>()
@@ -63,39 +69,47 @@ public class KnowledgeBaseService {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER, "该文档已经存在于当前知识库");
         }
         FileStorageService.StoredFile file=fileStorageService.storeKnowledgeDocument(bytes,name,type,operator,properties.getMaxDocumentSizeMb());
-        KnowledgeDocumentEntity doc=new KnowledgeDocumentEntity(); doc.setKnowledgeBaseId(baseId); doc.setFileId(file.fileId()); doc.setFileName(file.fileName()); doc.setContentType(type); doc.setFileSize((long)bytes.length); doc.setContentHash(contentHash); doc.setStatus("PROCESSING"); doc.setChunkCount(0); documentMapper.insert(doc);
-        try { index(base,doc,bytes,name); doc.setStatus("SUCCESS"); doc.setIndexedAt(LocalDateTime.now()); documentMapper.updateById(doc); refreshCounts(baseId); }
-        catch(Exception ex) { log.error("知识库文档索引失败, docId={}",doc.getId(),ex); vectorJdbc.update("DELETE FROM ai_knowledge_chunk WHERE document_id=?", doc.getId()); doc.setChunkCount(0); doc.setStatus("FAILED"); doc.setErrorMessage(trim(ex.getMessage(),1000)); documentMapper.updateById(doc); refreshCounts(baseId); }
+        KnowledgeDocumentEntity doc=new KnowledgeDocumentEntity();
+        doc.setKnowledgeBaseId(baseId); doc.setFileId(file.fileId()); doc.setFileName(file.fileName());
+        doc.setContentType(type); doc.setFileSize((long)bytes.length); doc.setContentHash(contentHash);
+        doc.setStatus("QUEUED"); doc.setChunkCount(0); doc.setIndexAttempts(0);
+        doc.setProcessedChunks(0); doc.setTotalChunks(0); doc.setNextAttemptAt(LocalDateTime.now());
+        documentMapper.insert(doc);
+        refreshCounts(baseId);
         return doc;
     }
-    @Transactional public void deleteDocument(Long baseId, Long docId) { requireBase(baseId); KnowledgeDocumentEntity d=requireDocument(baseId,docId); vectorJdbc.update("DELETE FROM ai_knowledge_chunk WHERE document_id=?",docId); documentMapper.deleteById(docId); refreshCounts(baseId); }
-    @Transactional public KnowledgeDocumentEntity reindex(Long baseId, Long docId) { KnowledgeBaseEntity b=requireBase(baseId); KnowledgeDocumentEntity d=requireDocument(baseId,docId); byte[] bytes=fileStorageService.readContent(d.getFileId()).bytes(); vectorJdbc.update("DELETE FROM ai_knowledge_chunk WHERE document_id=?",docId); d.setStatus("PROCESSING"); d.setErrorMessage(null); d.setIndexedAt(null); documentMapper.updateById(d); try {index(b,d,bytes,d.getFileName()); d.setStatus("SUCCESS"); d.setIndexedAt(LocalDateTime.now()); documentMapper.updateById(d); refreshCounts(baseId); } catch(Exception e){vectorJdbc.update("DELETE FROM ai_knowledge_chunk WHERE document_id=?", docId);d.setChunkCount(0);d.setStatus("FAILED");d.setErrorMessage(trim(e.getMessage(),1000));documentMapper.updateById(d);refreshCounts(baseId);} return d; }
-    private KnowledgeDocumentEntity requireDocument(Long baseId,Long id){KnowledgeDocumentEntity d=documentMapper.selectById(id);if(d==null||!Objects.equals(d.getKnowledgeBaseId(),baseId))throw new BusinessException(ErrorCode.NOT_FOUND,"文档不存在");return d;}
-    private void refreshCounts(Long baseId){int docs=documentMapper.selectCount(new LambdaQueryWrapper<KnowledgeDocumentEntity>().eq(KnowledgeDocumentEntity::getKnowledgeBaseId,baseId)).intValue();Integer chunks=vectorJdbc.queryForObject("SELECT count(*) FROM ai_knowledge_chunk WHERE knowledge_base_id=?",Integer.class,baseId); KnowledgeBaseEntity u=new KnowledgeBaseEntity();u.setId(baseId);u.setDocumentCount(docs);u.setChunkCount(chunks==null?0:chunks);baseMapper.updateById(u);}
-    private void index(KnowledgeBaseEntity base, KnowledgeDocumentEntity doc, byte[] bytes, String name) {
-        List<KnowledgeDocumentParser.Section> sections=parser.parse(bytes,name); List<Chunk> chunks=chunk(sections,base.getChunkSize(),base.getChunkOverlap()); int ordinal=0;
-        int batchSize=Math.max(1, properties.getEmbeddingBatchSize());
-        for (int from=0; from<chunks.size(); from+=batchSize) {
-            int to=Math.min(chunks.size(), from+batchSize);
-            List<Chunk> batch=chunks.subList(from,to);
-            List<EmbeddingService.EmbeddingResult> embeddings=embeddingService.embedBatch(batch.stream().map(Chunk::content).toList());
-            for (int i=0;i<batch.size();i++) {
-                Chunk c=batch.get(i); EmbeddingService.EmbeddingResult emb=embeddings.get(i); String vector=arrayLiteral(emb.vector()); String metadata; try{metadata=objectMapper.writeValueAsString(Map.of("page",c.page()==null?0:c.page(),"titlePath",c.titlePath()==null?"":c.titlePath(),"ordinal",ordinal));}catch(Exception e){metadata="{}";}
-                // 记录向量模型与维度：换模型后可据此识别历史分块并提示重建，避免余弦静默算错
-                vectorJdbc.update("INSERT INTO ai_knowledge_chunk(knowledge_base_id,document_id,ordinal,title_path,content,content_hash,metadata,embedding,embedding_model,embedding_dim) VALUES(?,?,?,?,?,?,?::jsonb,?::double precision[],?,?) ON CONFLICT (knowledge_base_id, content_hash) DO NOTHING",base.getId(),doc.getId(),ordinal,c.titlePath(),c.content(),sha256(c.content().getBytes(StandardCharsets.UTF_8)),metadata,vector,emb.model(),emb.vector().size()); ordinal++;
-            }
-        }
-        doc.setChunkCount(ordinal);
+    @Transactional public void deleteDocument(Long baseId, Long docId) {
+        requireBase(baseId); requireDocument(baseId,docId);
+        // Main-row deletion serializes with the worker's final ownership lock.
+        documentMapper.deleteById(docId);
+        vectorJdbc.update("DELETE FROM ai_knowledge_chunk WHERE document_id=?",docId);
+        vectorJdbc.update("DELETE FROM ai_knowledge_chunk_stage WHERE document_id=?",docId);
+        refreshCounts(baseId);
     }
-    private List<Chunk> chunk(List<KnowledgeDocumentParser.Section> sections,int size,int overlap){List<Chunk> out=new ArrayList<>();for(var s:sections){String text=s.text();int start=0;while(start<text.length()){int end=Math.min(text.length(),start+size);if(end<text.length()){int cut=Math.max(text.lastIndexOf('\n',end),text.lastIndexOf('。',end));if(cut>start+size/2)end=cut+1;}String c=text.substring(start,end).trim();if(!c.isBlank())out.add(new Chunk(s.titlePath(),s.page(),c));if(end>=text.length())break;start=Math.max(start+1,end-overlap);}}return out;}
-    private String arrayLiteral(List<Double> v){return "{"+v.stream().map(x->Double.toString(x==null?0:x)).collect(Collectors.joining(","))+"}";}
-    public RagTestResponse test(Long baseId,String question,boolean generate){long t=System.currentTimeMillis();KnowledgeBaseEntity b=requireBase(baseId); List<RagTestResponse.RagHit> hits=retrieve(List.of(baseId),question,b.getTopK(),b.getScoreThreshold()); long rt=System.currentTimeMillis()-t;String answer=null;long gt=0; if(generate&&!hits.isEmpty()){long s=System.currentTimeMillis();String context=hits.stream().map(h->"["+h.fileName()+" 第"+(h.page()==null?"-":h.page())+"页]\n"+h.content()).collect(Collectors.joining("\n\n"));String prompt="仅依据下列知识库资料回答问题；资料没有答案时明确说未找到，不要编造。回答末尾列出引用文件名和页码。\n\n资料：\n"+context+"\n\n问题："+question;try{AiChatResponse r=aiChatService.chat(List.of(new AiMessage("system",b.getSystemPrompt()==null?"你是校园知识库助手。":b.getSystemPrompt()),new AiMessage("user",prompt)));answer=r.content();}catch(Exception e){answer="知识库已召回相关资料，但回答模型暂不可用。";}gt=System.currentTimeMillis()-s;}var snapshot=AiRuntimeConfig.current();String model=snapshot!=null&&snapshot.embedding()!=null?snapshot.embedding().model():null;return new RagTestResponse(answer,hits,rt,gt,model);}
+    @Transactional public KnowledgeDocumentEntity reindex(Long baseId, Long docId) {
+        requireBase(baseId); requireDocument(baseId,docId);
+        if (documentMapper.enqueue(docId) != 1) {
+            throw new BusinessException(ErrorCode.REQUEST_STATE_INVALID,"文档已在索引队列中");
+        }
+        return documentMapper.selectById(docId);
+    }
+    private KnowledgeDocumentEntity requireDocument(Long baseId,Long id){KnowledgeDocumentEntity d=documentMapper.selectById(id);if(d==null||!Objects.equals(d.getKnowledgeBaseId(),baseId))throw new BusinessException(ErrorCode.NOT_FOUND,"文档不存在");return d;}
+    void refreshCounts(Long baseId) {
+        List<KnowledgeDocumentEntity> documents = documentMapper.selectList(new LambdaQueryWrapper<KnowledgeDocumentEntity>()
+                .select(KnowledgeDocumentEntity::getChunkCount).eq(KnowledgeDocumentEntity::getKnowledgeBaseId, baseId));
+        int chunks = documents.stream().mapToInt(doc -> doc.getChunkCount() == null ? 0 : doc.getChunkCount()).sum();
+        KnowledgeBaseEntity update = new KnowledgeBaseEntity();
+        update.setId(baseId); update.setDocumentCount(documents.size()); update.setChunkCount(chunks);
+        baseMapper.updateById(update);
+    }
+    public RagTestResponse test(Long baseId,String question,boolean generate){requireEnabled();long t=System.currentTimeMillis();KnowledgeBaseEntity b=requireBase(baseId); List<RagTestResponse.RagHit> hits=retrieve(List.of(baseId),question,b.getTopK(),b.getScoreThreshold()); long rt=System.currentTimeMillis()-t;String answer=null;long gt=0; if(generate&&!hits.isEmpty()){long s=System.currentTimeMillis();String context=hits.stream().map(h->"["+h.fileName()+" 第"+(h.page()==null?"-":h.page())+"页]\n"+h.content()).collect(Collectors.joining("\n\n"));String prompt="仅依据下列知识库资料回答问题；资料没有答案时明确说未找到，不要编造。回答末尾列出引用文件名和页码。\n\n资料：\n"+context+"\n\n问题："+question;try{AiChatResponse r=aiChatService.chat(List.of(new AiMessage("system",b.getSystemPrompt()==null?"你是校园知识库助手。":b.getSystemPrompt()),new AiMessage("user",prompt)));answer=r.content();}catch(Exception e){answer="知识库已召回相关资料，但回答模型暂不可用。";}gt=System.currentTimeMillis()-s;}var snapshot=AiRuntimeConfig.current();String model=snapshot!=null&&snapshot.embedding()!=null?snapshot.embedding().model():null;return new RagTestResponse(answer,hits,rt,gt,model);}
 
     /**
      * 混合检索：向量与词法各自独立召回后用 RRF 融合，检索逻辑见 {@link RetrievalService}。
      * 查询向量生成失败时降级为纯词法召回，不再让整次检索失败。
      */
     public List<RagTestResponse.RagHit> retrieve(List<Long> baseIds,String question,int topK,java.math.BigDecimal threshold){
+        if (!properties.isEnabled()) return List.of();
         if (baseIds==null || baseIds.isEmpty() || question==null || question.isBlank()) return List.of();
         List<Double> queryVector=null;
         try { queryVector=embeddingService.embed(question).vector(); }
@@ -104,17 +118,63 @@ public class KnowledgeBaseService {
     }
     private String sha256(byte[] b){return Digests.sha256Hex(b);}
     private String trim(String s,int n){return s==null?"":s.length()>n?s.substring(0,n):s;}
-    private record Chunk(String titlePath,Integer page,String content){}
 
-    /** AI 助手使用的公共校园知识上下文；个人/工单数据仍由原有意图链路处理。 */
-    public String assistantContext(String question) {
-        List<Long> ids = baseMapper.selectList(new LambdaQueryWrapper<KnowledgeBaseEntity>()
+    /**
+     * AI 助手使用的知识库上下文（V54）：与 visibility 解耦，检索 enabled + assistantEnabled 的库；
+     * 读每个库自己的 topK/scoreThreshold/ragTokenBudget，多库按 assistantPriority 降序合并去重，
+     * 再按本次 token 预算装包。公开接口仍只允许 visibility=PUBLIC（见 PublicKnowledgeController）。
+     */
+    public RagContext assistantContext(String question, int tokenBudget) {
+        if (!properties.isEnabled()) return RagContext.empty();
+        List<KnowledgeBaseEntity> bases = baseMapper.selectList(new LambdaQueryWrapper<KnowledgeBaseEntity>()
                 .eq(KnowledgeBaseEntity::getEnabled, true)
-                .eq(KnowledgeBaseEntity::getVisibility, "PUBLIC"))
-                .stream().map(KnowledgeBaseEntity::getId).toList();
-        if (ids.isEmpty()) return null;
-        List<RagTestResponse.RagHit> hits = retrieve(ids, question, 6, new java.math.BigDecimal("0.30"));
-        if (hits.isEmpty()) return null;
-        return hits.stream().map(h -> "[来源：" + h.fileName() + (h.page() == null ? "" : "，第" + h.page() + "页") + "]\n" + h.content()).collect(Collectors.joining("\n\n"));
+                .eq(KnowledgeBaseEntity::getAssistantEnabled, true)
+                .orderByDesc(KnowledgeBaseEntity::getAssistantPriority)
+                .orderByDesc(KnowledgeBaseEntity::getUpdatedAt));
+        if (bases.isEmpty()) return RagContext.empty();
+        List<RagTestResponse.RagHit> merged = new ArrayList<>();
+        java.util.Set<Long> seenChunks = new java.util.HashSet<>();
+        for (KnowledgeBaseEntity base : bases) {
+            int kbTopK = base.getTopK() == null ? 5 : base.getTopK();
+            int kbBudget = base.getRagTokenBudget() == null ? 3000 : base.getRagTokenBudget();
+            java.math.BigDecimal threshold = base.getScoreThreshold() == null
+                    ? new java.math.BigDecimal("0.30") : base.getScoreThreshold();
+            List<RagTestResponse.RagHit> hits = retrieve(List.of(base.getId()), question, kbTopK, threshold);
+            for (RagTestResponse.RagHit hit : hits) {
+                if (seenChunks.add(hit.chunkId())) {
+                    merged.add(hit);
+                }
+            }
+            // 每库最多贡献 kbBudget 内的候选，避免单库挤占全部预算；最终仍按总预算再裁
+            if (merged.size() > 200) break;
+        }
+        if (merged.isEmpty()) return RagContext.empty();
+        merged.sort(java.util.Comparator.comparingDouble(RagTestResponse.RagHit::score).reversed());
+        List<RagTestResponse.RagHit> packed = new ArrayList<>();
+        int used = 0;
+        for (RagTestResponse.RagHit hit : merged) {
+            String header = "[来源：" + hit.fileName()
+                    + (hit.page() == null ? "" : "，第" + hit.page() + "页")
+                    + (hit.titlePath() == null || hit.titlePath().isBlank() ? "" : "，" + hit.titlePath()) + "]";
+            int cost = com.studenthub.common.util.TokenEstimator.estimate(header + hit.content(), 1.5) + 8;
+            if (used + cost > tokenBudget && !packed.isEmpty()) {
+                break;
+            }
+            packed.add(hit);
+            used += cost;
+            if (used >= tokenBudget) break;
+        }
+        if (packed.isEmpty()) return RagContext.empty();
+        String text = packed.stream().map(h -> "[来源：" + h.fileName()
+                        + (h.page() == null ? "" : "，第" + h.page() + "页")
+                        + (h.titlePath() == null || h.titlePath().isBlank() ? "" : "，" + h.titlePath()) + "]\n"
+                        + h.content())
+                .collect(Collectors.joining("\n\n"));
+        return new RagContext(text, packed);
+    }
+
+    /** 知识库检索结果：拼好的上下文 + 结构化来源（供 App 展示引用）。 */
+    public record RagContext(String text, List<RagTestResponse.RagHit> hits) {
+        public static RagContext empty() { return new RagContext(null, List.of()); }
     }
 }

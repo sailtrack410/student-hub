@@ -4,12 +4,10 @@ import com.studenthub.common.ErrorCode;
 import com.studenthub.common.util.Digests;
 import com.studenthub.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "studenthub.wechat", name = "mode", havingValue = "mock", matchIfMissing = true)
 public class MockWechatIdentityProvider implements WechatIdentityProvider {
 
     private final WechatProperties properties;

@@ -22,5 +22,6 @@ public class CommunityDirectMessageEntity extends BaseEntity {
     private String referenceType;
     private Long referenceId;
     private String referenceCard;
+    private LocalDateTime deliveredAt;
     private LocalDateTime readAt;
 }

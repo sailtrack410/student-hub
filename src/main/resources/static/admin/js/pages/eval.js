@@ -1,5 +1,5 @@
 /* 服务评价（管理端）：真实接口 /api/admin/evaluations。
-   评分页签 + 分页 + 回复弹层（一条评价仅可回复一次），画布规范。 */
+   评分页签（含差评跟进）+ 标签展示 + 分页 + 回复弹层 + 导出 CSV，画布规范。 */
 (function () {
     'use strict';
 
@@ -7,21 +7,28 @@
 
     var TABS = [
         { value: '', label: '全部' },
-        { value: 'good', label: '好评 · 4-5星' },
-        { value: 'mid', label: '中评 · 3星' },
-        { value: 'bad', label: '差评 · 1-2星' },
+        { value: 'good', label: '好评 · 4-5星', ratings: [4, 5] },
+        { value: 'mid', label: '中评 · 3星', ratings: [3] },
+        { value: 'bad', label: '差评 · 1-2星', ratings: [1, 2] },
+        { value: 'badPending', label: '差评待跟进', ratings: [1, 2], replied: false },
         { value: 'pending', label: '待回复', replied: false },
         { value: 'replied', label: '已回复', replied: true }
     ];
-    var RATING_MAP = { good: [4, 5], mid: [3], bad: [1, 2] };
+
+    function currentTab(value) {
+        for (var i = 0; i < TABS.length; i++) {
+            if (TABS[i].value === value) return TABS[i];
+        }
+        return {};
+    }
 
     window.AdminPages.EvalPage = {
         name: 'EvalPage',
         template: [
             '<div class="pgw" style="display:flex;flex-direction:column;gap:16px;flex:1;min-height:0">',
             '  <div class="page-h">',
-            '    <div><h1>服务评价</h1><div class="sub">服务完成后的师生评价统一管理与回复</div></div>',
-            '    <div class="r"><button class="btn2" @click="load">刷新</button></div>',
+            '    <div><h1>服务评价</h1><div class="sub">评价统一管理 · 差评跟进 · 导出归档</div></div>',
+            '    <div class="r"><button class="btn2" @click="exportCsv">导出 CSV</button><button class="btn2" @click="load">刷新</button></div>',
             '  </div>',
 
             '  <div class="tabs">',
@@ -29,17 +36,20 @@
             '  </div>',
 
             '  <div class="lcard" style="flex:1;min-height:0">',
-            '    <div class="cap">评价列表<span class="cnt" v-if="total">共 {{ total }} 条</span></div>',
+            '    <div class="cap">评价列表<span class="cnt" v-if="Number(total) > 0">共 {{ total }} 条</span>',
+            '      <span class="r" style="font-size:11px;color:var(--tk-text3)" v-if="tabValue === \'badPending\'">差评（1-2 星）且尚未回复，需优先跟进</span>',
+            '    </div>',
             '    <div class="tblw" style="flex:1;min-height:0;overflow:auto">',
             '      <table class="pk">',
-            '        <colgroup><col style="width:120px"><col style="width:110px"><col style="width:110px"><col style="width:130px"><col><col style="width:120px"><col style="width:110px"><col></colgroup>',
-            '        <thead><tr><th>评价ID</th><th>评分</th><th>关联申请</th><th>评价时间</th><th>评价内容</th><th>处理人</th><th>回复状态</th><th class="r">操作</th></tr></thead>',
+            '        <colgroup><col style="width:110px"><col style="width:100px"><col style="width:130px"><col style="width:120px"><col style="width:120px"><col><col style="width:100px"><col style="width:100px"><col style="width:130px"></colgroup>',
+            '        <thead><tr><th>评价ID</th><th>评分</th><th>标签</th><th>关联申请</th><th>评价时间</th><th>评价内容</th><th>处理人</th><th>回复状态</th><th class="r">操作</th></tr></thead>',
             '        <tbody>',
-            '          <tr v-if="!rows.length && !loading"><td colspan="8" style="text-align:center;color:var(--tk-muted);padding:32px 0">暂无评价</td></tr>',
-            '          <tr v-if="loading"><td colspan="8" style="text-align:center;color:var(--tk-muted);padding:32px 0">加载中…</td></tr>',
+            '          <tr v-if="!rows.length && !loading"><td colspan="9" style="text-align:center;color:var(--tk-muted);padding:32px 0">暂无评价</td></tr>',
+            '          <tr v-if="loading"><td colspan="9" style="text-align:center;color:var(--tk-muted);padding:32px 0">加载中…</td></tr>',
             '          <tr v-for="row in rows" :key="row.evaluationId">',
             '            <td style="color:var(--tk-muted)">EV-{{ row.evaluationId }}</td>',
             '            <td><span :style="{ color: ratingColor(row.rating), letterSpacing: \'1px\' }">{{ stars(row.rating) }}</span></td>',
+            '            <td><span v-if="row.tags" class="bdg n2">{{ row.tags }}</span><span v-else style="color:var(--tk-muted)">-</span></td>',
             '            <td style="color:var(--tk-text3)">REQ-{{ row.requestId }}</td>',
             '            <td style="color:var(--tk-text3)">{{ fmt(row.createdAt) }}</td>',
             '            <td style="color:var(--tk-text)">{{ row.comment || "-" }}</td>',
@@ -77,6 +87,7 @@
             '      <div class="psum">',
             '        <div class="l1">「{{ target.comment || "未填写文字评价" }}」 · {{ stars(target.rating) }}</div>',
             '        <div class="l2">关联申请 REQ-{{ target.requestId }} · 处理人 {{ target.assigneeName || "-" }} · {{ fmt(target.createdAt) }}</div>',
+            '        <div class="l2" v-if="target.tags">标签：{{ target.tags }}</div>',
             '      </div>',
             '      <div class="fld"><label>回复内容 <em>*</em></label><textarea class="pta" v-model="replyText" maxlength="512" placeholder="回复将展示在评价下方，并站内通知评价人"></textarea></div>',
             '      <div class="pbtn"><span class="sp"></span><button class="c ghost" @click="replyVisible = false">取消</button>',
@@ -102,27 +113,71 @@
             var replyText = Vue.ref('');
             var submitting = Vue.ref(false);
 
-            function queryOf() {
-                var t = TABS.filter(function (x) { return x.value === tabValue.value; })[0] || {};
-                var params = ['pageNum=' + pageNum.value, 'pageSize=' + pageSize.value];
-                if (t.replied !== undefined) params.push('replied=' + t.replied);
-                if (RATING_MAP[t.value]) params.push('rating=' + RATING_MAP[t.value][0]);
-                return params.join('&');
+            var FETCH_PAGE_SIZE = 50;
+            var MAX_FETCH_PAGES = 20;
+
+            function fetchAllPages(rating, replied) {
+                var results = [];
+                var page = 1;
+                function step() {
+                    var params = 'pageSize=' + FETCH_PAGE_SIZE + '&pageNum=' + page;
+                    if (rating) params += '&rating=' + rating;
+                    if (replied !== undefined) params += '&replied=' + replied;
+                    return api.get('/api/admin/evaluations?' + params).then(function (res) {
+                        results = results.concat(res.records || []);
+                        if (page < MAX_FETCH_PAGES && page * FETCH_PAGE_SIZE < (res.total || 0)) {
+                            page++;
+                            return step();
+                        }
+                        return results;
+                    });
+                }
+                return step();
             }
-            // 多评分档位（好评4-5、差评1-2）一次查询没法带两个 rating，退化为前端过滤
-            function applyRatingFilter(list) {
-                var t = TABS.filter(function (x) { return x.value === tabValue.value; })[0] || {};
-                var map = RATING_MAP[t.value];
-                if (!map) return list;
-                return list.filter(function (r) { return map.indexOf(r.rating) >= 0; });
+
+            function loadForTab(tab, pageNo, size) {
+                var ratings = tab.ratings || [];
+                var replied = tab.replied;
+                if (ratings.length <= 1) {
+                    var rating = ratings.length ? ratings[0] : null;
+                    var params = 'pageNum=' + pageNo + '&pageSize=' + size;
+                    if (rating) params += '&rating=' + rating;
+                    if (replied !== undefined) params += '&replied=' + replied;
+                    return api.get('/api/admin/evaluations?' + params).then(function (res) {
+                        return { rows: res.records || [], total: res.total || 0, clientPaged: false };
+                    });
+                }
+                // 多个评分档位（好评、差评）：后端仅支持单 rating，逐档全量拉取后按时间排序前端分页
+                return Promise.all(ratings.map(function (rating) {
+                    return fetchAllPages(rating, replied);
+                })).then(function (groups) {
+                    var merged = [];
+                    groups.forEach(function (group) { merged = merged.concat(group); });
+                    merged.sort(function (a, b) {
+                        return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+                    });
+                    var start = (pageNo - 1) * size;
+                    return {
+                        rows: merged.slice(start, start + size),
+                        total: merged.length,
+                        clientPaged: true
+                    };
+                });
             }
 
             function load() {
                 loading.value = true;
-                api.get('/api/admin/evaluations?' + queryOf())
-                    .then(function (page) {
-                        rows.value = applyRatingFilter(page.records || []);
-                        total.value = page.total || 0;
+                loadForTab(currentTab(tabValue.value), pageNum.value, pageSize.value)
+                    .then(function (result) {
+                        rows.value = result.rows;
+                        total.value = result.total;
+                        if (result.clientPaged) {
+                            var totalPages = Math.max(1, Math.ceil(result.total / pageSize.value));
+                            if (pageNum.value > totalPages) {
+                                pageNum.value = totalPages;
+                                load();
+                            }
+                        }
                     })
                     .catch(function (error) { El.ElMessage.error(error.message); })
                     .finally(function () { loading.value = false; });
@@ -148,10 +203,11 @@
                 replyVisible.value = true;
             }
             function openDetail(row) {
-                El.ElMessageBox.alert(
-                    (row.comment || '未填写文字评价') + (row.reply ? '<br><br><b>商家回复：</b>' + row.reply : ''),
-                    '评价详情 EV-' + row.evaluationId,
-                    { dangerouslyUseHTMLString: false, confirmButtonText: '关闭' });
+                var text = (row.comment || '未填写文字评价')
+                    + (row.tags ? '\n标签：' + row.tags : '')
+                    + (row.reply ? '\n\n商家回复：' + row.reply : '');
+                El.ElMessageBox.alert(text, '评价详情 EV-' + row.evaluationId,
+                    { confirmButtonText: '关闭' });
             }
             function submit() {
                 if (!replyText.value.trim()) {
@@ -168,6 +224,49 @@
                     })
                     .catch(function (error) { El.ElMessage.error(error.message); })
                     .finally(function () { submitting.value = false; });
+            }
+
+            /** 导出当前页签全部评价为 CSV（含标签/回复），用于差评跟进归档。 */
+            function exportCsv() {
+                var tab = currentTab(tabValue.value);
+                var ratings = tab.ratings || [];
+                var replied = tab.replied;
+                var promise = ratings.length <= 1
+                    ? fetchAllPages(ratings.length ? ratings[0] : null, replied)
+                    : Promise.all(ratings.map(function (rating) { return fetchAllPages(rating, replied); }))
+                        .then(function (groups) {
+                            var merged = [];
+                            groups.forEach(function (group) { merged = merged.concat(group); });
+                            return merged;
+                        });
+                promise.then(function (list) {
+                    list.sort(function (a, b) {
+                        return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+                    });
+                    var lines = [['评价ID', '评分', '标签', '关联申请', '处理人', '评价内容', '回复内容', '评价时间']];
+                    list.forEach(function (row) {
+                        lines.push([
+                            row.evaluationId, row.rating, row.tags || '', row.requestId,
+                            row.assigneeName || '', row.comment || '', row.reply || '',
+                            row.createdAt || ''
+                        ]);
+                    });
+                    var csv = lines.map(function (line) {
+                        return line.map(function (cell) {
+                            return '"' + String(cell == null ? '' : cell).replace(/"/g, '""') + '"';
+                        }).join(',');
+                    }).join('\r\n');
+                    var blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+                    var downloadUrl = URL.createObjectURL(blob);
+                    var link = document.createElement('a');
+                    link.href = downloadUrl;
+                    link.download = '服务评价-' + new Date().toISOString().slice(0, 10) + '.csv';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(downloadUrl);
+                    El.ElMessage.success('已导出 ' + list.length + ' 条评价');
+                }).catch(function (error) { El.ElMessage.error(error.message); });
             }
 
             function stars(n) {
@@ -188,8 +287,9 @@
             return {
                 tabs: TABS, tabValue: tabValue, rows: rows, total: total, pageNum: pageNum, pageSize: pageSize,
                 loading: loading, totalPages: totalPages, pageNumbers: pageNumbers, goPage: goPage, switchTab: switchTab,
+                load: load, reload: reload,
                 replyVisible: replyVisible, target: target, replyText: replyText, submitting: submitting,
-                openReply: openReply, openDetail: openDetail, submit: submit,
+                openReply: openReply, openDetail: openDetail, submit: submit, exportCsv: exportCsv,
                 stars: stars, ratingColor: ratingColor, fmt: fmt
             };
         }

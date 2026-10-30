@@ -29,6 +29,16 @@ public class ServiceItemEntity extends BaseEntity {
     private String formSchema;
     private Long handlerOrganizationId;
     private Integer slaHours;
+    /** 默认优先级：NORMAL 普通 / URGENT 加急（创建工单时作为初始优先级） */
+    private String defaultPriority;
+    /** 是否需要现场照片 → 完工照片 → 申请人确认的拍照流程 */
+    private Boolean photoWorkflowRequired;
+    /** 办事指南（富文本/纯文本，S02） */
+    private String guideContent;
+    /** 材料清单 JSON 数组，元素 {name, required, note} */
+    private String materialList;
+    /** 常见问题 JSON 数组，元素 {question, answer} */
+    private String faq;
     private Integer sortOrder;
     private String status;
 }

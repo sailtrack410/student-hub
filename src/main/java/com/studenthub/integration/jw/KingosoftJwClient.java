@@ -47,11 +47,23 @@ public class KingosoftJwClient {
             Pattern.DOTALL);
 
     private final JwProperties properties;
-    private final PublicKey rsaPublicKey;
+    private volatile PublicKey rsaPublicKey;
 
     public KingosoftJwClient(JwProperties properties) {
         this.properties = properties;
-        this.rsaPublicKey = buildPublicKey(properties.getRsaModulus(), properties.getRsaExponent());
+        reload();
+    }
+
+    /** 管理端修改 SSO RSA 公钥后重建本地公钥；非法公钥保留旧值并记录，不打断登录链路。 */
+    public synchronized void reload() {
+        try {
+            this.rsaPublicKey = buildPublicKey(properties.getRsaModulus(), properties.getRsaExponent());
+        } catch (Exception exception) {
+            if (this.rsaPublicKey == null) {
+                throw exception;
+            }
+            log.error("教务 SSO RSA 公钥配置无效，保留启动时的公钥: {}", exception.getMessage());
+        }
     }
 
     /**

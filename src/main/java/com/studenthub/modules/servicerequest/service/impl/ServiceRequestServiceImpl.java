@@ -42,15 +42,21 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ServiceRequestServiceImpl implements ServiceRequestService {
 
-    private static final String REQUEST_NO_PREFIX = "SR-";
+    private static final String REQUEST_NO_PREFIX = "SR";
 
     /** 催单冷却期（小时）：单条申请每 2 小时仅允许催单 1 次 */
     private static final long URGE_COOLDOWN_HOURS = 2;
@@ -86,6 +92,7 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
         entity.setTitle(request.title() == null || request.title().isBlank()
                 ? item.getItemName() : request.title().trim());
         entity.setFormData(normalizedFormData);
+        applyLeaveFields(entity, item, normalizedFormData);
         entity.setStatus(RequestTransitions.Status.SUBMITTED.name());
         entity.setHandlerOrganizationId(item.getHandlerOrganizationId());
         entity.setIdempotencyKey(idempotencyKey == null || idempotencyKey.isBlank()
@@ -159,7 +166,17 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
                 .orderByDesc(ServiceRequestEntity::getCreatedAt);
         Page<ServiceRequestEntity> page = serviceRequestMapper.selectPage(
                 new Page<>(pageNumOrDefault(pageNum), pageSizeOrDefault(pageSize)), wrapper);
-        return PageResult.of(page.convert(ServiceRequestSummaryResponse::from));
+        List<Long> requestIds = page.getRecords().stream().map(ServiceRequestEntity::getId).toList();
+        Map<Long, WorkOrderEntity> orders = requestIds.isEmpty()
+                ? Map.of()
+                : workOrderMapper.selectList(new LambdaQueryWrapper<WorkOrderEntity>()
+                        .in(WorkOrderEntity::getRequestId, requestIds))
+                .stream()
+                .collect(Collectors.toMap(WorkOrderEntity::getRequestId, Function.identity(), (left, right) -> left));
+        List<ServiceRequestSummaryResponse> records = page.getRecords().stream()
+                .map(entity -> ServiceRequestSummaryResponse.from(entity, orders.get(entity.getId())))
+                .toList();
+        return PageResult.of(page.getCurrent(), page.getSize(), page.getTotal(), records);
     }
 
     @Override
@@ -296,5 +313,43 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
 
     private int pageSizeOrDefault(Integer pageSize) {
         return pageSize == null ? 10 : pageSize;
+    }
+
+    /** 请假事项（AFFAIR-LEAVE）在提交时落请假专属列；其他事项不写。 */
+    private void applyLeaveFields(ServiceRequestEntity entity, ServiceItemEntity item, String formData) {
+        if (item == null || item.getItemCode() == null || !"AFFAIR-LEAVE".equalsIgnoreCase(item.getItemCode())) {
+            return;
+        }
+        JsonNode node = parseFormData(formData);
+        if (node == null) {
+            return;
+        }
+        String leaveType = text(node, "leaveType");
+        LocalDate start = parseDate(text(node, "startDate"));
+        LocalDate end = parseDate(text(node, "endDate"));
+        entity.setLeaveType(leaveType);
+        entity.setLeaveStartAt(start == null ? null : start.atStartOfDay());
+        entity.setLeaveEndAt(end == null ? null : end.atTime(23, 59, 59));
+        if (start != null && end != null && !end.isBefore(start)) {
+            entity.setLeaveDays(BigDecimal.valueOf(ChronoUnit.DAYS.between(start, end) + 1)
+                    .setScale(1, java.math.RoundingMode.HALF_UP));
+        }
+        entity.setLeaveCancelStatus("NONE");
+    }
+
+    private String text(JsonNode node, String key) {
+        JsonNode value = node.get(key);
+        return value == null || value.isNull() ? null : value.asText();
+    }
+
+    private LocalDate parseDate(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(value.length() >= 10 ? value.substring(0, 10) : value);
+        } catch (Exception exception) {
+            return null;
+        }
     }
 }

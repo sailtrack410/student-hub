@@ -33,7 +33,17 @@ public interface CommunityDirectMessageMapper extends BaseMapper<CommunityDirect
             + "GROUP BY sender_id")
     List<Map<String, Object>> unreadByPeer(@Param("campusId") Long campusId, @Param("userId") Long userId);
 
-    @Update("UPDATE community_direct_message SET read_at = CURRENT_TIMESTAMP "
+    @Update("UPDATE community_direct_message SET delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP) "
+            + "WHERE id = #{messageId} AND receiver_id = #{receiverId} AND deleted = 0")
+    int markDelivered(@Param("messageId") Long messageId, @Param("receiverId") Long receiverId);
+
+    @Update("UPDATE community_direct_message SET read_at = CURRENT_TIMESTAMP, "
+            + "delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP) "
+            + "WHERE id = #{messageId} AND receiver_id = #{receiverId} AND deleted = 0 AND read_at IS NULL")
+    int markReadById(@Param("messageId") Long messageId, @Param("receiverId") Long receiverId);
+
+    @Update("UPDATE community_direct_message SET read_at = CURRENT_TIMESTAMP, "
+            + "delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP) "
             + "WHERE campus_id = #{campusId} AND receiver_id = #{userId} AND sender_id = #{withUserId} "
             + "AND deleted = 0 AND read_at IS NULL")
     int markConversationRead(@Param("campusId") Long campusId, @Param("userId") Long userId,

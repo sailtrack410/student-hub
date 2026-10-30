@@ -4,7 +4,6 @@ import com.studenthub.common.ErrorCode;
 import com.studenthub.common.util.Digests;
 import com.studenthub.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
@@ -13,7 +12,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "studenthub.qq", name = "mode", havingValue = "mock", matchIfMissing = true)
 public class MockQqIdentityProvider implements QqIdentityProvider {
 
     private final QqProperties properties;
@@ -23,7 +21,9 @@ public class MockQqIdentityProvider implements QqIdentityProvider {
         if (accessToken == null || accessToken.isBlank() || accessToken.startsWith("invalid")) {
             throw new BusinessException(ErrorCode.QQ_LOGIN_FAILED);
         }
-        return new QqIdentity(Digests.sha256Hex(accessToken), null);
+        String openId = Digests.sha256Hex(accessToken);
+        // mock 模式也返回稳定的昵称，便于本地确认「QQ 昵称默认展示」；头像为空由 App 显示默认头像。
+        return new QqIdentity(openId, null, "QQ用户" + openId.substring(0, 4), null);
     }
 
     @Override

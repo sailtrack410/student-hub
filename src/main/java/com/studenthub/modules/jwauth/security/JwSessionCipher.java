@@ -23,10 +23,17 @@ public class JwSessionCipher {
     private static final int IV_LENGTH = 12;
     private static final int TAG_BITS = 128;
 
-    private final SecretKey key;
+    private final JwProperties properties;
     private final SecureRandom secureRandom = new SecureRandom();
+    private volatile SecretKey key;
 
     public JwSessionCipher(JwProperties properties) {
+        this.properties = properties;
+        reload();
+    }
+
+    /** 管理端修改教务会话加密密钥后重建 AES Key；之后新写入的会话使用新 Key。 */
+    public synchronized void reload() {
         try {
             byte[] keyBytes = MessageDigest.getInstance("SHA-256")
                     .digest(properties.getEncryptKey().getBytes(StandardCharsets.UTF_8));

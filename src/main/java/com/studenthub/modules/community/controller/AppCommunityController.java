@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/app/community")
@@ -115,6 +116,14 @@ public class AppCommunityController {
         return Result.success(communityService.authorProfile(currentUserProvider.requireCurrentUser(), authorId));
     }
 
+    @PostMapping("/appeals")
+    @Operation(summary = "提交内容申诉", description = "仅作者本人可对被隐藏/删除的帖子提交复核申请，进入人工复核队列。",
+            operationId = "createCommunityAppeal")
+    public Result<CommunityAppealResponse> appeal(@RequestBody @Valid CreateCommunityAppealRequest request) {
+        return Result.success(communityModerationService.submitAppeal(
+                currentUserProvider.requireCurrentUser(), request));
+    }
+
     @GetMapping("/messages")
     @Operation(summary = "查询与用户的私信")
     public Result<List<DirectMessageResponse>> messages(@RequestParam Long withUserId) {
@@ -129,10 +138,38 @@ public class AppCommunityController {
     }
 
     @PostMapping("/messages/read")
-    @Operation(summary = "标记私信会话已读")
-    public Result<Void> markMessagesRead(@RequestParam Long withUserId) {
-        directMessageService.markConversationRead(currentUserProvider.requireCurrentUser(), withUserId);
-        return Result.success();
+    @Operation(summary = "标记私信已读")
+    public Result<MessageReceiptResponse> markMessagesRead(
+            @RequestParam Long withUserId,
+            @RequestBody(required = false) MarkReadRequest request) {
+        return Result.success(directMessageService.markRead(
+                currentUserProvider.requireCurrentUser(), withUserId,
+                request == null ? null : request.messageIds()));
+    }
+
+    @PostMapping("/messages/delivered")
+    @Operation(summary = "批量标记私信送达")
+    public Result<MessageReceiptResponse> markDelivered(@RequestBody @Valid MarkDeliveredRequest request) {
+        return Result.success(directMessageService.markDelivered(
+                currentUserProvider.requireCurrentUser(), request.messageIds()));
+    }
+
+    @GetMapping("/presence")
+    @Operation(summary = "批量查询在线状态")
+    public Result<List<Map<String, Object>>> presence(@RequestParam String userIds) {
+        var user = currentUserProvider.requireCurrentUser();
+        List<Map<String, Object>> result = java.util.Arrays.stream(userIds.split(","))
+                .map(String::trim).filter(s -> s.matches("\\d+")).limit(50)
+                .map(Long::valueOf).map(id -> {
+                    boolean allowed = id.equals(user.userId()) || directMessageService.canContact(user, id);
+                    boolean online = allowed && directMessageService.isOnline(id);
+                    Map<String, Object> row = new java.util.LinkedHashMap<>();
+                    row.put("userId", id);
+                    row.put("online", online);
+                    row.put("lastSeenAt", online || !allowed ? null : directMessageService.lastSeenAt(id));
+                    return row;
+                }).toList();
+        return Result.success(result);
     }
 
     @GetMapping("/messages/contacts")

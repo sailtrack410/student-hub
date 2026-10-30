@@ -100,8 +100,10 @@
     }
 
     // 全局触摸监听：待机屏任意触摸进入主控台，其他情况重置空闲计时
-    document.addEventListener('pointerdown', function () {
+    document.addEventListener('pointerdown', function (event) {
         if (state === 'attract') {
+            // 待机屏上的下载入口是真实链接，不要被“触摸任意位置进入”拦截。
+            if (event.target && event.target.closest && event.target.closest('.attract-download')) return;
             switchView('home');
         } else {
             resetIdle();
@@ -581,6 +583,8 @@
             .catch(function () {
                 $('guide-items').innerHTML =
                     '<li class="guide-empty">指南加载失败，请返回重试</li>';
+                // 首页卡片也别停在「加载中…」，给一个可理解的兜底文案
+                $('preview-guide').textContent = '服务目录暂时不可用，进入后可重试';
             });
     }
 

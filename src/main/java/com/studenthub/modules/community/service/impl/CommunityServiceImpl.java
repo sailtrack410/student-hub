@@ -3,6 +3,8 @@ package com.studenthub.modules.community.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studenthub.common.ErrorCode;
 import com.studenthub.common.util.JsonIds;
 import com.studenthub.common.PageResult;
@@ -20,6 +22,7 @@ import com.studenthub.modules.community.mapper.CommunityCommentLikeMapper;
 import com.studenthub.modules.community.entity.CommunityTopicEntity;
 import com.studenthub.modules.community.entity.CommunityPostLikeEntity;
 import com.studenthub.modules.community.entity.CommunityCommentLikeEntity;
+import com.studenthub.modules.community.service.BannedWordService;
 import com.studenthub.modules.community.service.CommunityModerationService;
 import com.studenthub.modules.community.service.CommunityService;
 import com.studenthub.modules.file.entity.FileStorageEntity;
@@ -37,8 +40,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -63,6 +68,8 @@ public class CommunityServiceImpl implements CommunityService {
     private final CommunityModerationService communityModerationService;
     private final com.studenthub.modules.achievement.service.AchievementService achievementService;
     private final SocialService socialService;
+    private final BannedWordService bannedWordService;
+    private final ObjectMapper objectMapper;
 
     @Override
     public List<CommunitySectionResponse> sections(Long campusId) {
@@ -99,6 +106,8 @@ public class CommunityServiceImpl implements CommunityService {
                         .like(CommunityPostEntity::getTitle, search)
                         .or().like(CommunityPostEntity::getContent, search)
                         .or().like(CommunityPostEntity::getTopics, search));
+        // 官方置顶（C12）：置顶帖优先展示，再按热度/时间排序
+        wrapper.orderByDesc(CommunityPostEntity::getFeedPinned);
         if (hot) {
             wrapper.orderByDesc(CommunityPostEntity::getLikeCount)
                     .orderByDesc(CommunityPostEntity::getCommentCount)
@@ -114,9 +123,13 @@ public class CommunityServiceImpl implements CommunityService {
     @Override
     public CommunityPostDetailResponse detail(AuthenticatedUser user, Long postId) {
         CommunityPostEntity post = requirePost(user, postId);
+        // 举报人对被举报评论不可见（与举报管理一致），其余人正常可见
+        String reportedByViewer = "SELECT target_id FROM community_report WHERE target_type = 'COMMENT' AND reporter_id = "
+                + user.userId();
         List<CommunityCommentEntity> comments = commentMapper.selectList(new LambdaQueryWrapper<CommunityCommentEntity>()
                 .eq(CommunityCommentEntity::getPostId, postId)
                 .eq(CommunityCommentEntity::getStatus, ENABLED)
+                .notInSql(CommunityCommentEntity::getId, reportedByViewer)
                 .orderByAsc(CommunityCommentEntity::getCreatedAt)
                 .last("LIMIT 100"));
         // 批量组装评论（一屏最多 100 条 → 3 条 SQL），作者标记在 Map 重建时补
@@ -126,8 +139,9 @@ public class CommunityServiceImpl implements CommunityService {
                     CommunityCommentResponse base = byId.get(comment.getId());
                     boolean isPostAuthor = post.getAuthorId() != null && post.getAuthorId().equals(comment.getAuthorId());
                     return new CommunityCommentResponse(base.commentId(), base.parentCommentId(), base.authorId(),
-                            base.authorName(), base.avatarUrl(), base.content(), base.imageUrls(),
-                            base.thumbnailUrls(), base.likeCount(), base.liked(), base.pinned(),
+                            base.authorName(), base.avatarUrl(), base.authorOfficial(), base.authorOfficialTitle(),
+                            base.content(), base.imageUrls(),
+                            base.thumbnailUrls(), base.likeCount(), base.weight(), base.liked(), base.pinned(),
                             isPostAuthor, base.createdAt());
                 }).toList();
         return new CommunityPostDetailResponse(toPostResponse(post, user.userId()), commentResponses);
@@ -144,23 +158,81 @@ public class CommunityServiceImpl implements CommunityService {
         if (section == null) {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER, "社区分区不存在或已停用");
         }
-        List<Long> imageIds = normalizeImageIds(request.imageFileIds());
+
+        String postType = normalizePostType(request.postType());
+        String title;
+        String content;
+        String blocksJson = null;
+        List<Long> imageIds;
+        if ("ARTICLE".equals(postType)) {
+            if (!StringUtils.hasText(request.title())) {
+                throw new BusinessException(ErrorCode.INVALID_PARAMETER, "文章标题不能为空");
+            }
+            ArticleContent article = buildArticleContent(request.contentBlocks());
+            if (article.blocks().isEmpty()) {
+                throw new BusinessException(ErrorCode.INVALID_PARAMETER, "文章内容不能为空");
+            }
+            title = request.title().trim();
+            // content 列存纯文本摘要（列表/评论/搜索兼容），完整图文见 content_blocks
+            String plain = article.plainText();
+            content = plain.isBlank() ? title
+                    : (plain.length() > 2000 ? plain.substring(0, 2000) : plain);
+            imageIds = article.imageIds();
+            blocksJson = writeBlocks(article.blocks());
+        } else {
+            if (!StringUtils.hasText(request.content())) {
+                throw new BusinessException(ErrorCode.INVALID_PARAMETER, "正文不能为空");
+            }
+            content = request.content().trim();
+            if (content.length() > 2000) {
+                throw new BusinessException(ErrorCode.INVALID_PARAMETER, "动态正文不能超过 2000 字");
+            }
+            title = StringUtils.hasText(request.title()) ? request.title().trim() : deriveTitle(content);
+            imageIds = normalizeImageIds(request.imageFileIds());
+        }
+
         List<String> topics = normalizeTopics(request.topics());
         validateOwnedImages(imageIds, user.userId());
+        // 免人工审核：命中屏蔽词自动隐藏，通知作者并可申诉
+        String status = ENABLED;
+        String hiddenReason = null;
+        if (bannedWordService.firstHit(user.campusId(), title, content, blocksJson) != null) {
+            status = "HIDDEN";
+            hiddenReason = "BANNED_WORD";
+        }
         CommunityPostEntity entity = new CommunityPostEntity();
         entity.setCampusId(user.campusId());
         entity.setSectionId(section.getId());
         entity.setAuthorId(user.userId());
-        entity.setTitle(request.title().trim());
-        entity.setContent(request.content().trim());
+        entity.setTitle(title);
+        entity.setContent(content);
+        entity.setPostType(postType);
+        entity.setContentBlocks(blocksJson);
         entity.setImageFileIds(JsonIds.write(imageIds));
         entity.setTopics(writeTopics(topics));
         entity.setCommentCount(0);
         entity.setLikeCount(0);
-        entity.setStatus(ENABLED);
+        entity.setReportCount(0);
+        entity.setStatus(status);
+        entity.setHiddenReason(hiddenReason);
+        entity.setLocationName(normalizeLocationText(request.locationName(), 128));
+        entity.setLocationAddress(normalizeLocationText(request.locationAddress(), 255));
+        entity.setLatitude(request.latitude());
+        entity.setLongitude(request.longitude());
+        entity.setPoiId(normalizeLocationText(request.poiId(), 64));
+        if (!ENABLED.equals(status)) {
+            entity.setHiddenAt(java.time.LocalDateTime.now());
+        }
         postMapper.insert(entity);
         recordTopicUsage(user.campusId(), topics);
-        log.info("社区帖子发布成功, postId={}, authorId={}, section={}", entity.getId(), user.userId(), section.getSectionCode());
+        if (!ENABLED.equals(status)) {
+            notificationService.send(new NotificationSendCommand(user.userId(), "COMMUNITY_MODERATION",
+                    "内容违规提示",
+                    "你的帖子「" + title + "」因包含违规内容已被隐藏，可在社区申诉中提交复核。",
+                    "COMMUNITY_POST", entity.getId()));
+        }
+        log.info("社区帖子发布成功, postId={}, authorId={}, section={}, postType={}, status={}",
+                entity.getId(), user.userId(), section.getSectionCode(), postType, status);
         return toPostResponse(entity, user.userId());
     }
 
@@ -183,19 +255,30 @@ public class CommunityServiceImpl implements CommunityService {
         List<Long> imageIds = normalizeImageIds(request.imageFileIds());
         validateOwnedImages(imageIds, user.userId());
         entity.setImageFileIds(JsonIds.write(imageIds));
+        boolean visible = bannedWordService.firstHit(user.campusId(), request.content()) == null;
         entity.setLikeCount(0);
         entity.setPinned(0);
-        entity.setStatus(ENABLED);
+        entity.setReportCount(0);
+        entity.setWeight(0);
+        entity.setStatus(visible ? ENABLED : "HIDDEN");
+        entity.setHiddenReason(visible ? null : "BANNED_WORD");
         commentMapper.insert(entity);
-        if (!post.getAuthorId().equals(user.userId())) {
-            notificationService.send(new NotificationSendCommand(post.getAuthorId(), "COMMUNITY_COMMENT", "新的社区评论",
-                    user.displayName() + " 评论了你的帖子", "COMMUNITY_POST", post.getId()));
+        if (!visible) {
+            notificationService.send(new NotificationSendCommand(user.userId(), "COMMUNITY_MODERATION",
+                    "内容违规提示",
+                    "你的评论因包含违规内容已被隐藏，可在社区申诉中提交复核。",
+                    "COMMUNITY_POST", post.getId()));
+        } else {
+            if (!post.getAuthorId().equals(user.userId())) {
+                notificationService.send(new NotificationSendCommand(post.getAuthorId(), "COMMUNITY_COMMENT", "新的社区评论",
+                        user.displayName() + " 评论了你的帖子", "COMMUNITY_POST", post.getId()));
+            }
+            CommunityPostEntity update = new CommunityPostEntity();
+            update.setId(post.getId());
+            update.setCommentCount((post.getCommentCount() == null ? 0 : post.getCommentCount()) + 1);
+            update.setVersion(post.getVersion());
+            postMapper.updateById(update);
         }
-        CommunityPostEntity update = new CommunityPostEntity();
-        update.setId(post.getId());
-        update.setCommentCount((post.getCommentCount() == null ? 0 : post.getCommentCount()) + 1);
-        update.setVersion(post.getVersion());
-        postMapper.updateById(update);
         return toCommentResponse(entity, user.userId(), post.getAuthorId());
     }
 
@@ -230,6 +313,7 @@ public class CommunityServiceImpl implements CommunityService {
         if (existing == null) {
             CommunityCommentLikeEntity like = new CommunityCommentLikeEntity(); like.setCommentId(commentId); like.setUserId(user.userId()); commentLikeMapper.insert(like);
             comment.setLikeCount((comment.getLikeCount() == null ? 0 : comment.getLikeCount()) + 1);
+            comment.setWeight((comment.getWeight() == null ? 0 : comment.getWeight()) + 1);
             if (!comment.getAuthorId().equals(user.userId())) {
                 notificationService.send(new NotificationSendCommand(comment.getAuthorId(), "COMMUNITY_LIKE", "评论收到点赞",
                         user.displayName() + " 点赞了你的评论", "COMMUNITY_POST", comment.getPostId()));
@@ -237,6 +321,7 @@ public class CommunityServiceImpl implements CommunityService {
         } else {
             commentLikeMapper.deleteById(existing.getId());
             comment.setLikeCount(Math.max(0, (comment.getLikeCount() == null ? 0 : comment.getLikeCount()) - 1));
+            comment.setWeight(Math.max(0, (comment.getWeight() == null ? 0 : comment.getWeight()) - 1));
         }
         commentMapper.updateById(comment);
         CommunityPostEntity post = postMapper.selectById(comment.getPostId());
@@ -314,6 +399,7 @@ public class CommunityServiceImpl implements CommunityService {
         int level = com.studenthub.modules.achievement.service.AchievementService.levelOf(totalExp);
         boolean isFollowing = followMapperCountSafe(user.userId(), authorId);
         return new CommunityAuthorProfileResponse(author.getId(), author.getDisplayName(), avatarUrl(author),
+                Boolean.TRUE.equals(author.getOfficial()), author.getOfficialTitle(),
                 level, com.studenthub.modules.achievement.service.AchievementService.levelName(level), totalExp,
                 wornBadge, isFollowing,
                 college, major, className, gender, posts);
@@ -335,7 +421,12 @@ public class CommunityServiceImpl implements CommunityService {
 
     private CommunityPostEntity requirePost(AuthenticatedUser user, Long postId) {
         CommunityPostEntity post = postMapper.selectById(postId);
-        if (post == null || !user.campusId().equals(post.getCampusId()) || !ENABLED.equals(post.getStatus())) {
+        if (post == null || !user.campusId().equals(post.getCampusId())) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "帖子不存在或已下线");
+        }
+        // 作者可查看自己被隐藏（屏蔽词/治理下架）的帖子，用于申诉与状态提示；其他人只能看 ENABLED
+        boolean ownerView = user.userId().equals(post.getAuthorId()) && "HIDDEN".equals(post.getStatus());
+        if (!ENABLED.equals(post.getStatus()) && !ownerView) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "帖子不存在或已下线");
         }
         return post;
@@ -351,8 +442,9 @@ public class CommunityServiceImpl implements CommunityService {
         CommunityCommentResponse response = assembleComments(List.of(comment), viewerId).get(comment.getId());
         boolean isPostAuthor = postAuthorId != null && postAuthorId.equals(comment.getAuthorId());
         return new CommunityCommentResponse(response.commentId(), response.parentCommentId(), response.authorId(),
-                response.authorName(), response.avatarUrl(), response.content(), response.imageUrls(),
-                response.thumbnailUrls(), response.likeCount(), response.liked(), response.pinned(),
+                response.authorName(), response.avatarUrl(), response.authorOfficial(), response.authorOfficialTitle(),
+                response.content(), response.imageUrls(),
+                response.thumbnailUrls(), response.likeCount(), response.weight(), response.liked(), response.pinned(),
                 isPostAuthor, response.createdAt());
     }
 
@@ -393,12 +485,20 @@ public class CommunityServiceImpl implements CommunityService {
                     post.getAuthorId(), author == null ? "同学" : author.getDisplayName(), avatarUrl(author),
                     null,
                     author == null ? null : author.getWornBadgeCode(),
+                    author != null && Boolean.TRUE.equals(author.getOfficial()),
+                    author == null ? null : author.getOfficialTitle(),
+                    post.getPostType() == null ? "DYNAMIC" : post.getPostType(),
+                    post.getStatus(), post.getHiddenReason(),
                     post.getTitle(), post.getContent(),
                     signImages(JsonIds.parse(post.getImageFileIds())),
-                    signThumbnailImages(JsonIds.parse(post.getImageFileIds())), parseTopics(post.getTopics()),
+                    signThumbnailImages(JsonIds.parse(post.getImageFileIds())),
+                    parseBlockResponses(post.getContentBlocks(), post.getId()),
+                    parseTopics(post.getTopics()),
                     post.getCommentCount() == null ? 0 : post.getCommentCount(),
                     post.getLikeCount() == null ? 0 : post.getLikeCount(),
-                    likedPostIds.contains(post.getId()), post.getCreatedAt());
+                    likedPostIds.contains(post.getId()), post.getCreatedAt(),
+                    post.getLocationName(), post.getLocationAddress(),
+                    post.getLatitude(), post.getLongitude(), post.getPoiId());
         }).toList();
     }
 
@@ -423,9 +523,12 @@ public class CommunityServiceImpl implements CommunityService {
             UserEntity author = authors.get(comment.getAuthorId());
             result.put(comment.getId(), new CommunityCommentResponse(comment.getId(), comment.getParentCommentId(),
                     comment.getAuthorId(), author == null ? "同学" : author.getDisplayName(), avatarUrl(author),
+                    author != null && Boolean.TRUE.equals(author.getOfficial()),
+                    author == null ? null : author.getOfficialTitle(),
                     comment.getContent(), signImages(JsonIds.parse(comment.getImageFileIds())),
                     signThumbnailImages(JsonIds.parse(comment.getImageFileIds())),
                     comment.getLikeCount() == null ? 0 : comment.getLikeCount(),
+                    comment.getWeight() == null ? 0 : comment.getWeight(),
                     likedCommentIds.contains(comment.getId()),
                     comment.getPinned() != null && comment.getPinned() == 1,
                     false, comment.getCreatedAt()));
@@ -440,9 +543,124 @@ public class CommunityServiceImpl implements CommunityService {
     }
 
     private String avatarUrl(UserEntity user) {
-        if (user == null || user.getAvatarUrl() == null || user.getAvatarUrl().isBlank()) return null;
-        try { return fileStorageService.signViewPath(Long.valueOf(user.getAvatarUrl())); }
-        catch (NumberFormatException ignored) { return null; }
+        return user == null ? null : fileStorageService.resolveAvatarUrl(user.getAvatarUrl());
+    }
+
+    /** 帖子类型归一：空 → DYNAMIC；非法值拒绝 */
+    private String normalizePostType(String postType) {
+        if (!StringUtils.hasText(postType)) {
+            return "DYNAMIC";
+        }
+        String value = postType.trim().toUpperCase();
+        if (!"DYNAMIC".equals(value) && !"ARTICLE".equals(value)) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "帖子类型仅支持 DYNAMIC / ARTICLE");
+        }
+        return value;
+    }
+
+    /** 动态未填标题时取正文前 40 字（title 列 NOT NULL） */
+    private String deriveTitle(String content) {
+        String normalized = content.replaceAll("\\s+", " ").trim();
+        return normalized.length() <= 40 ? normalized : normalized.substring(0, 40) + "…";
+    }
+
+    /**
+     * 文章图文混排块校验与归一：TEXT 非空累计（≤10000 字）；IMAGE 需 fileId（≤9 张）；
+     * 返回归一化块列表 + 纯文本摘要 + 去重后的图片 ID（顺序保持首次出现）。
+     */
+    private ArticleContent buildArticleContent(List<CommunityContentBlockRequest> blocks) {
+        if (blocks == null || blocks.isEmpty()) {
+            return new ArticleContent(List.of(), "", List.of());
+        }
+        List<ArticleBlock> normalized = new ArrayList<>();
+        List<Long> imageIds = new ArrayList<>();
+        StringBuilder plain = new StringBuilder();
+        int textLength = 0;
+        for (CommunityContentBlockRequest block : blocks) {
+            if (block == null) {
+                continue;
+            }
+            String type = block.type() == null ? "" : block.type().trim().toUpperCase();
+            if ("TEXT".equals(type)) {
+                String value = block.text() == null ? "" : block.text().trim();
+                if (value.isEmpty()) {
+                    continue;
+                }
+                textLength += value.length();
+                if (textLength > 10000) {
+                    throw new BusinessException(ErrorCode.INVALID_PARAMETER, "文章正文合计不能超过 10000 字");
+                }
+                normalized.add(new ArticleBlock("TEXT", value, null));
+                if (!plain.isEmpty()) {
+                    plain.append("\n\n");
+                }
+                plain.append(value);
+            } else if ("IMAGE".equals(type)) {
+                if (block.fileId() == null || block.fileId() <= 0) {
+                    throw new BusinessException(ErrorCode.INVALID_PARAMETER, "图片块缺少文件 ID");
+                }
+                if (imageIds.size() >= 9) {
+                    throw new BusinessException(ErrorCode.INVALID_PARAMETER, "文章图片最多 9 张");
+                }
+                imageIds.add(block.fileId());
+                normalized.add(new ArticleBlock("IMAGE", null, block.fileId()));
+            } else {
+                throw new BusinessException(ErrorCode.INVALID_PARAMETER, "内容块类型仅支持 TEXT / IMAGE");
+            }
+        }
+        return new ArticleContent(normalized, plain.toString(), normalizeImageIds(imageIds));
+    }
+
+    private String writeBlocks(List<ArticleBlock> blocks) {
+        try {
+            return objectMapper.writeValueAsString(blocks);
+        } catch (Exception exception) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "文章内容序列化失败");
+        }
+    }
+
+    /** 响应组装：IMAGE 块批量签名（一次查询），TEXT 块原样返回 */
+    private List<CommunityContentBlockResponse> parseBlockResponses(String json, Long postId) {
+        if (!StringUtils.hasText(json)) {
+            return List.of();
+        }
+        List<ArticleBlock> blocks;
+        try {
+            blocks = objectMapper.readValue(json, new TypeReference<List<ArticleBlock>>() {
+            });
+        } catch (Exception exception) {
+            log.warn("帖子内容块解析失败, postId={}", postId);
+            return List.of();
+        }
+        List<Long> imageIds = blocks.stream()
+                .filter(block -> "IMAGE".equalsIgnoreCase(block.type()) && block.fileId() != null)
+                .map(ArticleBlock::fileId)
+                .distinct()
+                .toList();
+        List<String> urls = signImages(imageIds);
+        List<String> thumbnails = signThumbnailImages(imageIds);
+        Map<Long, Integer> index = new HashMap<>();
+        for (int i = 0; i < imageIds.size(); i++) {
+            index.put(imageIds.get(i), i);
+        }
+        List<CommunityContentBlockResponse> result = new ArrayList<>();
+        for (ArticleBlock block : blocks) {
+            if ("IMAGE".equalsIgnoreCase(block.type()) && block.fileId() != null) {
+                Integer position = index.get(block.fileId());
+                result.add(new CommunityContentBlockResponse("IMAGE", null, block.fileId(),
+                        position == null ? null : urls.get(position),
+                        position == null ? null : thumbnails.get(position)));
+            } else if ("TEXT".equalsIgnoreCase(block.type())) {
+                result.add(new CommunityContentBlockResponse("TEXT", block.text(), null, null, null));
+            }
+        }
+        return result;
+    }
+
+    private record ArticleBlock(String type, String text, Long fileId) {
+    }
+
+    private record ArticleContent(List<ArticleBlock> blocks, String plainText, List<Long> imageIds) {
     }
 
     private List<String> signImages(List<Long> ids) {
@@ -512,4 +730,11 @@ public class CommunityServiceImpl implements CommunityService {
         return java.util.Arrays.stream(value.split(",")).filter(s -> !s.isBlank()).map(String::trim).toList();
     }
 
+
+    private String normalizeLocationText(String value, int maxLength) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        if (trimmed.isEmpty()) return null;
+        return trimmed.length() > maxLength ? trimmed.substring(0, maxLength) : trimmed;
+    }
 }

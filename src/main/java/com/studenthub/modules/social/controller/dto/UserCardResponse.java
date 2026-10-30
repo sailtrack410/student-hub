@@ -15,6 +15,8 @@ public record UserCardResponse(
         @Schema(description = "头像 URL") String avatarUrl,
         @Schema(description = "性别") String gender,
         @Schema(description = "身份类型") String identityType,
+        @Schema(description = "是否官方账号") boolean official,
+        @Schema(description = "官方头衔") String officialTitle,
         @Schema(description = "等级") Integer level,
         @Schema(description = "等级名") String levelName,
         @Schema(description = "累计经验") Integer currentExp,

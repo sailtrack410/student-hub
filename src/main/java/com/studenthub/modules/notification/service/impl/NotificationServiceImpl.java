@@ -26,6 +26,7 @@ import java.time.LocalDateTime;
 public class NotificationServiceImpl implements NotificationService {
 
     private final NotificationMapper notificationMapper;
+    private final com.studenthub.modules.delivery.DeliveryOutboxService outbox;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -38,6 +39,8 @@ public class NotificationServiceImpl implements NotificationService {
         entity.setRelatedType(command.relatedType());
         entity.setRelatedId(command.relatedId());
         notificationMapper.insert(entity);
+        outbox.enqueue("notification:" + entity.getId(), "NOTIFICATION", entity.getRecipientId(),
+                java.util.Map.of("notificationId", entity.getId()));
         log.info("站内通知已发送, recipientId={}, type={}, title={}",
                 command.recipientId(), command.notificationType(), command.title());
     }

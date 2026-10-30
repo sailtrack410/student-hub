@@ -26,6 +26,10 @@ public class AiMessageEntity extends BaseEntity {
     private String model;
     private String promptVersion;
     private Integer tokenUsage;
+    private Integer promptTokens;
+    private Integer completionTokens;
+    /** 本轮回答引用的知识库来源 JSON（仅 ASSISTANT 消息） */
+    private String sources;
     private Integer costMs;
     private String errorCode;
     /** OK / FAILED */

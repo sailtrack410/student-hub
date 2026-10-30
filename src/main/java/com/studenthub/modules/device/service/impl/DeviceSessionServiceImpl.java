@@ -115,6 +115,32 @@ public class DeviceSessionServiceImpl implements DeviceSessionService {
         return revoked;
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int enforceDeviceLimit(Long userId, int maxDevices) {
+        if (maxDevices <= 0) {
+            return 0;
+        }
+        List<UserDeviceSessionEntity> rows = deviceMapper.selectList(
+                new LambdaQueryWrapper<UserDeviceSessionEntity>()
+                        .eq(UserDeviceSessionEntity::getUserId, userId)
+                        .orderByAsc(UserDeviceSessionEntity::getLastActiveAt)
+                        .orderByAsc(UserDeviceSessionEntity::getId));
+        int revoked = 0;
+        int index = 0;
+        while (rows.size() - revoked > maxDevices && index < rows.size()) {
+            UserDeviceSessionEntity oldest = rows.get(index++);
+            // 过期会话没有 Redis key 时 deleteSessionByHash 静默返回；登记行仍要清理。
+            sessionStore.deleteSessionByHash(oldest.getTokenHash());
+            deviceMapper.deleteById(oldest.getId());
+            revoked++;
+        }
+        if (revoked > 0) {
+            log.info("设备上限生效，已踢除最旧设备, userId={}, max={}, revoked={}", userId, maxDevices, revoked);
+        }
+        return revoked;
+    }
+
     /** 设备指纹：UA+clientType 摘要前 24 位（稳定同设备复用同一 deviceId） */
     private String deriveDeviceId(Long userId, String userAgent, String clientType) {
         String seed = (userAgent == null ? "" : userAgent) + "|" + (clientType == null ? "" : clientType);

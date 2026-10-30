@@ -9,6 +9,8 @@ import com.studenthub.exception.BusinessException;
 import com.studenthub.modules.screen.controller.dto.AdminNoticeResponse;
 import com.studenthub.modules.screen.controller.dto.AppAnnouncementResponse;
 import com.studenthub.modules.screen.controller.dto.NoticeUpsertRequest;
+import com.studenthub.integration.storage.BinaryStorage;
+import com.studenthub.modules.audit.aspect.AuditTrailContext;
 import com.studenthub.modules.screen.entity.ScreenNoticeEntity;
 import com.studenthub.modules.screen.mapper.ScreenNoticeMapper;
 import com.studenthub.modules.screen.service.ScreenAdminService;
@@ -18,9 +20,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * 公告管理实现：状态机 DRAFT/SCHEDULED→PUBLISHED→OFFLINE（可恢复 PUBLISHED）；
@@ -37,7 +41,12 @@ public class ScreenAdminServiceImpl implements ScreenAdminService {
     private static final Map<String, String> TYPE_TEXT = Map.of(
             "NOTICE", "通知", "NEWS", "要闻", "ACTIVITY", "活动");
 
+    private static final long MAX_COVER_BYTES = 2L * 1024L * 1024L;
+    private static final String COVER_OBJECT_PREFIX = "static/assets/notices/";
+    private static final String COVER_URL_PREFIX = "/api/common/assets/notices/";
+
     private final ScreenNoticeMapper noticeMapper;
+    private final BinaryStorage binaryStorage;
 
     @Override
     public List<AdminNoticeResponse> list(String channel, String publishStatus, String noticeType) {
@@ -91,6 +100,15 @@ public class ScreenAdminServiceImpl implements ScreenAdminService {
     @Transactional(rollbackFor = Exception.class)
     public AdminNoticeResponse update(Long id, NoticeUpsertRequest request, Long operatorId) {
         ScreenNoticeEntity entity = requireNotice(id);
+        // 审计变更前快照：标题/状态/正文长度/封面，便于追溯改稿
+        Map<String, Object> before = new LinkedHashMap<>();
+        before.put("id", entity.getId());
+        before.put("title", entity.getTitle());
+        before.put("publishStatus", entity.getPublishStatus());
+        before.put("channel", entity.getChannel());
+        before.put("contentLength", entity.getContent() == null ? 0 : entity.getContent().length());
+        before.put("coverImageUrl", entity.getCoverImageUrl());
+        AuditTrailContext.setBefore(before);
         applyUpsert(entity, request);
         String status = resolveInitialStatus(request);
         entity.setPublishStatus(status);
@@ -117,6 +135,56 @@ public class ScreenAdminServiceImpl implements ScreenAdminService {
     public void delete(Long id) {
         requireNotice(id);
         noticeMapper.deleteById(id);
+    }
+
+    @Override
+    public String uploadCover(org.springframework.web.multipart.MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "请选择封面图片");
+        }
+        if (file.getSize() > MAX_COVER_BYTES) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "封面图片不能超过 2MB");
+        }
+        byte[] content;
+        try {
+            content = file.getBytes();
+        } catch (Exception exception) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "封面图片读取失败");
+        }
+        String extension = detectImageExtension(content);
+        if (extension == null) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "封面仅支持 PNG/JPEG/WebP 格式");
+        }
+        String objectKey = COVER_OBJECT_PREFIX + UUID.randomUUID().toString().replace("-", "") + "." + extension;
+        String contentType = switch (extension) {
+            case "png" -> org.springframework.http.MediaType.IMAGE_PNG_VALUE;
+            case "jpg" -> org.springframework.http.MediaType.IMAGE_JPEG_VALUE;
+            default -> "image/webp";
+        };
+        try {
+            binaryStorage.put(objectKey, content, contentType);
+        } catch (Exception exception) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "封面上传失败，请稍后重试");
+        }
+        return COVER_URL_PREFIX + objectKey.substring(COVER_OBJECT_PREFIX.length());
+    }
+
+    /** 内容嗅探：不信任文件名与 Content-Type，按魔数判断 PNG/JPEG/WebP */
+    private String detectImageExtension(byte[] content) {
+        if (content.length >= 8 && (content[0] & 0xFF) == 0x89 && content[1] == 0x50
+                && content[2] == 0x4E && content[3] == 0x47) {
+            return "png";
+        }
+        if (content.length >= 3 && (content[0] & 0xFF) == 0xFF && (content[1] & 0xFF) == 0xD8
+                && (content[2] & 0xFF) == 0xFF) {
+            return "jpg";
+        }
+        if (content.length >= 12 && content[0] == 'R' && content[1] == 'I' && content[2] == 'F'
+                && content[3] == 'F' && content[8] == 'W' && content[9] == 'E' && content[10] == 'B'
+                && content[11] == 'P') {
+            return "webp";
+        }
+        return null;
     }
 
     @Override
@@ -154,6 +222,8 @@ public class ScreenAdminServiceImpl implements ScreenAdminService {
         entity.setNoticeType(request.noticeType());
         entity.setTitle(request.title());
         entity.setSummary(request.summary());
+        entity.setContent(request.content());
+        entity.setCoverImageUrl(request.coverImageUrl());
         entity.setPublishDate(request.publishDate());
         entity.setChannel(request.channel());
         entity.setSortOrder(request.sortOrder() == null ? 0 : request.sortOrder());

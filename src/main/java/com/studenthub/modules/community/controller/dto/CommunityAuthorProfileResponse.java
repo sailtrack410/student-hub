@@ -8,6 +8,7 @@ import java.util.List;
  * 关注表落地后接入，当前恒为 false。
  */
 public record CommunityAuthorProfileResponse(Long userId, String displayName, String avatarUrl,
+                                             boolean official, String officialTitle,
                                              Integer level, String levelName, Integer totalExp,
                                              String wornBadgeCode,
                                              Boolean isFollowing,

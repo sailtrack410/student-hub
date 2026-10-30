@@ -45,14 +45,20 @@ public class ScheduleAdjustmentSyncService {
         if (bindings.isEmpty()) {
             return 0;
         }
+        String semesterCode = currentSemesterCode();
         for (JwBindingEntity binding : bindings) {
+            if (binding.getJwStudentNo() == null || binding.getJwStudentNo().isBlank()) {
+                // 调课报表按教务内部学号查询，历史绑定缺学号的跳过
+                continue;
+            }
             var session = jwSessionStore.find(binding.getUserId());
             if (session.isEmpty()) {
                 continue;
             }
             try {
                 List<ScheduleAdjustmentEntity> fetched =
-                        adjustmentClient.fetchAdjustments(session.get().cookieHeader(), currentSemesterCode(binding));
+                        adjustmentClient.fetchAdjustments(session.get().cookieHeader(),
+                                binding.getJwStudentNo(), semesterCode);
                 return persistAndNotify(fetched, bindings);
             } catch (Exception exception) {
                 // 单个采样源失败换下一个（会话失效等），全部失败则本轮放弃
@@ -63,8 +69,13 @@ public class ScheduleAdjustmentSyncService {
         return 0;
     }
 
-    private String currentSemesterCode(JwBindingEntity binding) {
-        return binding.getLastSemesterCode() == null ? "" : binding.getLastSemesterCode();
+    /** 校历推算当前学期（与课表一致：8 月~次年 1 月第一学期，2~7 月第二学期） */
+    private String currentSemesterCode() {
+        java.time.LocalDate today = java.time.LocalDate.now();
+        int month = today.getMonthValue();
+        int startYear = month >= 8 ? today.getYear() : today.getYear() - 1;
+        int term = (month >= 8 || month == 1) ? 1 : 2;
+        return startYear + "," + term;
     }
 
     private int persistAndNotify(List<ScheduleAdjustmentEntity> fetched, List<JwBindingEntity> bindings) {

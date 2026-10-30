@@ -15,7 +15,7 @@
             '<div class="duo" style="flex:1;min-height:0">',
             // 左侧：分类树
             '<aside class="lcard" style="width:240px;flex:none;gap:12px">',
-            '<div class="cap" style="font-size:15px">服务分类<span class="cnt">{{ categories.length }} 个</span></div>',
+            '<div class="cap" style="font-size:14px">服务分类<span class="cnt">{{ categories.length }} 个</span></div>',
             '<div style="display:flex;flex-direction:column;gap:4px;overflow:auto">',
             '<div class="node" :class="{on:!activeCategoryId}" @click="selectCategory(null)">',
             '<span class="dot" style="width:6px;height:6px;border-radius:999px;margin-top:6px;flex:none;background:var(--tk-info)"></span>',
@@ -32,22 +32,25 @@
             // 右侧：服务项表格
             '<section style="flex:1;display:flex;flex-direction:column;gap:16px;min-width:0;min-height:0" v-loading="loading">',
             '<div class="lcard" style="gap:12px;flex:1;min-height:0">',
-            '<div class="cap" style="font-size:15px">服务项<span class="cnt">{{ activeCategoryId ? categoryName(activeCategoryId) : "全部分类" }}</span>',
+            '<div class="cap" style="font-size:14px">服务项<span class="cnt">{{ activeCategoryId ? categoryName(activeCategoryId) : "全部分类" }}</span>',
             '<span class="r"><span class="srch"><input v-model="keyword" placeholder="搜索名称 / 编码 / 简介" /></span></span></div>',
             '<div class="tblw" style="flex:1;min-height:0;overflow:auto"><table class="pk">',
-            '<colgroup><col style="width:280px"><col style="width:120px"><col style="width:90px"><col style="width:90px"><col style="width:80px"><col style="width:150px"><col style="width:150px"></colgroup>',
-            '<thead><tr><th>服务项</th><th>分类</th><th>状态</th><th>SLA</th><th>排序</th><th>更新时间</th><th class="r">操作</th></tr></thead>',
+            '<colgroup><col style="width:250px"><col style="width:110px"><col style="width:86px"><col style="width:80px"><col style="width:74px"><col style="width:64px"><col style="width:60px"><col style="width:140px"><col style="width:190px"></colgroup>',
+            '<thead><tr><th>服务项</th><th>分类</th><th>状态</th><th>SLA</th><th>默认</th><th>拍照</th><th>排序</th><th>更新时间</th><th class="r">操作</th></tr></thead>',
             '<tbody>',
-            '<tr v-if="!filteredItems.length"><td colspan="7" style="text-align:center;color:var(--tk-muted);padding:24px 0">暂无服务项</td></tr>',
+            '<tr v-if="!filteredItems.length"><td colspan="9" style="text-align:center;color:var(--tk-muted);padding:24px 0">暂无服务项</td></tr>',
             '<tr v-for="it in filteredItems" :key="it.itemId">',
             '<td><div style="display:flex;flex-direction:column;gap:2px"><b style="font-size:13px;color:var(--tk-text)">{{ it.itemName }}</b>',
             '<span style="font-size:11px;color:var(--tk-text3)">{{ it.itemCode }}<template v-if="it.summary"> · {{ it.summary }}</template></span></div></td>',
             '<td style="color:var(--tk-text2)">{{ it.categoryName }}</td>',
             '<td><span class="bdg" :class="it.status===\'ENABLED\'?\'g\':\'i\'">{{ it.status===\'ENABLED\'?\'已上线\':\'已停用\' }}</span></td>',
             '<td style="color:var(--tk-text3)">{{ it.slaHours ? it.slaHours + "h" : "-" }}</td>',
+            '<td><span class="bdg" :class="it.defaultPriority===\'URGENT\'?\'r\':\'n2\'">{{ it.defaultPriority===\'URGENT\'?\'加急\':\'普通\' }}</span></td>',
+            '<td style="color:var(--tk-text3)">{{ it.photoWorkflowRequired ? "需要" : "-" }}</td>',
             '<td style="color:var(--tk-text3)">{{ it.sortOrder }}</td>',
             '<td style="color:var(--tk-text3)">{{ fmt(it.updatedAt) }}</td>',
             '<td class="r"><span class="op" @click="openItemEdit(it)">编辑</span>',
+            '<span class="op" @click="copyItem(it)">复制</span>',
             '<span class="op" @click="toggleStatus(it)">{{ it.status===\'ENABLED\'?\'停用\':\'上架\' }}</span>',
             '<span class="op r" @click="removeItem(it)">删除</span></td>',
             '</tr></tbody></table></div></div>',
@@ -70,10 +73,26 @@
             '<div class="fld"><label>图标标识</label><div class="pin"><input v-model="itemForm.icon" maxlength="128" placeholder="可选，如 fix-water" /></div></div>',
             '</div>',
             '<div class="fld"><label>一句话简介</label><div class="pin"><input v-model="itemForm.summary" maxlength="512" placeholder="列表与详情页展示" /></div></div>',
-            '<div class="fld"><label>办事指南</label><textarea class="pta" v-model="itemForm.description" placeholder="可选：办理说明、材料要求等"></textarea></div>',
+            '<div class="fld"><label>服务说明</label><textarea class="pta" v-model="itemForm.description" placeholder="可选：办理说明、适用范围等"></textarea></div>',
             '<div class="frow">',
-            '<div class="fld"><label>承诺办结时限（小时）</label><div class="pin"><input type="number" v-model.number="itemForm.slaHours" min="1" placeholder="如 24" /></div></div>',
+            '<div class="fld"><label>受理组织</label><div class="pin"><select v-model="itemForm.handlerOrganizationId" style="width:100%">',
+            '<option :value="null">不指定（沿用默认）</option>',
+            '<option v-for="org in orgOptions" :key="org.organizationId" :value="org.organizationId">{{ org.organizationName }}</option>',
+            '</select></div></div>',
+            '<div class="fld"><label>默认优先级</label><div class="pin"><select v-model="itemForm.defaultPriority" style="width:100%">',
+            '<option value="NORMAL">普通</option><option value="URGENT">加急</option>',
+            '</select></div></div>',
+            '</div>',
+            '<div class="frow">',
+            '<div class="fld"><label>承诺办结时限（小时，SLA）</label><div class="pin"><input type="number" v-model.number="itemForm.slaHours" min="1" placeholder="如 24" /></div></div>',
             '<div class="fld"><label>排序值</label><div class="pin"><input type="number" v-model.number="itemForm.sortOrder" placeholder="越小越靠前" /></div></div>',
+            '</div>',
+            '<div class="fld"><label>拍照确认流程</label><div class="pin" style="height:auto;padding:8px 10px"><label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--tk-text2);cursor:pointer">',
+            '<input type="checkbox" v-model="itemForm.photoWorkflowRequired" /> 需要服务人员现场拍照 + 完工拍照 + 申请人确认</label></div></div>',
+            '<div class="fld"><label>办事指南正文（S02）</label><textarea class="pta" v-model="itemForm.guideContent" maxlength="2000" placeholder="办理流程、注意事项、领取方式等，展示在服务详情页"></textarea></div>',
+            '<div class="frow">',
+            '<div class="fld"><label>材料清单（JSON 数组，留空不展示）</label><textarea class="ta2" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;min-height:80px" v-model="itemForm.materialListText" placeholder=\'[{"name":"学生证","required":true,"note":"原件核验"}]\'></textarea></div>',
+            '<div class="fld"><label>常见问题（JSON 数组，留空不展示）</label><textarea class="ta2" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;min-height:80px" v-model="itemForm.faqText" placeholder=\'[{"question":"多久能办好？","answer":"一般 1 个工作日"}]\'></textarea></div>',
             '</div>',
             '<div class="fld"><label>动态表单 Schema（JSON 数组）</label>',
             '<textarea class="ta2" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;min-height:120px" v-model="itemForm.formSchemaText" placeholder=\'[{"key":"reason","label":"报修事由","type":"textarea","required":true,"max":500}]\'></textarea>',
@@ -98,7 +117,8 @@
             var categories = V.ref([]), items = V.ref([]), loading = V.ref(false);
             var activeCategoryId = V.ref(null), keyword = V.ref('');
             var itemDialog = V.ref(false), itemEditId = V.ref(null);
-            var itemForm = V.reactive({ categoryId: null, itemCode: '', itemName: '', summary: '', description: '', icon: '', slaHours: null, sortOrder: null, formSchemaText: '' });
+            var orgOptions = V.ref([]);
+            var itemForm = V.reactive({ categoryId: null, itemCode: '', itemName: '', summary: '', description: '', icon: '', handlerOrganizationId: null, defaultPriority: 'NORMAL', photoWorkflowRequired: false, slaHours: null, sortOrder: null, guideContent: '', materialListText: '', faqText: '', formSchemaText: '' });
             var categoryDialog = V.ref(false);
             var categoryForm = V.reactive({ categoryCode: '', categoryName: '', icon: '', description: '', sortOrder: null });
 
@@ -121,6 +141,11 @@
                     categories.value = x || [];
                 }).catch(function (e) { E.ElMessage.error(e.message); }).finally(function () { loading.value = false; });
             }
+            function loadOrganizations() {
+                api.get('/api/admin/catalog/organizations')
+                    .then(function (list) { orgOptions.value = list || []; })
+                    .catch(function (e) { E.ElMessage.error(e.message); });
+            }
             function loadItems() {
                 loading.value = true;
                 var path = activeCategoryId.value ? '/api/admin/catalog/items?categoryId=' + activeCategoryId.value : '/api/admin/catalog/items';
@@ -141,7 +166,7 @@
             function openItemCreate() {
                 if (!categories.value.length) { E.ElMessage.warning('请先创建服务分类'); return; }
                 itemEditId.value = null;
-                Object.assign(itemForm, { categoryId: activeCategoryId.value || categories.value[0].categoryId, itemCode: '', itemName: '', summary: '', description: '', icon: '', slaHours: null, sortOrder: null, formSchemaText: '' });
+                Object.assign(itemForm, { categoryId: activeCategoryId.value || categories.value[0].categoryId, itemCode: '', itemName: '', summary: '', description: '', icon: '', handlerOrganizationId: null, defaultPriority: 'NORMAL', photoWorkflowRequired: false, slaHours: null, sortOrder: null, guideContent: '', materialListText: '', faqText: '', formSchemaText: '' });
                 itemDialog.value = true;
             }
             function openItemEdit(it) {
@@ -149,7 +174,13 @@
                 Object.assign(itemForm, {
                     categoryId: it.categoryId, itemCode: it.itemCode, itemName: it.itemName,
                     summary: it.summary || '', description: it.description || '', icon: it.icon || '',
+                    handlerOrganizationId: it.handlerOrganizationId || null,
+                    defaultPriority: it.defaultPriority || 'NORMAL',
+                    photoWorkflowRequired: !!it.photoWorkflowRequired,
                     slaHours: it.slaHours, sortOrder: it.sortOrder,
+                    guideContent: it.guideContent || '',
+                    materialListText: it.materialList && it.materialList.length ? JSON.stringify(it.materialList, null, 2) : '',
+                    faqText: it.faq && it.faq.length ? JSON.stringify(it.faq, null, 2) : '',
                     formSchemaText: it.formSchema && it.formSchema.length ? JSON.stringify(it.formSchema, null, 2) : ''
                 });
                 itemDialog.value = true;
@@ -169,12 +200,26 @@
                 });
                 return node;
             }
+            function parseJsonArray(text, label) {
+                var value = (text || '').trim();
+                if (!value) return null;
+                var node;
+                try { node = JSON.parse(value); } catch (e) {
+                    throw new Error(label + ' 不是合法 JSON：' + e.message);
+                }
+                if (!Array.isArray(node)) throw new Error(label + ' 必须是 JSON 数组');
+                return node;
+            }
             function saveItem() {
                 if (!itemForm.itemCode.trim()) { E.ElMessage.warning('请填写服务项编码'); return; }
                 if (!itemForm.itemName.trim()) { E.ElMessage.warning('请填写服务项名称'); return; }
                 if (!itemForm.categoryId) { E.ElMessage.warning('请选择所属分类'); return; }
-                var schema;
-                try { schema = parseSchema(); } catch (e) { E.ElMessage.error(e.message); return; }
+                var schema, materials, faq;
+                try {
+                    schema = parseSchema();
+                    materials = parseJsonArray(itemForm.materialListText, '材料清单');
+                    faq = parseJsonArray(itemForm.faqText, '常见问题');
+                } catch (e) { E.ElMessage.error(e.message); return; }
                 var payload = {
                     categoryId: itemForm.categoryId,
                     itemCode: itemForm.itemCode.trim(),
@@ -182,6 +227,12 @@
                     summary: itemForm.summary.trim() || null,
                     description: itemForm.description.trim() || null,
                     icon: itemForm.icon.trim() || null,
+                    handlerOrganizationId: itemForm.handlerOrganizationId || null,
+                    defaultPriority: itemForm.defaultPriority || 'NORMAL',
+                    photoWorkflowRequired: !!itemForm.photoWorkflowRequired,
+                    guideContent: (itemForm.guideContent || '').trim() || null,
+                    materialList: materials,
+                    faq: faq,
                     formSchema: schema,
                     slaHours: itemForm.slaHours || null,
                     sortOrder: itemForm.sortOrder
@@ -194,6 +245,14 @@
                     E.ElMessage.success('已保存');
                     load(); loadItems();
                 }).catch(function (e) { E.ElMessage.error(e.message); });
+            }
+            function copyItem(it) {
+                api.post('/api/admin/catalog/items/' + it.itemId + '/copy')
+                    .then(function () {
+                        E.ElMessage.success('已复制为停用副本，确认内容后再上架');
+                        load(); loadItems();
+                    })
+                    .catch(function (e) { E.ElMessage.error(e.message); });
             }
             function toggleStatus(it) {
                 var next = it.status === 'ENABLED' ? 'DISABLED' : 'ENABLED';
@@ -231,15 +290,15 @@
                 }).catch(function (e) { E.ElMessage.error(e.message); });
             }
 
-            load(); loadItems();
+            load(); loadItems(); loadOrganizations();
             return {
                 categories: categories, items: items, loading: loading, activeCategoryId: activeCategoryId, keyword: keyword,
                 totalCount: totalCount, filteredItems: filteredItems,
-                itemDialog: itemDialog, itemEditId: itemEditId, itemForm: itemForm,
+                itemDialog: itemDialog, itemEditId: itemEditId, itemForm: itemForm, orgOptions: orgOptions,
                 categoryDialog: categoryDialog, categoryForm: categoryForm,
                 selectCategory: selectCategory, categoryName: categoryName, fmt: fmt,
                 openItemCreate: openItemCreate, openItemEdit: openItemEdit, saveItem: saveItem,
-                toggleStatus: toggleStatus, removeItem: removeItem,
+                toggleStatus: toggleStatus, removeItem: removeItem, copyItem: copyItem,
                 openCategoryCreate: openCategoryCreate, saveCategory: saveCategory
             };
         }

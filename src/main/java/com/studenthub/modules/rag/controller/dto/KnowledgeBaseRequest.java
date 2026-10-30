@@ -10,4 +10,7 @@ public record KnowledgeBaseRequest(
         @Min(0) @Max(600) Integer chunkOverlap,
         @Min(1) @Max(20) Integer topK,
         @DecimalMin("0.0") @DecimalMax("1.0") BigDecimal scoreThreshold,
-        @Size(max=1000) String systemPrompt) {}
+        @Size(max=1000) String systemPrompt,
+        Boolean assistantEnabled,
+        @Min(200) @Max(32000) Integer ragTokenBudget,
+        @Min(0) @Max(1000) Integer assistantPriority) {}

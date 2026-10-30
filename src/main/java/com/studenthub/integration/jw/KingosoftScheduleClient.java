@@ -41,6 +41,7 @@ public class KingosoftScheduleClient {
     private static final Pattern DQ_XNXQ = Pattern.compile("var\\s+dqxn\\s*=\\s*\"(\\d+)\";\\s*var\\s+dqxq\\s*=\\s*\"(\\d+)\";");
     /** 数据页标题里的学期名 */
     private static final Pattern SEMESTER_TITLE = Pattern.compile("(\\d{4}-\\d{4}学年.+?)教学安排表");
+    private static final Pattern TOTAL_WEEKS = Pattern.compile("周次[：:]\\s*(\\d+)\\s*[-–~]\\s*(\\d+)");
     private static final Pattern XNXQ_PARTS = Pattern.compile("^(\\d{4}),(\\d)$");
 
     private final JwProperties properties;
@@ -53,6 +54,11 @@ public class KingosoftScheduleClient {
      * 拉取个人课表（当前学年学期）。semesterCode 形如 {@code 2025,1}，为空时取当前学期。
      */
     public JwSchedulePage fetchSchedulePage(String cookieHeader, String semesterCode) {
+        return fetchSchedulePage(cookieHeader, semesterCode, null);
+    }
+
+    /** weeks 为空保留全学期快照；指定周次时让学校按周过滤，不混合其他周安排。 */
+    public JwSchedulePage fetchSchedulePage(String cookieHeader, String semesterCode, Integer week) {
         return IntegrationExceptions.wrap(() -> {
             HttpClient client = buildClient();
 
@@ -76,19 +82,20 @@ public class KingosoftScheduleClient {
             }
 
             // 3. 数据页：POST 周视图课表
+            String weeks = week == null ? "" : Integer.toString(week);
             HttpResponse<byte[]> response = client.send(
                     HttpRequest.newBuilder(URI.create(properties.getJwBaseUrl()
                                     + "/frame/desk/showLessonScheduleDetail.action"))
                             .timeout(Duration.ofSeconds(properties.getReadTimeoutSeconds()))
                             .header("Cookie", cookieHeader)
                             .header("Content-Type", "application/x-www-form-urlencoded")
-                            .POST(HttpRequest.BodyPublishers.ofString("weeks=&xnxq=" + chosen))
+                            .POST(HttpRequest.BodyPublishers.ofString("weeks=" + weeks + "&xnxq=" + chosen))
                             .build(),
                     HttpResponse.BodyHandlers.ofByteArray());
             if (response.statusCode() != 200) {
                 // 会话已在壳页校验过；目标学期尚未在教务发布时数据页可能异常，按空课表处理
                 log.info("教务课表数据页返回非 200, status={}, xnxq={}", response.statusCode(), chosen);
-                return new JwSchedulePage(chosen, fallbackSemesterName(chosen), List.of());
+                return new JwSchedulePage(chosen, fallbackSemesterName(chosen), List.of(), null);
             }
 
             byte[] body = response.body();
@@ -102,7 +109,10 @@ public class KingosoftScheduleClient {
             }
 
             List<JwCourseEntry> courses = parseGrid(document);
-            return new JwSchedulePage(chosen, semesterName, courses);
+            Matcher weeksMatcher = TOTAL_WEEKS.matcher(document.text());
+            Integer totalWeeks = weeksMatcher.find()
+                    ? Integer.parseInt(weeksMatcher.group(2)) : null;
+            return new JwSchedulePage(chosen, semesterName, courses, totalWeeks);
         }, ErrorCode.JW_SESSION_EXPIRED, "拉取教务课表异常");
     }
 
@@ -137,10 +147,12 @@ public class KingosoftScheduleClient {
                 continue;
             }
             int section = Integer.parseInt(sectionMatcher.group(1));
+            String timeRange = sectionText.replaceFirst("^\\d+\\s*", "")
+                    .replace("(", "").replace(")", "").trim();
             for (int day = 0; day < 7 && dayStart + day < tds.size(); day++) {
                 Element cell = tds.get(dayStart + day);
                 for (String line : splitLines(cell)) {
-                    JwCourseEntry entry = parseCourseLine(line, day + 1, section);
+                    JwCourseEntry entry = parseCourseLine(line, day + 1, section, timeRange);
                     if (entry != null) {
                         entries.add(entry);
                     }
@@ -165,7 +177,7 @@ public class KingosoftScheduleClient {
     }
 
     /** 解析单行：{@code 课程名 教师(周次 地点)} */
-    private JwCourseEntry parseCourseLine(String line, int day, int section) {
+    private JwCourseEntry parseCourseLine(String line, int day, int section, String timeRange) {
         int open = line.indexOf('(');
         int close = line.lastIndexOf(')');
         if (open <= 0 || close <= open) {
@@ -201,7 +213,7 @@ public class KingosoftScheduleClient {
         }
 
         return new JwCourseEntry(null, null, courseName, teacher,
-                null, location, day, section, section, weeks, parity, line);
+                null, location, day, section, section, weeks, parity, line, timeRange);
     }
 
     /** 按校历推算当前学期：8~12 月与 1 月为学年第一学期，2~7 月为第二学期 */
@@ -209,11 +221,12 @@ public class KingosoftScheduleClient {
         java.time.LocalDate today = java.time.LocalDate.now();
         int month = today.getMonthValue();
         int startYear = month >= 8 ? today.getYear() : today.getYear() - 1;
-        int term = (month >= 8 || month == 1) ? 1 : 2;
+        // 青果 xnxq 的学期为 0 基：0=第一学期，1=第二学期
+        int term = (month >= 8 || month == 1) ? 0 : 1;
         return startYear + "," + term;
     }
 
-    /** 校历学期名兜底：2026,1 → 2026-2027学年第一学期（数据页标题缺失时使用） */
+    /** 校历学期名兜底：2026,0 → 2026-2027学年第一学期（数据页标题缺失时使用） */
     private static String fallbackSemesterName(String xnxq) {
         if (xnxq == null) {
             return "";
@@ -224,7 +237,7 @@ public class KingosoftScheduleClient {
         }
         int year = Integer.parseInt(m.group(1));
         int term = Integer.parseInt(m.group(2));
-        String termName = term == 1 ? "第一学期" : term == 2 ? "第二学期" : "第三学期";
+        String termName = term == 0 ? "第一学期" : term == 1 ? "第二学期" : "第三学期";
         return year + "-" + (year + 1) + "学年" + termName;
     }
 
@@ -258,9 +271,10 @@ public class KingosoftScheduleClient {
     /** 课表单条上课安排（一门课可拆多行为多个周次/地点） */
     public record JwCourseEntry(String classCode, String courseCode, String courseName, String teacher,
                                 String nature, String location, int dayOfWeek, int startSection, int endSection,
-                                String weeks, int weekParity, String rawText) {
+                                String weeks, int weekParity, String rawText, String timeRange) {
     }
 
-    public record JwSchedulePage(String semesterCode, String semesterName, List<JwCourseEntry> courses) {
+    public record JwSchedulePage(String semesterCode, String semesterName, List<JwCourseEntry> courses,
+                                 Integer totalWeeks) {
     }
 }

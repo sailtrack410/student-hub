@@ -60,6 +60,7 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
     private final AiModelMapper modelMapper;
     private final AiDefaultModelMapper defaultModelMapper;
     private final AiConfigService aiConfigService;
+    private final AiEmbeddingModelLockService embeddingModelLockService;
     private final ObjectMapper objectMapper;
     /** 直连 HttpClient.Builder 工厂（HttpClientConfig 提供，不走系统代理），探活用固定短超时 */
     private final HttpClient.Builder directHttpClientBuilder;
@@ -102,6 +103,9 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
     @Transactional(rollbackFor = Exception.class)
     public AiProviderResponse updateProvider(Long operatorId, Long providerId, AiProviderUpdateRequest request) {
         AiProviderEntity provider = requireProvider(providerId);
+        if (Boolean.FALSE.equals(request.enabled())) {
+            assertEmbeddingLockAllowsProviderRemoval(providerId);
+        }
         if (StringUtils.hasText(request.providerName())) {
             provider.setProviderName(request.providerName().trim());
         }
@@ -136,6 +140,7 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
     @Transactional(rollbackFor = Exception.class)
     public void deleteProvider(Long operatorId, Long providerId) {
         requireProvider(providerId);
+        assertEmbeddingLockAllowsProviderRemoval(providerId);
         List<Long> modelIds = modelMapper.selectList(new LambdaQueryWrapper<AiModelEntity>()
                         .eq(AiModelEntity::getProviderId, providerId))
                 .stream().map(AiModelEntity::getId).toList();
@@ -263,11 +268,20 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
     @Transactional(rollbackFor = Exception.class)
     public AiModelResponse updateModel(Long operatorId, Long modelId, AiModelUpdateRequest request) {
         AiModelEntity model = requireModel(modelId);
+        if (Boolean.FALSE.equals(request.enabled())) {
+            assertEmbeddingLockAllowsModelRemoval(modelId);
+        }
         if (request.enabled() != null) {
             model.setEnabled(request.enabled());
         }
         if (StringUtils.hasText(request.modelType())) {
             model.setModelType(request.modelType());
+        }
+        if (request.contextWindowTokens() != null) {
+            model.setContextWindowTokens(request.contextWindowTokens());
+        }
+        if (request.maxOutputTokens() != null) {
+            model.setMaxOutputTokens(request.maxOutputTokens());
         }
         modelMapper.updateById(model);
         aiConfigService.refreshRuntime();
@@ -280,6 +294,7 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
     @Transactional(rollbackFor = Exception.class)
     public void deleteModel(Long operatorId, Long modelId) {
         requireModel(modelId);
+        assertEmbeddingLockAllowsModelRemoval(modelId);
         modelMapper.deleteById(modelId);
         clearDefaultsReferencing(List.of(modelId));
         aiConfigService.refreshRuntime();
@@ -294,14 +309,18 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
                 .collect(Collectors.toMap(AiDefaultModelEntity::getTypeCode,
                         AiDefaultModelEntity::getModelId));
         Map<Long, String> providerNames = providerNameMap();
+        AiEmbeddingModelLockService.LockState embeddingLock = embeddingModelLockService.current();
         List<AiDefaultModelResponse> result = new ArrayList<>();
         for (String typeCode : Arrays.stream(AiModelType.values()).map(Enum::name).toList()) {
             Long modelId = defaults.get(typeCode);
             AiModelEntity model = modelId == null ? null : modelMap.get(modelId);
+            boolean embedding = AiModelType.EMBEDDING.name().equals(typeCode);
             result.add(new AiDefaultModelResponse(typeCode, typeName(typeCode),
                     model == null ? null
                             : AiModelResponse.from(model, providerNames.getOrDefault(model.getProviderId(),
-                            "未知供应商"))));
+                            "未知供应商")),
+                    embedding && embeddingLock.locked(),
+                    embedding ? embeddingLock.message() : null));
         }
         return result;
     }
@@ -310,6 +329,10 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
     @Transactional(rollbackFor = Exception.class)
     public AiDefaultModelResponse setDefault(Long operatorId, AiDefaultModelSetRequest request) {
         String typeCode = request.typeCode();
+        if (AiModelType.EMBEDDING.name().equals(typeCode)) {
+            AiModelEntity target = request.modelId() == null ? null : requireModel(request.modelId());
+            assertEmbeddingLockAllowsChange(target);
+        }
         AiDefaultModelEntity existing = defaultModelMapper.selectOne(new LambdaQueryWrapper<AiDefaultModelEntity>()
                 .eq(AiDefaultModelEntity::getTypeCode, typeCode)
                 .last("LIMIT 1"));
@@ -360,6 +383,48 @@ public class AiProviderAdminServiceImpl implements AiProviderAdminService {
             providerMapper.updateById(update);
         } catch (Exception exception) {
             log.warn("连通性检查结果落库失败, providerId={}", provider.getId(), exception);
+        }
+    }
+
+    private void assertEmbeddingLockAllowsChange(AiModelEntity target) {
+        AiEmbeddingModelLockService.LockState lock = embeddingModelLockService.current();
+        if (!lock.locked()) {
+            return;
+        }
+        if (target != null && target.getProviderModelId() != null
+                && target.getProviderModelId().equals(lock.model())) {
+            return;
+        }
+        throw new BusinessException(ErrorCode.INVALID_PARAMETER, lock.message());
+    }
+
+    private void assertEmbeddingLockAllowsModelRemoval(Long modelId) {
+        AiEmbeddingModelLockService.LockState lock = embeddingModelLockService.current();
+        if (!lock.locked()) {
+            return;
+        }
+        AiDefaultModelEntity def = defaultModelMapper.selectOne(new LambdaQueryWrapper<AiDefaultModelEntity>()
+                .eq(AiDefaultModelEntity::getTypeCode, AiModelType.EMBEDDING.name())
+                .last("LIMIT 1"));
+        if (def != null && modelId.equals(def.getModelId())) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, lock.message());
+        }
+    }
+
+    private void assertEmbeddingLockAllowsProviderRemoval(Long providerId) {
+        AiEmbeddingModelLockService.LockState lock = embeddingModelLockService.current();
+        if (!lock.locked()) {
+            return;
+        }
+        AiDefaultModelEntity def = defaultModelMapper.selectOne(new LambdaQueryWrapper<AiDefaultModelEntity>()
+                .eq(AiDefaultModelEntity::getTypeCode, AiModelType.EMBEDDING.name())
+                .last("LIMIT 1"));
+        if (def == null) {
+            return;
+        }
+        AiModelEntity model = modelMapper.selectById(def.getModelId());
+        if (model != null && providerId.equals(model.getProviderId())) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, lock.message());
         }
     }
 

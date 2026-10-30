@@ -3,6 +3,7 @@ package com.studenthub.modules.servicecatalog.service;
 import com.studenthub.modules.servicecatalog.controller.dto.CatalogCategoryResponse;
 import com.studenthub.modules.servicecatalog.controller.dto.ServiceCategoryCreateRequest;
 import com.studenthub.modules.servicecatalog.controller.dto.ServiceItemAdminResponse;
+import com.studenthub.modules.servicecatalog.controller.dto.ServiceHandlerOrganizationResponse;
 import com.studenthub.modules.servicecatalog.controller.dto.ServiceItemDetailResponse;
 import com.studenthub.modules.servicecatalog.controller.dto.ServiceItemUpsertRequest;
 import com.studenthub.modules.servicecatalog.entity.ServiceItemEntity;
@@ -36,6 +37,16 @@ public interface ServiceCatalogService {
     Long createCategory(ServiceCategoryCreateRequest request);
 
     Long upsertItem(ServiceItemUpsertRequest request);
+
+    /**
+     * 复制服务项：生成一个停用状态的副本（编码自动加 -COPY 后缀），供运营在既有表单基础上快速新建。
+     */
+    Long copyItem(Long itemId);
+
+    /**
+     * 受理组织选项：供服务项编辑页选择处理组织。
+     */
+    List<ServiceHandlerOrganizationResponse> handlerOrganizations(Long campusId);
 
     /**
      * 逻辑删除服务项；已产生申请或工单的服务项禁止删除，只能停用。

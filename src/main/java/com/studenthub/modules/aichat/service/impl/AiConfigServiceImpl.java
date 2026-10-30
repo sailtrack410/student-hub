@@ -65,6 +65,16 @@ public class AiConfigServiceImpl implements AiConfigService {
         entity.setHourlyMessageLimit(request.hourlyMessageLimit());
         entity.setHistoryWindow(request.historyWindow());
         entity.setMaxMessageCharacters(request.maxMessageCharacters());
+        if (request.maxContextTokens() != null) entity.setMaxContextTokens(request.maxContextTokens());
+        if (request.contextSafetyMarginTokens() != null) entity.setContextSafetyMarginTokens(request.contextSafetyMarginTokens());
+        if (request.maxOutputTokens() != null) entity.setMaxOutputTokens(request.maxOutputTokens());
+        if (request.historyTokenRatio() != null) entity.setHistoryTokenRatio(request.historyTokenRatio());
+        if (request.ragTokenRatio() != null) entity.setRagTokenRatio(request.ragTokenRatio());
+        if (request.attachmentTokenRatio() != null) entity.setAttachmentTokenRatio(request.attachmentTokenRatio());
+        if (request.summaryEnabled() != null) entity.setSummaryEnabled(request.summaryEnabled());
+        if (request.summaryTriggerRatio() != null) entity.setSummaryTriggerRatio(request.summaryTriggerRatio());
+        if (request.summaryKeepRecentTurns() != null) entity.setSummaryKeepRecentTurns(request.summaryKeepRecentTurns());
+        if (request.tokenEstimateCharsPerToken() != null) entity.setTokenEstimateCharsPerToken(request.tokenEstimateCharsPerToken());
         entity.setVersion(entity.getVersion());
         entity.setUpdatedBy(operatorId == null ? 0L : operatorId);
         aiConfigMapper.updateById(entity);
@@ -94,6 +104,16 @@ public class AiConfigServiceImpl implements AiConfigService {
                 config.getHourlyMessageLimit(),
                 config.getHistoryWindow(),
                 config.getMaxMessageCharacters(),
+                config.getMaxContextTokens() == null ? 60000 : config.getMaxContextTokens(),
+                config.getContextSafetyMarginTokens() == null ? 512 : config.getContextSafetyMarginTokens(),
+                config.getMaxOutputTokens() == null ? 2048 : config.getMaxOutputTokens(),
+                config.getHistoryTokenRatio() == null ? 0.400 : config.getHistoryTokenRatio().doubleValue(),
+                config.getRagTokenRatio() == null ? 0.250 : config.getRagTokenRatio().doubleValue(),
+                config.getAttachmentTokenRatio() == null ? 0.150 : config.getAttachmentTokenRatio().doubleValue(),
+                Boolean.TRUE.equals(config.getSummaryEnabled()),
+                config.getSummaryTriggerRatio() == null ? 0.800 : config.getSummaryTriggerRatio().doubleValue(),
+                config.getSummaryKeepRecentTurns() == null ? 4 : config.getSummaryKeepRecentTurns(),
+                config.getTokenEstimateCharsPerToken() == null ? 1.50 : config.getTokenEstimateCharsPerToken().doubleValue(),
                 (int) version));
     }
 

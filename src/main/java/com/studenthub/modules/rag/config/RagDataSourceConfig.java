@@ -1,11 +1,9 @@
 package com.studenthub.modules.rag.config;
 
-import com.zaxxer.hikari.HikariDataSource;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import javax.sql.DataSource;
@@ -18,22 +16,26 @@ public class RagDataSourceConfig {
         return properties.initializeDataSourceBuilder().build();
     }
 
+    /**
+     * RAG 数据源始终注册为可懒重建的包装器：应用即使未启用 RAG 也能启动，
+     * 管理端启用/修改连接后由 {@link RagDataSourceHolder} 在首次访问时建池。
+     */
     @Bean(name = "ragDataSource")
-    @ConditionalOnProperty(prefix = "studenthub.rag", name = "enabled", havingValue = "true")
-    public DataSource ragDataSource(RagProperties properties) {
-        HikariDataSource ds = new HikariDataSource();
-        ds.setJdbcUrl(properties.getJdbcUrl());
-        ds.setUsername(properties.getUsername());
-        ds.setPassword(properties.getPassword());
-        ds.setMaximumPoolSize(5);
-        ds.setMinimumIdle(0);
-        ds.setConnectionTimeout(5000);
-        ds.setInitializationFailTimeout(-1);
-        return ds;
+    public DataSource ragDataSource(RagDataSourceHolder holder) {
+        return holder;
+    }
+
+    /**
+     * 显式提供主库 JdbcTemplate 并标记 @Primary：自定义 ragJdbcTemplate 存在时，
+     * Spring Boot 的 JdbcTemplate 自动配置会退让，若不显式声明，按类型注入会误拿到 RAG 模板。
+     */
+    @Bean
+    @Primary
+    public JdbcTemplate jdbcTemplate(DataSource dataSource) {
+        return new JdbcTemplate(dataSource);
     }
 
     @Bean(name = "ragJdbcTemplate")
-    @ConditionalOnProperty(prefix = "studenthub.rag", name = "enabled", havingValue = "true")
     public JdbcTemplate ragJdbcTemplate(@org.springframework.beans.factory.annotation.Qualifier("ragDataSource") DataSource ragDataSource) {
         return new JdbcTemplate(ragDataSource);
     }

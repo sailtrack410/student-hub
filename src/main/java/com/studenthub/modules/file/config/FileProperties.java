@@ -7,7 +7,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "studenthub.file")
 public class FileProperties {
 
-    /** 存储实现：minio 或 local（默认本地，开发测试用） */
+    /** 存储实现：local / minio / oss（默认本地，开发测试用） */
     private String storage = "local";
 
     /** 本地存储目录（storage=local 时使用） */
@@ -34,4 +34,25 @@ public class FileProperties {
 
     /** MinIO 桶名称 */
     private String minioBucket = "student-hub";
+
+    /** 阿里云 OSS Endpoint，如 https://oss-cn-chengdu.aliyuncs.com */
+    private String ossEndpoint;
+    /** OSS 对客户端公开的访问域名/CDN；留空则使用 endpoint */
+    private String ossPublicEndpoint;
+    /** OSS 桶名称 */
+    private String ossBucket;
+    /** OSS AccessKey ID（仅后端使用，管理端加密存储） */
+    private String ossAccessKeyId;
+    /** OSS AccessKey Secret（仅后端使用，管理端加密存储） */
+    private String ossAccessKeySecret;
+
+    /** 当前是否为对象存储实现。 */
+    public boolean objectStorage() {
+        String value = storage == null ? "local" : storage.trim().toLowerCase();
+        return "minio".equals(value) || "oss".equals(value);
+    }
+
+    public String normalizedStorage() {
+        return storage == null || storage.isBlank() ? "local" : storage.trim().toLowerCase();
+    }
 }

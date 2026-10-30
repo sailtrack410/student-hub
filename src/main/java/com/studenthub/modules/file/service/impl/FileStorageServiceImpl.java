@@ -206,10 +206,27 @@ public class FileStorageServiceImpl implements FileStorageService {
     }
 
     @Override
+    public String resolveAvatarUrl(String rawAvatar) {
+        if (rawAvatar == null || rawAvatar.isBlank()) {
+            return null;
+        }
+        String value = rawAvatar.trim();
+        if (value.startsWith("http://") || value.startsWith("https://")) {
+            return value;
+        }
+        try {
+            return signViewPath(Long.valueOf(value));
+        } catch (NumberFormatException exception) {
+            log.warn("忽略无法识别的用户头像值");
+            return null;
+        }
+    }
+
+    @Override
     public String signThumbnailPath(Long fileId) {
         FileStorageEntity entity = fileStorageMapper.selectById(fileId);
         if (entity != null && entity.getCreatedAt() != null && entity.getStorageKey() != null
-                && "minio".equalsIgnoreCase(fileProperties.getStorage())) {
+                && fileProperties.objectStorage()) {
             String objectKey = objectKeyOf(entity);
             String thumbnailKey = thumbnailObjectKeyOf(objectKey);
             ensureThumbnail(entity, objectKey, thumbnailKey);

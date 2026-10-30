@@ -9,7 +9,6 @@ import com.studenthub.modules.rag.mapper.KnowledgeDocumentMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -39,7 +38,6 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
-@ConditionalOnBean(name = "ragJdbcTemplate")
 @RequiredArgsConstructor
 public class RetrievalService {
     private final RagProperties properties;
@@ -251,10 +249,10 @@ public class RetrievalService {
         return value instanceof Number n ? n.doubleValue() : null;
     }
 
-    /** PostgreSQL 数组字面量，如 {a,b,c}。 */
+    /** PostgreSQL 数组字面量（必须带单引号再 cast），如 '{a,b,c}'。 */
     private String arrayLiteral(List<Double> vector) {
-        return "{" + vector.stream()
+        return "'{" + vector.stream()
                 .map(v -> Double.toString(v == null ? 0 : v))
-                .collect(Collectors.joining(",")) + "}";
+                .collect(Collectors.joining(",")) + "}'";
     }
 }

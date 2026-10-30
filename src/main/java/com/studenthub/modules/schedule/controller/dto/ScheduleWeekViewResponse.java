@@ -13,6 +13,7 @@ public record ScheduleWeekViewResponse(
         LocalDate weekStart,
         /** 服务端推算的当前周次（日期不在学期范围内为 0） */
         int currentWeek,
+        int totalWeeks,
         List<DayView> days) {
 
     /** 一天的课程（周一到周日固定 7 项顺序返回，无课时 courses 为空数组） */

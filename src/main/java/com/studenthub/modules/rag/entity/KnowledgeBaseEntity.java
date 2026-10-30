@@ -23,4 +23,10 @@ public class KnowledgeBaseEntity extends BaseEntity {
     private String systemPrompt;
     private Integer documentCount;
     private Integer chunkCount;
+    /** 是否供 App AI 助手检索（与 visibility 解耦） */
+    private Boolean assistantEnabled;
+    /** 单次注入 AI 的 token 预算 */
+    private Integer ragTokenBudget;
+    /** 多知识库排序，越大越优先 */
+    private Integer assistantPriority;
 }

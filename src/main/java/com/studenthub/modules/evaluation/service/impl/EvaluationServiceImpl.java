@@ -57,6 +57,13 @@ public class EvaluationServiceImpl implements EvaluationService {
         entity.setComment(request.comment());
         evaluationMapper.insert(entity);
 
+        ServiceRequestEntity completed = new ServiceRequestEntity();
+        completed.setId(requestId);
+        completed.setStatus(RequestTransitions.Status.COMPLETED.name());
+        completed.setCompletedAt(java.time.LocalDateTime.now());
+        completed.setVersion(serviceRequest.getVersion());
+        serviceRequestMapper.updateById(completed);
+
         requestLogRecorder.record(requestId, order == null ? null : order.getId(),
                 RequestTransitions.Action.EVALUATE, RequestTransitions.Status.COMPLETED,
                 RequestTransitions.Status.COMPLETED, evaluator.userId(), evaluator.displayName(),

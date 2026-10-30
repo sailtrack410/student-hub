@@ -1,0 +1,490 @@
+/* ============================================================
+   Student Hub · Admin Design System
+   管理端统一视觉规范（2026-10-20）
+   目标：一个字号梯度、一个间距梯度、一套控件高度、一套圆角。
+   依赖：campus-os.css 的科技蓝 token；本文件最后加载，只做归一化。
+   ============================================================ */
+
+:root {
+  /* Typography · 8 级梯度 */
+  --fs-10: 10px;   /* 表头 / 标签 / 元信息 */
+  --fs-11: 11px;   /* 辅助文字 / 次级说明 */
+  --fs-12: 12px;   /* 正文 / 表格 / 控件 */
+  --fs-13: 13px;   /* 卡片标题 / 区块标题 */
+  --fs-14: 14px;   /* 强调标题 / 弹层标题 */
+  --fs-16: 16px;   /* 顶栏页标题 */
+  --fs-20: 20px;   /* 紧凑指标 */
+  --fs-24: 24px;   /* 主指标 */
+
+  /* Spacing · 4 基准 */
+  --sp-1: 4px;
+  --sp-2: 6px;
+  --sp-3: 8px;
+  --sp-4: 10px;
+  --sp-5: 12px;
+  --sp-6: 16px;
+  --sp-7: 20px;
+  --sp-8: 24px;
+
+  /* Radius */
+  --r-tag: 3px;
+  --r-control: 4px;
+  --r-panel: 6px;
+  --r-overlay: 8px;
+
+  /* Controls */
+  --h-control-sm: 26px;
+  --h-control: 30px;
+  --h-row: 38px;
+  --h-panel-head: 38px;
+  --h-topbar: 56px;
+
+  /* Type */
+  --tk-font: "SF Pro Text", "SF Pro Display", "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+  --tk-mono: "SF Mono", "JetBrains Mono", "Menlo", "Consolas", monospace;
+}
+
+/* ---------------- Shell：顶栏、底栏、内容区 ---------------- */
+@media (min-width: 1025px) {
+  .topbar { height: var(--h-topbar) !important; padding: 0 var(--sp-7) !important; gap: var(--sp-5); }
+}
+.tb-kicker { font-size: var(--fs-10); letter-spacing: .1em; }
+.tb-title { gap: 2px; }
+.tb-title h1 { font-size: var(--fs-16); letter-spacing: -.015em; }
+.tb-title h1 .sub { font-size: var(--fs-11); max-width: 560px; }
+.top-actions { gap: var(--sp-3); }
+.campus-pill,
+.cmd-trigger,
+.ticon,
+.tavatar,
+.rail-toggle { height: var(--h-control); }
+.ticon,
+.tavatar,
+.rail-toggle { width: var(--h-control); }
+.campus-pill,
+.cmd-trigger,
+.ticon,
+.tavatar,
+.rail-toggle { border-radius: var(--r-control); }
+.campus-pill,
+.cmd-trigger { font-size: var(--fs-11); }
+.cmd-trigger { width: 200px; }
+.cmd-trigger kbd { font-size: var(--fs-10); }
+.tavatar { font-size: var(--fs-11); }
+
+.layout > aside.rail .brand { height: 58px; }
+.layout > aside.rail nav .grp { height: 28px; font-size: var(--fs-10); border-radius: var(--r-control); }
+.layout > aside.rail nav .grp-n { font-size: var(--fs-10); }
+.layout > aside.rail nav .item { height: 30px; font-size: var(--fs-12); border-radius: var(--r-control); }
+.layout > aside.rail .me-card { border-radius: var(--r-panel); }
+.layout > aside.rail .me-card .nm { font-size: var(--fs-12); }
+.layout > aside.rail .me-card .rl { font-size: var(--fs-10); }
+
+.content { padding: var(--sp-6) var(--sp-7) var(--sp-7) !important; }
+.content > .pgw,
+.content > .ax-pane {
+  width: 100% !important;
+  max-width: 1600px;
+  margin: 0 auto;
+  align-self: stretch;
+  gap: var(--sp-5) !important;
+}
+.pgw { font-size: var(--fs-12); }
+.ax-pane { font-size: var(--fs-12); }
+.pgw .page-h { min-height: 28px; margin: 0; gap: var(--sp-5); }
+.pgw .page-h .sub { font-size: var(--fs-11); }
+.pgw .page-h .r { gap: var(--sp-3); }
+.statusbar { height: 26px; padding: 0 var(--sp-7); gap: var(--sp-6); font-size: var(--fs-10); }
+
+/* ---------------- 按钮 / 页签 / 表单控件 ---------------- */
+.pgw .btn2,
+.pgw .c,
+.ax-pane .ax-btn {
+  height: var(--h-control);
+  padding: 0 var(--sp-5);
+  border-radius: var(--r-control);
+  font-size: var(--fs-12);
+  box-shadow: none;
+}
+.pgw .page-h .r .btn2 { height: 28px; padding: 0 var(--sp-4); font-size: var(--fs-11); }
+.pgw .btn2.sm { height: var(--h-control-sm); padding: 0 var(--sp-3); font-size: var(--fs-11); }
+.pgw .os-btn { height: var(--h-control); padding: 0 var(--sp-5); border-radius: var(--r-control); font-size: var(--fs-12); }
+.pgw .tabs { gap: var(--sp-1); }
+.pgw .tab {
+  height: var(--h-control);
+  padding: 0 var(--sp-5);
+  border-radius: var(--r-control);
+  font-size: var(--fs-12);
+}
+.pgw .tab .n { min-width: 18px; height: 16px; padding: 0 5px; font-size: var(--fs-10); }
+.pgw.comm .tabs .tab { height: var(--h-control); padding: 0 var(--sp-5); border-radius: var(--r-control); font-size: var(--fs-12); }
+
+.ax-tabs-row { border-bottom: 0; gap: var(--sp-3); }
+.ax-tabs { gap: var(--sp-1); }
+.ax-tab {
+  height: var(--h-control);
+  padding: 0 var(--sp-5);
+  border: 1px solid transparent;
+  border-radius: var(--r-control);
+  font-size: var(--fs-12);
+  font-weight: 550;
+}
+.ax-tab:hover { background: var(--tk-subtle); color: var(--tk-text2); }
+.ax-tab.on {
+  background: var(--tk-text);
+  border-color: var(--tk-text);
+  border-radius: var(--r-control);
+  color: var(--tk-panel);
+  font-weight: 600;
+}
+.ax-tabs-meta { font-size: var(--fs-10); }
+
+.pgw .srch,
+.pgw .fchip,
+.pgw .ipt2,
+.pgw .pin,
+.os-input,
+.os-select,
+.ax-search,
+.ax-select,
+.ax-field input,
+.ax-field select {
+  height: var(--h-control);
+  border-radius: var(--r-control);
+  font-size: var(--fs-12);
+}
+.pgw .srch { width: 240px; }
+.pgw .srch input,
+.ax-search input,
+.ax-composer input,
+.pgw .pin input,
+.pgw .pin select,
+.pgw .ipt2 input,
+.pgw .ipt2 select { font-size: var(--fs-12); }
+.ax-search > span { font-size: var(--fs-10); }
+.ax-search.wide { width: 260px; }
+.ax-select { padding: 0 var(--sp-3); }
+.ax-search,
+.pgw .srch,
+.pgw .fchip,
+.pgw .ipt2,
+.ax-select,
+.ax-field input,
+.ax-field select,
+.os-input,
+.os-select {
+  box-shadow: none;
+}
+.ax-search:focus-within,
+.pgw .srch:focus-within,
+.ax-select:focus,
+.ax-field input:focus,
+.ax-field select:focus {
+  outline: 0;
+  border-color: var(--tk-brand);
+  box-shadow: 0 0 0 2px var(--tk-brand-soft);
+}
+
+/* ---------------- 面板 / 卡片 / 分组 ---------------- */
+.pgw .lcard,
+.pgw .panel,
+.pgw .chart,
+.pgw .pfoot,
+.pgw .svc-card,
+.os-panel,
+.os-kpi,
+.ax-side,
+.ax-hero,
+.ax-panel,
+.ax-subpanel,
+.ax-strip,
+.login-card,
+.cmd-panel {
+  border-radius: var(--r-panel) !important;
+  box-shadow: none !important;
+}
+.pgw .lcard { padding: var(--sp-5) var(--sp-5); gap: var(--sp-4); }
+.pgw .lcard .cap { font-size: var(--fs-13); }
+.pgw .lcard .cap .cnt { font-size: var(--fs-10); }
+.pgw .panel { padding: var(--sp-5); gap: var(--sp-4); }
+.pgw .panel .cap { font-size: var(--fs-13); }
+.pgw .chart .cap { padding: var(--sp-4) var(--sp-5); font-size: var(--fs-12); }
+.os-panel-h { min-height: var(--h-panel-head); padding: 0 var(--sp-5); gap: var(--sp-3); }
+.os-panel-h h3 { font-size: var(--fs-13); }
+.os-panel-h .hint { font-size: var(--fs-10); }
+.os-panel-b { padding: var(--sp-5) !important; }
+
+.ax-pane { gap: var(--sp-5); }
+.ax-main,
+.ax-split,
+.ax-test-grid,
+.ax-default-grid { gap: var(--sp-5); }
+.ax-side-head,
+.ax-panel-head,
+.ax-subhead {
+  min-height: var(--h-panel-head);
+  height: auto;
+  padding: var(--sp-2) var(--sp-5);
+}
+.ax-side-title b,
+.ax-panel-title,
+.ax-subhead b { font-size: var(--fs-13); }
+.ax-panel-sub,
+.ax-subhead span { font-size: var(--fs-10); }
+.ax-hero { gap: var(--sp-4); padding: var(--sp-5); }
+.ax-hero-name b { font-size: var(--fs-14); }
+.ax-hero-name em,
+.ax-hero-hint { font-size: var(--fs-10); }
+.ax-meta { padding: var(--sp-3) 0; }
+.ax-meta-item { gap: var(--sp-1); }
+.ax-meta-item label { font-size: var(--fs-10); }
+.ax-meta-item span { font-size: var(--fs-12); }
+
+/* ---------------- 表格 / 标签 ---------------- */
+.pgw table.pk th,
+.os-panel table th,
+.ax-table th,
+.cv-section-table th {
+  height: 30px;
+  padding: var(--sp-3) var(--sp-4);
+  font-size: var(--fs-10);
+  letter-spacing: .04em;
+}
+.pgw table.pk td,
+.os-panel table td,
+.ax-table td,
+.cv-section-table td {
+  height: var(--h-row);
+  padding: var(--sp-3) var(--sp-4);
+  font-size: var(--fs-12);
+}
+.ax-table th { padding: 0 var(--sp-4); }
+.ax-table td { padding: var(--sp-1) var(--sp-4); }
+.ax-table .ax-empty,
+.ax-empty,
+.ax-empty-sm { font-size: var(--fs-11); }
+.ax-sub { font-size: var(--fs-10); }
+.pgw table.pk .op { font-size: var(--fs-11); }
+
+.pgw .bdg,
+.os-tag,
+.ax-tag,
+.ax-provider-tag,
+.ax-status {
+  height: 20px;
+  padding: 0 7px;
+  border-radius: var(--r-tag);
+  font-size: var(--fs-10);
+  font-weight: 550;
+}
+.pgw .bdg.plain { height: 20px; padding: 0 7px; font-size: var(--fs-10); }
+
+/* ---------------- 指标 / 统计条 ---------------- */
+.pgw .statgrid,
+.pgw .chartgrid { border-radius: var(--r-panel) !important; }
+.pgw .stat { padding: var(--sp-5); }
+.pgw .stat .lb { font-size: var(--fs-10); letter-spacing: .02em; }
+.pgw .stat .v b { font-size: 22px; }
+.pgw .stat .v span { font-size: var(--fs-10); }
+.os-grid { gap: var(--sp-5) !important; }
+.os-kpi { padding: var(--sp-4) var(--sp-5); min-height: 78px; gap: var(--sp-2); }
+.os-kpi .k-label { font-size: var(--fs-10); }
+.os-kpi .k-val { font-size: var(--fs-24); }
+.os-kpi .k-val small,
+.os-kpi .k-foot { font-size: var(--fs-10); }
+.ax-strip { min-height: 56px; padding: 0 var(--sp-5); }
+.ax-stat { gap: var(--sp-1); padding: 0 var(--sp-6); }
+.ax-stat span { font-size: var(--fs-10); }
+.ax-stat b { font-size: 20px; }
+
+.cv-kpi { padding: var(--sp-4); }
+.cv-kpi .k-top span { font-size: var(--fs-10); }
+.cv-kpi .k-top em { font-size: var(--fs-10); }
+.cv-kpi .k-num { font-size: var(--fs-24); }
+.cv-kpi .k-num small { font-size: var(--fs-10); }
+.cv-kpi .k-sub { font-size: var(--fs-10); }
+.cv-panel-h h3 { font-size: var(--fs-13); }
+.cv-panel-h .hint,
+.cv-panel-h .r .delta { font-size: var(--fs-10); }
+
+/* ---------------- AI 供应商 / 模型 / 默认 / 测试 ---------------- */
+.ax-count { min-width: 20px; height: 18px; font-size: var(--fs-10); }
+.ax-icon-btn { width: 28px; height: 28px; border-radius: var(--r-control); font-size: var(--fs-14); }
+.ax-search { margin: var(--sp-3) var(--sp-4) var(--sp-1); padding: 0 var(--sp-3); }
+.ax-search.wide { margin: 0; }
+.ax-provider-list { padding: var(--sp-1) var(--sp-2) var(--sp-3); }
+.ax-provider { min-height: 48px; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-control); }
+.ax-avatar { width: 28px; height: 28px; border-radius: var(--r-control); font-size: var(--fs-11); }
+.ax-avatar.lg { width: 36px; height: 36px; font-size: var(--fs-13); }
+.ax-p-main b { font-size: var(--fs-12); }
+.ax-p-main em { font-size: var(--fs-10); }
+.ax-p-side,
+.ax-side-foot { font-size: var(--fs-10); }
+.ax-side-foot { padding: var(--sp-2) var(--sp-5); gap: var(--sp-5); }
+.ax-pane .ax-btn { font-size: var(--fs-12); }
+.ax-pane .ax-link { height: 26px; font-size: var(--fs-11); }
+.ax-pane .ax-link + .ax-link { margin-left: var(--sp-1); }
+.ax-panel-title { font-size: var(--fs-13); }
+.ax-panel-sub { font-size: var(--fs-10); }
+.ax-panel-head { gap: var(--sp-4); }
+.ax-panel-actions { gap: var(--sp-2); }
+.ax-hero-top { gap: var(--sp-3); }
+.ax-hero-actions { gap: var(--sp-2); }
+.ax-hero-foot { gap: var(--sp-3); }
+.ax-toggle-label { font-size: var(--fs-11); }
+.ax-status { height: 20px; font-size: var(--fs-10); }
+.ax-meta-item label { font-size: var(--fs-10); }
+.ax-meta-item span { font-size: var(--fs-12); }
+.ax-table th { font-size: var(--fs-10); }
+.ax-table td { font-size: var(--fs-12); }
+.ax-table td .ax-mono,
+.ax-mono,
+.ax-num { font-size: var(--fs-11) !important; }
+.ax-table .ax-sub { font-size: var(--fs-10); }
+.ax-tag,
+.ax-provider-tag,
+.ax-status { font-size: var(--fs-10); }
+.ax-provider-tag { height: 20px; }
+.ax-num { font-size: var(--fs-10) !important; }
+.ax-panel-foot { min-height: var(--h-panel-head); padding: var(--sp-2) var(--sp-5); font-size: var(--fs-11); }
+.ax-default-list { padding: var(--sp-2) var(--sp-5); }
+.ax-default-row { min-height: 52px; gap: var(--sp-4); }
+.ax-def-ico { width: 28px; height: 28px; border-radius: var(--r-control); font-size: var(--fs-11); }
+.ax-def-main b { font-size: var(--fs-12); }
+.ax-def-main em { font-size: var(--fs-10); }
+.ax-form-body { padding: var(--sp-4) var(--sp-5); }
+.ax-form-label { font-size: var(--fs-11); }
+.ax-form-row { min-height: 32px; }
+.ax-form-row.switch-row em,
+.ax-field > span { font-size: var(--fs-10); }
+.ax-section-title { font-size: var(--fs-12); }
+.ax-section-title span { font-size: var(--fs-10); }
+.ax-hint { font-size: var(--fs-10); }
+.ax-field input,
+.ax-field select { height: var(--h-control); font-size: var(--fs-12); }
+.ax-test-grid { grid-template-columns: minmax(0, 1fr) 300px; }
+.ax-chat-log { padding: var(--sp-6); gap: var(--sp-4); }
+.ax-msg-body { font-size: var(--fs-12); }
+.ax-msg-role { width: 24px; height: 24px; font-size: var(--fs-10); }
+.ax-sources-h,
+.ax-source { font-size: var(--fs-10); }
+.ax-error { font-size: var(--fs-11); }
+.ax-composer { min-height: 36px; padding: var(--sp-1) var(--sp-2) var(--sp-1) var(--sp-4); border-radius: var(--r-control); }
+.ax-composer input { height: 30px; font-size: var(--fs-12); }
+.ax-chat-foot { font-size: var(--fs-10); padding: var(--sp-2) var(--sp-5) var(--sp-3); }
+.ax-chat-empty b { font-size: var(--fs-13); }
+.ax-chat-empty em { font-size: var(--fs-11); }
+.ax-side-body { padding: var(--sp-4) var(--sp-5); gap: var(--sp-3); }
+.ax-run-list { padding: var(--sp-1) var(--sp-5); }
+.ax-run-list span,
+.ax-run-list b { font-size: var(--fs-10); }
+.ax-quick { padding: var(--sp-2) var(--sp-4) var(--sp-3); gap: var(--sp-1); }
+.ax-quick button { min-height: 30px; font-size: var(--fs-11); border-radius: var(--r-control); }
+.ax-model-bar-list { gap: var(--sp-3); padding: var(--sp-3) var(--sp-5); }
+.ax-model-bar { grid-template-columns: 88px minmax(0, 1fr) 28px; gap: var(--sp-3); }
+.ax-model-bar > span { font-size: var(--fs-11); }
+.ax-model-bar > em { font-size: var(--fs-11); }
+.ax-bottom-head b { font-size: var(--fs-12); }
+.ax-bottom-head span { font-size: var(--fs-10); }
+.ax-cover-grid { gap: var(--sp-4) var(--sp-6); padding: var(--sp-4) var(--sp-5); }
+.ax-cover-top b { font-size: var(--fs-12); }
+.ax-kv-list { padding: var(--sp-1) var(--sp-5); }
+.ax-kv-list span,
+.ax-kv-list b { font-size: var(--fs-11); }
+.ax-subfoot span { font-size: var(--fs-10); }
+.ax-subfoot .ax-btn { height: var(--h-control); font-size: var(--fs-11); }
+.ax-rule-list { gap: var(--sp-3); padding: var(--sp-4) var(--sp-5); }
+.ax-rule-list li { font-size: var(--fs-11); }
+.ax-rule-list i { width: 18px; height: 18px; font-size: var(--fs-10); }
+
+/* ---------------- 弹层 / 登录 ---------------- */
+.pcard { border-radius: var(--r-overlay); padding: var(--sp-7); gap: var(--sp-6); }
+.pcard .ph b { font-size: var(--fs-14); }
+.pcard .ph .no { font-size: var(--fs-11); }
+.pcard .fld > label,
+.pcard .plbl,
+.pcard .radio,
+.pcard .chk { font-size: var(--fs-11); }
+.pcard .pin { height: var(--h-control); border-radius: var(--r-control); font-size: var(--fs-12); }
+.pcard .pin input,
+.pcard .pin select { font-size: var(--fs-12); }
+.pcard .pta { padding: var(--sp-3) var(--sp-4); border-radius: var(--r-control); font-size: var(--fs-12); }
+.pcard .pbtn .c { height: var(--h-control); padding: 0 var(--sp-6); border-radius: var(--r-control); font-size: var(--fs-12); }
+.pcard .kv,
+.pcard .psum { border-radius: var(--r-control); padding: var(--sp-5); }
+.pcard .kv .row,
+.pcard .psum .l1 { font-size: var(--fs-12); }
+.pcard .psum .l2 { font-size: var(--fs-11); }
+.ax-page .pcard .ph b { font-size: var(--fs-14); }
+.ax-page .pcard .fld > label,
+.ax-page .pcard .plbl { font-size: var(--fs-11); }
+.ax-page .pcard .pin,
+.ax-page .pcard .pin input,
+.ax-page .pcard .pin select { font-size: var(--fs-12); }
+
+.login-brand,
+.login-panel { border-radius: var(--r-overlay); }
+.login-card h2 { font-size: 24px; }
+.login-card .sub { font-size: var(--fs-12); }
+.login-field label { font-size: var(--fs-11); }
+.login-field input,
+.login-btn { height: 42px; border-radius: var(--r-control); font-size: var(--fs-13); }
+
+/* ---------------- 响应式 ---------------- */
+@media (max-width: 1280px) {
+  .ax-search.wide { width: 210px; }
+}
+@media (max-width: 1024px) {
+  .topbar { height: auto !important; min-height: 60px; padding: var(--sp-3) var(--sp-5) !important; }
+  .content { padding: var(--sp-5) !important; }
+  .pgw table.pk th,
+  .pgw table.pk td,
+  .os-panel table th,
+  .os-panel table td { padding-left: var(--sp-3); padding-right: var(--sp-3); }
+  .ax-search.wide { width: 100%; }
+  .ax-chat { height: 460px; }
+}
+
+/* 1280 桌面仍展示 AI 接入概览与模型分布，保持与 1440/1904 相同的信息层级 */
+@media (min-width: 1025px) and (max-width: 1280px) {
+  .ax-provider-bottom { display: flex !important; flex: 0 0 230px; }
+  .ax-model-bottom { display: grid !important; flex: 0 0 230px; }
+  .ax-provider-bottom .ax-bottom-grid { gap: var(--sp-3); }
+  .ax-model-bottom { gap: var(--sp-3); }
+  .ax-models-page .ax-table-wrap { max-height: 240px; }
+}
+
+/* 1280×800 等短屏：优先保证主表完整可读，接入概览在更高屏展示 */
+@media (min-width: 1025px) and (max-width: 1280px) and (max-height: 840px) {
+  .ax-provider-bottom { display: none !important; }
+  .ax-model-bottom { display: none !important; }
+}
+
+/* 总览：在 823px 内容高度内完整容纳五个区块，不裁切运行状态 */
+.pgw.dash .os-kpi .k-val { font-size: var(--fs-24); }
+.pgw.dash .os-panel-h { min-height: 34px; }
+
+/* 短屏：总览允许纵向滚动，避免运行状态被压缩 */
+@media (max-height: 840px) {
+  .pgw.dash { height: auto !important; }
+  .pgw.dash > * { flex: none; }
+}
+.pgw.dash { gap: var(--sp-4) !important; }
+.ax-page .pcard { padding: var(--sp-7); gap: var(--sp-6); border-radius: var(--r-overlay); }
+
+/* Shared error recovery and persistent density preference. */
+html { --admin-row-padding: 12px; --admin-control-height: 38px; --admin-panel-gap: 24px; }
+html[data-density="compact"] { --admin-row-padding: 6px; --admin-control-height: 30px; --admin-panel-gap: 16px; }
+.content .el-table .el-table__cell { padding-top: var(--admin-row-padding); padding-bottom: var(--admin-row-padding); }
+.content .el-input__wrapper, .content .el-select__wrapper { min-height: var(--admin-control-height); }
+.content .el-form-item { margin-bottom: var(--admin-panel-gap); }
+.content .el-button { min-height: var(--admin-control-height); }
+.density-toggle { min-height: 36px; padding: 0 10px; font: inherit; color: var(--tk-text); background: var(--tk-surface, transparent); border: 1px solid var(--tk-stroke); border-radius: 7px; cursor: pointer; white-space: nowrap; }
+.page-loading { padding: 32px; color: var(--tk-muted); }
+.api-error-panel { margin: 0 0 20px; padding: 18px 22px; border: 1px solid #ca7860; border-radius: 10px; background: var(--tk-surface, #fff8f4); color: var(--tk-text, #42281e); }
+.api-error-panel strong { font-size: 15px; }
+.api-error-panel p { margin: 8px 0; overflow-wrap: anywhere; }
+.api-error-panel small { display: block; line-height: 1.7; color: var(--tk-muted); overflow-wrap: anywhere; }
+.api-error-panel button { min-height: 38px; margin: 12px 12px 8px 0; padding: 6px 14px; font: inherit; border: 1px solid var(--tk-stroke, #bf9a8b); border-radius: 6px; color: inherit; background: transparent; cursor: pointer; }
+.density-toggle:focus-visible, .api-error-panel button:focus-visible { outline: 3px solid #477ab6; outline-offset: 3px; }
+@media (max-width: 600px) { .density-toggle { padding: 0 6px; } }

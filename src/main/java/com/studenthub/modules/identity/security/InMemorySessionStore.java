@@ -110,6 +110,33 @@ public class InMemorySessionStore implements SessionStore {
         return count;
     }
 
+    @Override
+    public void deleteSessionByHash(String tokenHash) {
+        if (tokenHash == null || tokenHash.isBlank()) {
+            return;
+        }
+        StoredSession storedSession = sessions.remove(tokenHash);
+        if (storedSession != null) {
+            removeFromIndex(storedSession.user().userId(), tokenHash);
+        }
+    }
+
+    @Override
+    public boolean existsSessionByHash(String tokenHash) {
+        if (tokenHash == null || tokenHash.isBlank()) {
+            return false;
+        }
+        StoredSession storedSession = sessions.get(tokenHash);
+        if (storedSession == null) {
+            return false;
+        }
+        if (storedSession.expiresAt().isBefore(Instant.now())) {
+            remove(tokenHash, storedSession.user().userId());
+            return false;
+        }
+        return true;
+    }
+
     private void remove(String tokenHash, Long userId) {
         sessions.remove(tokenHash);
         removeFromIndex(userId, tokenHash);

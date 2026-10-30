@@ -30,6 +30,12 @@ public interface FileStorageService {
      */
     String signViewPath(Long fileId);
 
+    /**
+     * 将 sys_user.avatar_url 解析成可直接展示的地址：
+     * 本地上传的头像存的是文件 ID，换取短时签名路径；QQ 等外部头像存的是 http(s) 地址，原样返回。
+     */
+    String resolveAvatarUrl(String rawAvatar);
+
     /** 为列表首屏生成后端缩略图地址；缩略图由本地 API 从对象存储读取并压缩。 */
     String signThumbnailPath(Long fileId);
 

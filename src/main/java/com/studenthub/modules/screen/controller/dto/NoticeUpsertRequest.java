@@ -13,6 +13,9 @@ public record NoticeUpsertRequest(
         @NotBlank String noticeType,
         @Schema(description = "标题") @NotBlank @Size(max = 128) String title,
         @Schema(description = "摘要", nullable = true) @Size(max = 512) String summary,
+        @Schema(description = "正文（纯文本，保留换行；最大 20000 字）", nullable = true) @Size(max = 20000) String content,
+        @Schema(description = "封面图地址（先调 POST /api/admin/notices/cover 上传）", nullable = true)
+        @Size(max = 512) String coverImageUrl,
         @Schema(description = "发布日期 yyyy-MM-dd（公告列表展示用）", nullable = true) LocalDate publishDate,
         @Schema(description = "投放渠道：SCREEN 终端大屏 / APP 校园公告", allowableValues = {"SCREEN", "APP"})
         @NotBlank String channel,

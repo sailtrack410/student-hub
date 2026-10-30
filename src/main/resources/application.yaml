@@ -25,6 +25,7 @@ spring:
       keepalive-time: 120000
       max-lifetime: 300000
   flyway:
+    out-of-order: true
     enabled: true
     locations: classpath:db/migration
   data:
@@ -43,6 +44,10 @@ mybatis-plus:
     map-underscore-to-camel-case: true
 
 studenthub:
+  config:
+    # 管理端配置中心敏感值落库加密主密钥（AES-256-GCM）。
+    # 仅从环境变量读取，禁止写入仓库；为空时密钥类配置只能读取环境变量、不能在页面保存。
+    secret-key: ${CONFIG_SECRET_KEY:}
   security:
     session-store: ${SESSION_STORE:memory}
     session-ttl: ${SESSION_TTL:8h}
@@ -66,6 +71,11 @@ studenthub:
     connect-timeout-seconds: ${AI_CONNECT_TIMEOUT_SECONDS:5}
     read-timeout-seconds: ${AI_READ_TIMEOUT_SECONDS:60}
     max-input-characters: ${AI_MAX_INPUT_CHARACTERS:12000}
+  amap:
+    web-service-key: ${AMAP_WEB_SERVICE_KEY:}
+    base-url: ${AMAP_BASE_URL:https://restapi.amap.com}
+    connect-timeout-seconds: ${AMAP_CONNECT_TIMEOUT_SECONDS:5}
+    read-timeout-seconds: ${AMAP_READ_TIMEOUT_SECONDS:8}
   ai-chat:
     hourly-message-limit: ${AI_CHAT_HOURLY_MESSAGE_LIMIT:20}
     history-window: ${AI_CHAT_HISTORY_WINDOW:10}
@@ -91,7 +101,9 @@ studenthub:
     connect-timeout-seconds: ${WECHAT_CONNECT_TIMEOUT_SECONDS:5}
     read-timeout-seconds: ${WECHAT_READ_TIMEOUT_SECONDS:10}
   qq:
-    # QQ 互联「移动应用」审核通过前用 mock：不访问 QQ，凭 accessToken 派生稳定身份
+    # QQ 互联「移动应用」审核通过前用 mock：不访问 QQ，凭 accessToken 派生稳定身份。
+    # real 模式：服务端用 APP ID + openid + accessToken 调 get_user_info，校验 token 属于本应用；
+    # 移动端 SDK 只需 QQ_CLIENT_ID，QQ_CLIENT_SECRET 仅预留网站授权码流程，不能下发客户端。
     mode: ${QQ_MODE:mock}
     client-id: ${QQ_CLIENT_ID:}
     client-secret: ${QQ_CLIENT_SECRET:}
@@ -99,6 +111,23 @@ studenthub:
     default-campus-id: ${QQ_DEFAULT_CAMPUS_ID:1}
     connect-timeout-seconds: ${QQ_CONNECT_TIMEOUT_SECONDS:5}
     read-timeout-seconds: ${QQ_READ_TIMEOUT_SECONDS:10}
+  mail:
+    # 校园邮箱验证码真实发信。生产环境必须开启并配置 SMTP，未配置时接口明确返回 503，不会伪报已发送。
+    # 465 常用 SSL；587 常用 STARTTLS（此时 MAIL_SSL_ENABLED=false、MAIL_STARTTLS_ENABLED=true）。
+    enabled: ${MAIL_ENABLED:false}
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    from: ${MAIL_FROM:}
+    from-name: ${MAIL_FROM_NAME:绵城一码通}
+    ssl-enabled: ${MAIL_SSL_ENABLED:true}
+    starttls-enabled: ${MAIL_STARTTLS_ENABLED:false}
+    connect-timeout-ms: ${MAIL_CONNECT_TIMEOUT_MS:5000}
+    read-timeout-ms: ${MAIL_READ_TIMEOUT_MS:5000}
+    write-timeout-ms: ${MAIL_WRITE_TIMEOUT_MS:5000}
+    # 仅 dev/test profile 生效；生产 profile 即使误设 true 也不会返回验证码。
+    dev-return-code: ${MAIL_DEV_RETURN_CODE:true}
   file:
     storage: ${FILE_STORAGE:local}
     storage-dir: ${FILE_STORAGE_DIR:./data/files}
@@ -111,11 +140,20 @@ studenthub:
     minio-access-key: ${MINIO_ACCESS_KEY:}
     minio-secret-key: ${MINIO_SECRET_KEY:}
     minio-bucket: ${MINIO_BUCKET:student-hub}
+    oss-endpoint: ${OSS_ENDPOINT:}
+    oss-public-endpoint: ${OSS_PUBLIC_ENDPOINT:}
+    oss-bucket: ${OSS_BUCKET:}
+    oss-access-key-id: ${OSS_ACCESS_KEY_ID:}
+    oss-access-key-secret: ${OSS_ACCESS_KEY_SECRET:}
   jw:
     sso-base-url: ${JW_SSO_BASE_URL:https://sso.mycc.edu.cn}
     jw-base-url: ${JW_JW_BASE_URL:https://jwgl.mycc.edu.cn}
+    cas-service: ${JW_CAS_SERVICE:http://jwgl.mycc.edu.cn/caslogin}
     encrypt-key: ${JW_ENCRYPT_KEY:dev-jw-encrypt-key-change-me}
     session-ttl-hours: ${JW_SESSION_TTL_HOURS:48}
+    connect-timeout-seconds: ${JW_CONNECT_TIMEOUT_SECONDS:5}
+    read-timeout-seconds: ${JW_READ_TIMEOUT_SECONDS:15}
+    auth-rate-limit-per-minute: ${JW_AUTH_RATE_LIMIT_PER_MINUTE:5}
 
 management:
   endpoints:

@@ -23,4 +23,6 @@ public class UserAchievementBadgeEntity extends BaseEntity {
     private Integer currentProgress;
     private LocalDateTime unlockedAt;
     private Boolean notified;
+    /** 发放来源（V71）：AUTO 自动达成 / MANUAL 管理端手动发放 */
+    private String grantSource;
 }

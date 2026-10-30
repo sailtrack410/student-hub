@@ -21,4 +21,9 @@ public class CommunityCommentEntity extends BaseEntity {
     private Integer likeCount;
     private Integer pinned;
     private String status;
+    /** 隐藏原因：BANNED_WORD / REPORT_LIMIT / MANUAL；正常为 null */
+    private String hiddenReason;
+    private Integer reportCount;
+    /** 排序权重：点赞 +1、举报 -3（热门排序用） */
+    private Integer weight;
 }

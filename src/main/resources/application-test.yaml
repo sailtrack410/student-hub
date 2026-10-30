@@ -15,6 +15,8 @@ spring:
         enabled: false
 
 studenthub:
+  config:
+    secret-key: test-only-config-secret-key-0123456789abcdef
   security:
     session-store: memory
     session-ttl: 8h
@@ -22,6 +24,10 @@ studenthub:
     allowed-origins:
       - http://localhost:3000
   wechat:
+    mode: mock
+    default-campus-id: 1
+  qq:
+    # 测试固定 mock：.env 可能配置真实 QQ 凭证，不能让测试依赖外网
     mode: mock
     default-campus-id: 1
   ai:

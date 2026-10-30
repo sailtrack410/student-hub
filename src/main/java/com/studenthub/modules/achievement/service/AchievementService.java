@@ -31,7 +31,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * 成就评估（2026-10-17 定稿方案）：经验不落流水、每次从业务表现状重算（零侵入、天然幂等、删帖掉经验即防刷）；
@@ -86,14 +88,21 @@ public class AchievementService {
                 record.setNotified(false);
                 userBadgeMapper.insert(record);
             } else {
-                UserAchievementBadgeEntity update = new UserAchievementBadgeEntity();
-                update.setId(record.getId());
-                update.setCurrentProgress(value);
-                update.setVersion(record.getVersion());
-                if (unlocked && record.getUnlockedAt() == null) {
-                    update.setUnlockedAt(LocalDateTime.now());
+                // 进度未变且未新解锁时不写库：/state 会在每次启动被调用，避免无意义更新
+                boolean progressChanged = !Objects.equals(record.getCurrentProgress(), value);
+                boolean justUnlocked = unlocked && record.getUnlockedAt() == null;
+                if (progressChanged || justUnlocked) {
+                    UserAchievementBadgeEntity update = new UserAchievementBadgeEntity();
+                    update.setId(record.getId());
+                    if (progressChanged) {
+                        update.setCurrentProgress(value);
+                    }
+                    if (justUnlocked) {
+                        update.setUnlockedAt(LocalDateTime.now());
+                    }
+                    update.setVersion(record.getVersion());
+                    userBadgeMapper.updateById(update);
                 }
-                userBadgeMapper.updateById(update);
             }
             if (unlocked && (record.getUnlockedAt() == null || !Boolean.TRUE.equals(record.getNotified()))) {
                 newlyUnlocked++;
@@ -232,11 +241,43 @@ public class AchievementService {
         return record != null && record.getUnlockedAt() != null;
     }
 
-    /** 佩戴：卸下传 null；佩戴须已解锁 */
+    /** 佩戴：卸下传 null；佩戴须已解锁且勋章启用（旧签名保留兼容）。 */
     public void wear(Long userId, String badgeCode) {
-        if (badgeCode != null && !unlocked(userId, badgeCode)) {
+        wear(userId, badgeCode, null);
+    }
+
+    /**
+     * 佩戴/卸下：action=WEAR/UNWEAR；缺省时 badgeCode 非空=佩戴、为空=卸下（兼容只传 badgeCode 的旧客户端）。
+     * 佩戴校验：勋章存在、启用、本人已解锁。
+     */
+    public void wear(Long userId, String badgeCode, String action) {
+        String normalizedAction = action == null ? null : action.trim().toUpperCase(Locale.ROOT);
+        boolean actionPresent = normalizedAction != null && !normalizedAction.isBlank();
+        if (actionPresent && !"WEAR".equals(normalizedAction) && !"UNWEAR".equals(normalizedAction)) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "action 仅支持 WEAR 或 UNWEAR");
+        }
+        String code = badgeCode == null || badgeCode.isBlank() ? null : badgeCode.trim();
+        boolean unwear = "UNWEAR".equals(normalizedAction) || (!actionPresent && code == null);
+        if (unwear) {
+            updateWornBadge(userId, null);
+            return;
+        }
+        if (code == null) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "佩戴勋章时 badgeCode 不能为空");
+        }
+        AchievementBadgeEntity badge = badgeMapper.selectOne(
+                new LambdaQueryWrapper<AchievementBadgeEntity>()
+                        .eq(AchievementBadgeEntity::getBadgeCode, code));
+        if (badge == null || !Boolean.TRUE.equals(badge.getEnabled())) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "该勋章不存在或已停用，无法佩戴");
+        }
+        if (!unlocked(userId, code)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "尚未获得该勋章，无法佩戴");
         }
+        updateWornBadge(userId, code);
+    }
+
+    private void updateWornBadge(Long userId, String badgeCode) {
         UserEntity update = new UserEntity();
         update.setId(userId);
         update.setWornBadgeCode(badgeCode);

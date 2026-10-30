@@ -18,6 +18,7 @@ public record AiMessageResponse(
         @Schema(description = "是否降级回复") boolean degraded,
         @Schema(description = "动作卡片，可空") List<AiActionResponse> actions,
         @Schema(description = "追问建议数组，服务端暂不下发，预留字段") List<String> suggestions,
+        @Schema(description = "本轮回答引用的知识库来源", nullable = true) List<AiSourceResponse> sources,
         @Schema(description = "发送时间") LocalDateTime createdAt) {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -25,7 +26,19 @@ public record AiMessageResponse(
     public static AiMessageResponse from(AiMessageEntity entity) {
         return new AiMessageResponse(entity.getId(), entity.getRole(), entity.getContent(),
                 JsonIds.parseOrNull(entity.getImages()), "FAILED".equals(entity.getStatus()),
-                parseActions(entity.getActions()), null, entity.getCreatedAt());
+                parseActions(entity.getActions()), null, parseSources(entity.getSources()),
+                entity.getCreatedAt());
+    }
+
+    private static List<AiSourceResponse> parseSources(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return MAPPER.readValue(json, new TypeReference<List<AiSourceResponse>>() { });
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private static List<AiActionResponse> parseActions(String json) {

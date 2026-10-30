@@ -1,53 +1,23 @@
 /* ============================================================
    管理端页面体系 v2 —— 按共享画布设计稿 1:1 还原
-   token 与画布 Design Variables 一致；Dark 为默认主题
    画布规范: 1440 宽 = 侧栏240 + 主区1200; 顶栏64; 内容区padding24 gap16
    卡片: radius12 + stroke + 内边距20; 弹窗卡固定白底(与主题无关)
-   ============================================================ */
 
-/* ---------- Design Tokens（与画布变量一一对应） ---------- */
-:root, [data-theme="dark"]{
-  --tk-page:#1C1C1F;      /* surface-page */
-  --tk-panel:#262629;     /* surface-panel */
-  --tk-input:#2C2C2E;     /* surface-input */
-  --tk-subtle:#2C2C2E;    /* surface-subtle */
-  --tk-stroke:#3B3B3D;    /* stroke-panel */
-  --tk-row:#333336;       /* stroke-row */
-  --tk-text:#F5F5F7;      /* text-primary */
-  --tk-text2:#C7C7CC;     /* text-secondary */
-  --tk-text3:#8E8E93;     /* text-tertiary */
-  --tk-muted:#6E6E73;     /* text-muted */
-  --tk-brand:#0066CC;     /* accent-brand */
-  --tk-ok-bg:rgba(14,138,60,.18);   --tk-ok:#4ADE80;
-  --tk-warn-bg:rgba(184,120,31,.18);--tk-warn:#F5B840;
-  --tk-bad-bg:rgba(213,73,65,.18);  --tk-bad:#FF7A73;
-  --tk-info-bg:rgba(0,102,204,.22); --tk-info:#5AA9F0;
-  --tk-neu-bg:rgba(255,255,255,.08);--tk-neu:#A0A0A5;
-  --tk-white:#FFFFFF;
-}
-[data-theme="light"]{
-  --tk-page:#F5F5F7; --tk-panel:#FFFFFF; --tk-input:#FFFFFF; --tk-subtle:#F5F5F7;
-  --tk-stroke:#E0E0E0; --tk-row:#F0F0F5;
-  --tk-text:#1D1D1F; --tk-text2:#3A3A3C; --tk-text3:#7A7A7A; --tk-muted:#9B9B9B;
-  --tk-brand:#0066CC;
-  --tk-ok-bg:#E8F7ED; --tk-ok:#0E8A3C;
-  --tk-warn-bg:#FFF7E5; --tk-warn:#B8781F;
-  --tk-bad-bg:#FCEBED; --tk-bad:#D54941;
-  --tk-info-bg:#E8F1FC; --tk-info:#0066CC;
-  --tk-neu-bg:#F2F2F7; --tk-neu:#7A7A7A;
-  --tk-white:#FFFFFF;
-}
+   注意：颜色 token（--tk-* 亮/暗两套）唯一权威来源是 campus-os.css，
+   它在本文件之后加载并覆盖同名变量。这里不再重复定义，避免双写漂移。
+   ============================================================ */
 
 /* ---------- 页面骨架（内容区由 shell 提供） ---------- */
 .pgw{color:var(--tk-text)}
-.pgw .page-h{display:flex;align-items:flex-start;gap:16px}
-.pgw .page-h h1{font-size:28px;font-weight:650;letter-spacing:-.02em;color:var(--tk-text)}
-.pgw .page-h .sub{font-size:13px;color:var(--tk-text3);margin-top:4px}
+.pgw .page-h{display:flex;align-items:center;gap:16px;min-height:32px}
+/* 页面大标题统一移到应用顶栏（切菜单即切换），内容区不再重复；副标题保留为上下文说明 */
+.pgw .page-h h1{display:none}
+.pgw .page-h .sub{font-size:13px;color:var(--tk-text3);margin-top:0}
 .pgw .page-h .r{margin-left:auto;display:flex;gap:12px;align-items:center;flex:none}
 .pgw .stack{display:flex;flex-direction:column;gap:16px}
 
 /* 按钮（画布: pill 高40 padding 0 18） */
-.pgw .btn2{height:40px;display:inline-flex;align-items:center;justify-content:center;gap:7px;
+.pgw .btn2{height:40px;display:inline-flex;align-items:center;justify-content:center;gap:6px;
   padding:0 18px;border-radius:999px;font-size:14px;cursor:pointer;white-space:nowrap;
   background:var(--tk-input);border:1px solid var(--tk-stroke);color:var(--tk-text2)}
 .pgw .btn2:hover{color:var(--tk-text)}
@@ -55,6 +25,14 @@
 .pgw .btn2.pri:hover{background:#0059B3}
 .pgw .btn2 svg{stroke:currentColor}
 .pgw .btn2.sm{height:30px;padding:0 14px;font-size:13px;border-radius:6px}
+/* 页内动作按钮（卡片标题/工具条使用，与弹层 .pbtn .c 区分） */
+.pgw .c{height:36px;display:inline-flex;align-items:center;justify-content:center;
+  padding:0 16px;border-radius:8px;font-size:13px;cursor:pointer;white-space:nowrap;font-family:inherit;
+  background:var(--tk-input);border:1px solid var(--tk-stroke);color:var(--tk-text2)}
+.pgw .c:hover{color:var(--tk-text);border-color:var(--tk-brand)}
+.pgw .c.blue{background:var(--tk-brand);border-color:var(--tk-brand);color:#fff;font-weight:500}
+.pgw .c.blue:hover{background:#0059B3;border-color:#0059B3;color:#fff}
+.pgw .c.ghost{background:transparent}
 
 /* 状态页签（画布: pill padding16/9, 激活蓝底白字+数字白20%胶囊, 未激活描边+数字语义胶囊） */
 .pgw .tabs{display:flex;align-items:center;gap:8px}
@@ -144,7 +122,7 @@
 .pgw .svc-card .top{display:flex;align-items:center;justify-content:space-between}
 .pgw .svc-card .ic{width:40px;height:40px;border-radius:10px;background:var(--tk-info-bg);display:grid;place-items:center}
 .pgw .svc-card .ic svg{stroke:var(--tk-info)}
-.pgw .svc-card h3{font-size:17px;font-weight:650;color:var(--tk-text)}
+.pgw .svc-card h3{font-size:16px;font-weight:650;color:var(--tk-text)}
 .pgw .svc-card .desc{font-size:12px;color:var(--tk-text3);line-height:1.6;min-height:38px}
 .pgw .svc-card .meta{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--tk-muted)}
 .pgw .svc-card .meta .sla{color:var(--tk-info)}
@@ -209,7 +187,7 @@
   box-shadow:0 24px 60px rgba(0,0,0,.35);color:#1D1D1F}
 .pcard.w440{width:440px}.pcard.w560{width:560px}.pcard.w640{width:640px}.pcard.w720{width:720px}
 .pcard .ph{display:flex;align-items:center;gap:12px}
-.pcard .ph b{font-size:17px;font-weight:650;color:#1D1D1F}
+.pcard .ph b{font-size:16px;font-weight:650;color:#1D1D1F}
 .pcard .ph .no{font-size:13px;color:#0066CC}
 .pcard .ph .sp{flex:1}
 .pcard .ph .x{font-size:16px;color:#9B9B9B;cursor:pointer;line-height:1}
@@ -284,22 +262,22 @@
 .login-logo{display:flex;align-items:center;gap:12px}
 .login-logo .mark{width:40px;height:40px;border-radius:11px;background:#0066CC;display:grid;place-items:center;flex:none}
 .login-logo .mark svg{stroke:#fff}
-.login-logo b{font-size:17px;display:block;font-weight:600;color:var(--tk-text)}
+.login-logo b{font-size:16px;display:block;font-weight:600;color:var(--tk-text)}
 .login-logo em{font-style:normal;font-size:12px;color:var(--tk-text3);display:block;margin-top:3px}
 .brand-mid h1{font-size:40px;font-weight:650;letter-spacing:-.02em;line-height:1.25;color:var(--tk-text)}
-.brand-sub{font-size:17px;color:var(--tk-text2);margin-top:16px}
-.brand-feats{margin-top:36px;display:flex;flex-direction:column;gap:18px}
-.brand-feats .feat{display:flex;align-items:center;gap:10px;font-size:15px;color:var(--tk-text2)}
+.brand-sub{font-size:16px;color:var(--tk-text2);margin-top:16px}
+.brand-feats{margin-top:36px;display:flex;flex-direction:column;gap:16px}
+.brand-feats .feat{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--tk-text2)}
 .brand-feats .feat svg{stroke:var(--tk-info);flex:none}
 .brand-foot{font-size:12px;color:var(--tk-muted)}
 .login-panel{width:560px;flex:none;background:#fff;display:flex;align-items:center;justify-content:center}
 .login-card{width:360px}
-.login-card h2{font-size:28px;font-weight:650;letter-spacing:-.02em;color:#1D1D1F}
+.login-card h2{font-size:24px;font-weight:650;letter-spacing:-.02em;color:#1D1D1F}
 .login-card .sub{font-size:14px;color:#7A7A7A;margin:8px 0 28px}
 .login-field{margin-bottom:16px}
 .login-field label{display:block;font-size:13px;color:#3A3A3C;margin-bottom:8px;font-weight:600}
 .login-field input{width:100%;height:48px;padding:0 14px;border:1px solid #E0E0E0;
-  border-radius:12px;font-size:15px;color:#1D1D1F;background:#fff;
+  border-radius:12px;font-size:14px;color:#1D1D1F;background:#fff;
   transition:border-color .15s,box-shadow .15s;outline:none;font-family:inherit}
 .login-field input::placeholder{color:#AEAEB2}
 .login-field input:focus{border-color:#0066CC;box-shadow:0 0 0 3px #EAF3FB}
@@ -318,8 +296,8 @@
 .mdv h1,.mdv h2,.mdv h3,.mdv h4{margin:16px 0 8px;font-weight:650;color:var(--tk-text);line-height:1.4}
 .mdv h1{font-size:18px}
 .mdv h2{font-size:16px}
-.mdv h3{font-size:14.5px}
-.mdv h4{font-size:13.5px}
+.mdv h3{font-size:14px}
+.mdv h4{font-size:14px}
 .mdv ul,.mdv ol{margin:0 0 10px;padding-left:22px}
 .mdv li{margin:3px 0}
 .mdv li::marker{color:var(--tk-muted)}
@@ -337,7 +315,76 @@
 .mdv blockquote{margin:0 0 10px;padding:2px 0 2px 12px;border-left:3px solid var(--tk-stroke);color:var(--tk-muted)}
 .mdv hr{border:0;border-top:1px solid var(--tk-stroke);margin:14px 0}
 .mdv table{border-collapse:collapse;margin:0 0 10px;max-width:100%;display:block;overflow:auto}
-.mdv th,.mdv td{border:1px solid var(--tk-stroke);padding:6px 10px;font-size:12.5px;text-align:left}
+.mdv th,.mdv td{border:1px solid var(--tk-stroke);padding:6px 10px;font-size:13px;text-align:left}
 .mdv th{background:var(--tk-subtle);color:var(--tk-text);font-weight:600;white-space:nowrap}
 .mdv img{max-width:100%;border-radius:8px;display:block;margin:8px 0}
 .mdv-plain{white-space:pre-wrap}
+
+/* ============================================================
+   社区模块：去卡片化（2026-10-19）
+   页面标题移入顶栏后，内容区不再重复大标题；统计=一条数据带，图表=一个数据面板，
+   列表页只保留 1 个主面板，分页脚贴底不单独成卡。
+   ============================================================ */
+.pgw.comm{gap:12px}
+.pgw.comm .page-h{min-height:32px;align-items:center;justify-content:flex-end;margin-top:-2px}
+.pgw.comm .page-h .sub{display:none}
+
+.pgw .statgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1px;
+  background:var(--tk-stroke);border:1px solid var(--tk-stroke);border-radius:10px;overflow:hidden}
+.pgw .statgrid.five{grid-template-columns:repeat(5,1fr)}
+.pgw .stat{background:var(--tk-panel);padding:14px 16px;min-width:0}
+.pgw .stat .lb{font-size:12px;color:var(--tk-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pgw .stat .v{display:flex;align-items:baseline;gap:6px;margin-top:4px;min-width:0}
+.pgw .stat .v b{font-size:24px;font-weight:650;color:var(--tk-text);letter-spacing:-.01em}
+.pgw .stat .v span{font-size:11px;color:var(--tk-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.pgw.comm .chartgrid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--tk-stroke);
+  border:1px solid var(--tk-stroke);border-radius:10px;overflow:hidden;min-height:0}
+.pgw.comm .chart{background:var(--tk-panel);display:flex;flex-direction:column;min-height:0}
+.pgw.comm .chart .cap{font-size:13px;font-weight:600;color:var(--tk-text);padding:12px 16px;border-bottom:1px solid var(--tk-row)}
+
+.pgw.comm .panel{background:var(--tk-panel);border:1px solid var(--tk-stroke);border-radius:10px;
+  padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-height:0}
+.pgw.comm .panel .cap{font-size:13px;font-weight:600;color:var(--tk-text);display:flex;align-items:center;gap:10px}
+.pgw.comm .panel .cap .cnt{font-size:11px;color:var(--tk-text3);font-weight:400}
+.pgw.comm .panel .cap .r{margin-left:auto;display:flex;gap:8px;align-items:center}
+
+.pgw.comm .tblw{border-top:1px solid var(--tk-row);padding-top:2px}
+.pgw.comm table.pk th{padding:7px 4px}
+.pgw.comm table.pk td{padding:10px 4px}
+.pgw.comm .pfoot{background:transparent;border:0;border-top:1px solid var(--tk-row);border-radius:0;padding:10px 2px 0;margin-top:-2px}
+.pgw.comm .pfoot .pgs b{min-width:26px;height:26px;border-radius:6px}
+.pgw.comm .tabs{gap:6px}
+.pgw.comm .tabs .tab{height:32px;padding:0 12px;border-radius:7px;font-size:13px}
+.pgw.comm .ipt2{height:36px}
+
+/* 社区概览快捷处理条 */
+.pgw.comm .quickbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pgw.comm .quickbar .ql{font-size:12px;color:var(--tk-muted);margin-right:2px}
+.pgw.comm .quickbar .qitem{height:30px;display:inline-flex;align-items:center;gap:6px;padding:0 12px;
+  border:1px solid var(--tk-stroke);border-radius:7px;background:var(--tk-panel);font-size:13px;
+  color:var(--tk-text2);cursor:pointer}
+.pgw.comm .quickbar .qitem:hover{color:var(--tk-info);border-color:var(--tk-info)}
+.pgw.comm .quickbar .n{min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--tk-warn-bg);
+  color:var(--tk-warn);font-size:11px;display:inline-flex;align-items:center;justify-content:center}
+
+/* ---------- 组织架构：单根树 + 校区范围（campus_scope） ---------- */
+.pgw .org-campus-strip{display:flex;flex-wrap:wrap;gap:10px}
+.pgw .org-campus-card{position:relative;min-width:150px;max-width:270px;flex:0 1 auto;padding:10px 12px;
+  border:1px solid var(--tk-stroke);border-radius:10px;background:var(--tk-panel);cursor:pointer;
+  transition:border-color .15s,background .15s}
+.pgw .org-campus-card:hover{border-color:var(--tk-brand)}
+.pgw .org-campus-card.on{border-color:var(--tk-brand);background:var(--tk-info-bg)}
+.pgw .org-campus-card .nm{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;
+  color:var(--tk-text);white-space:nowrap;min-width:0}
+.pgw .org-campus-card .nm .op{font-size:11px;font-weight:400;cursor:pointer}
+.pgw .org-campus-card .meta{margin-top:4px;font-size:11px;color:var(--tk-muted);white-space:nowrap}
+.pgw .org-campus-card.add{display:flex;align-items:center;justify-content:center;min-height:58px;
+  color:var(--tk-brand);font-size:12px;border-style:dashed;background:transparent}
+.pgw .org-campus-card.add:hover{background:var(--tk-info-bg)}
+.pgw .org-scope-cell{display:flex;align-items:center;gap:6px;min-width:0}
+.pgw .org-name{font-weight:600;color:var(--tk-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width: 720px){
+  .pcard.w560,.pcard.w640{width:calc(100vw - 32px)}
+  .pgw .org-campus-card{min-width:130px}
+}

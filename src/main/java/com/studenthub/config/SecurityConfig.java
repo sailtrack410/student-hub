@@ -3,8 +3,9 @@ package com.studenthub.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studenthub.common.ErrorCode;
 import com.studenthub.common.Result;
-import com.studenthub.modules.identity.security.SecurityProperties;
+import com.studenthub.modules.identity.security.SecurityRuntimeConfig;
 import com.studenthub.modules.identity.security.SessionAuthenticationFilter;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -21,7 +22,6 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -33,7 +33,7 @@ public class SecurityConfig {
 
     private final ObjectMapper objectMapper;
     private final SessionAuthenticationFilter sessionAuthenticationFilter;
-    private final SecurityProperties securityProperties;
+    private final SecurityRuntimeConfig securityRuntimeConfig;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -51,19 +51,28 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(
                                 "/api/common/system/health",
+                                "/api/common/features",
+                                "/api/common/features/**",
                                 "/api/common/auth/login",
+                                "/api/common/auth/captcha",
                                 "/api/common/auth/wechat-login",
                                 "/api/common/auth/qq-login",
                                 "/api/common/auth/dev-wechat-login",
+                                "/api/common/auth/email-code",
+                                "/api/common/auth/register",
+                                "/api/common/auth/password/reset",
                                 "/api/common/files/view/**",
                                 "/api/common/assets/**",
                                 "/api/public/screen/**",
                                 "/api/public/knowledge-bases/**",
+                                "/api/public/app-version/**",
                                 "/ws/**",
                                 "/admin",
                                 "/admin/**",
                                 "/screen",
                                 "/screen/**",
+                                "/download",
+                                "/download/**",
                                 "/actuator/health",
                                 "/api",
                                 "/v3/api-docs/**",
@@ -92,16 +101,26 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(securityProperties.getAllowedOrigins());
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of(HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE, "X-Request-Id"));
-        configuration.setExposedHeaders(List.of("X-Request-Id"));
-        configuration.setAllowCredentials(true);
-        configuration.setMaxAge(3600L);
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
-        return source;
+        // 不缓存 CorsConfiguration：配置中心修改 security.cors_allowed_origins 后下一次请求立即生效。
+        return (HttpServletRequest request) -> {
+            List<String> origins = securityRuntimeConfig.corsAllowedOrigins();
+            if (origins.isEmpty()) {
+                return null;
+            }
+            CorsConfiguration configuration = new CorsConfiguration();
+            if (origins.stream().anyMatch(origin -> origin.contains("*"))) {
+                configuration.setAllowedOriginPatterns(origins);
+            } else {
+                configuration.setAllowedOrigins(origins);
+            }
+            configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+            configuration.setAllowedHeaders(List.of(HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE,
+                    "X-Request-Id", "X-Campus-Id", "X-Client-Type"));
+            configuration.setExposedHeaders(List.of("X-Request-Id"));
+            configuration.setAllowCredentials(true);
+            configuration.setMaxAge(3600L);
+            return configuration;
+        };
     }
 
     private void writeSecurityError(HttpServletResponse response, ErrorCode errorCode) throws java.io.IOException {

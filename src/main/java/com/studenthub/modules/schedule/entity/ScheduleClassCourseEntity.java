@@ -29,4 +29,5 @@ public class ScheduleClassCourseEntity extends BaseEntity {
     private Integer endSection;
     private String weeks;
     private Integer weekParity;
+    private String timeRange;
 }

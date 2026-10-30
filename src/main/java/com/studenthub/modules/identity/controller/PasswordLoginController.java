@@ -1,14 +1,18 @@
 package com.studenthub.modules.identity.controller;
 
 import com.studenthub.common.Result;
+import com.studenthub.modules.identity.controller.dto.CaptchaResponse;
 import com.studenthub.modules.identity.controller.dto.LoginResponse;
 import com.studenthub.modules.identity.controller.dto.PasswordLoginRequest;
+import com.studenthub.modules.identity.security.LoginCaptchaService;
+import com.studenthub.modules.identity.security.SecurityRuntimeConfig;
 import com.studenthub.modules.identity.service.IdentityAuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,12 +26,27 @@ import org.springframework.web.bind.annotation.RestController;
 public class PasswordLoginController {
 
     private final IdentityAuthService identityAuthService;
+    private final LoginCaptchaService loginCaptchaService;
+    private final SecurityRuntimeConfig securityRuntimeConfig;
 
     @PostMapping("/login")
     @Operation(summary = "开发环境密码登录", description = "仅用于 dev/test 环境调试，生产环境关闭。", operationId = "passwordLogin")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "提交开发环境账号和密码")
     public Result<LoginResponse> login(@RequestBody @Valid PasswordLoginRequest request) {
-        return Result.success(identityAuthService.login(request.username(), request.password()));
+        return Result.success(identityAuthService.login(request.username(), request.password(),
+                request.captchaId(), request.captchaCode()));
+    }
+
+    @GetMapping("/captcha")
+    @Operation(summary = "获取登录图形验证码", description = "验证码开关关闭时 enabled=false；开启时返回一次性 SVG 图片。",
+            operationId = "getLoginCaptcha")
+    public Result<CaptchaResponse> captcha() {
+        if (!securityRuntimeConfig.loginCaptchaEnabled()) {
+            return Result.success(CaptchaResponse.disabled());
+        }
+        LoginCaptchaService.CaptchaChallenge challenge = loginCaptchaService.issue();
+        return Result.success(new CaptchaResponse(true, challenge.captchaId(), challenge.image(),
+                challenge.expiresInSeconds()));
     }
 
     @PostMapping("/dev-wechat-login")

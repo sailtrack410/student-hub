@@ -17,4 +17,8 @@ public class CommunityTopicEntity extends BaseEntity {
     private String name;
     private Integer heat;
     private String status;
+    /** 推荐位（V71）：1 = 运营推荐 */
+    private Boolean recommended;
+    /** 合并去向（V71）：非空表示该话题已合并到目标话题 */
+    private Long mergedIntoId;
 }

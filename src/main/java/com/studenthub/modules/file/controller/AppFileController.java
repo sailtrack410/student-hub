@@ -35,6 +35,16 @@ public class AppFileController {
                 file.getOriginalFilename(), file.getContentType(), uploaderId));
     }
 
+    @PostMapping("/document")
+    @Operation(summary = "上传文档", description = "上传 PDF/DOCX/TXT/MD 文档，供 AI 文档问答使用，最大 10MB。",
+            operationId = "uploadDocument")
+    public Result<FileStorageService.StoredFile> uploadDocument(
+            @RequestParam("file") MultipartFile file) throws IOException {
+        Long uploaderId = currentUserProvider.requireCurrentUser().userId();
+        return Result.success(fileStorageService.storeKnowledgeDocument(file.getBytes(),
+                file.getOriginalFilename(), file.getContentType(), uploaderId, 10));
+    }
+
     @PostMapping("/audio")
     @Operation(summary = "上传音频", description = "上传语音音频（mp3/aac/m4a/wav/ogg），供 AI 语音转写使用。",
             operationId = "uploadAudio")

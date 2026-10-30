@@ -5,13 +5,11 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studenthub.common.ErrorCode;
 import com.studenthub.integration.oauth.AbstractOAuthIdentityProvider;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 /** real 模式：小程序 wx.login 的 code 换取 openid（/sns/jscode2session）。 */
 @Component
-@ConditionalOnProperty(prefix = "studenthub.wechat", name = "mode", havingValue = "real")
 public class WechatApiIdentityProvider extends AbstractOAuthIdentityProvider<WechatProperties>
         implements WechatIdentityProvider {
 
@@ -20,6 +18,12 @@ public class WechatApiIdentityProvider extends AbstractOAuthIdentityProvider<Wec
                                      ObjectMapper objectMapper) {
         super(restClientBuilder, properties, objectMapper, ErrorCode.WECHAT_LOGIN_FAILED, "微信",
                 properties.getApiBaseUrl(), properties.getConnectTimeoutSeconds(),
+                properties.getReadTimeoutSeconds());
+    }
+
+    /** 管理端保存微信配置后热刷新 baseUrl/超时；客户端按 mode 路由到本 Provider。 */
+    public void reload() {
+        refreshClient(properties.getApiBaseUrl(), properties.getConnectTimeoutSeconds(),
                 properties.getReadTimeoutSeconds());
     }
 

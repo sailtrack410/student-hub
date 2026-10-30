@@ -30,14 +30,15 @@ public record CurrentUserResponse(
         List<RoleScope> roleScopes,
         @Schema(description = "已生效的权限编码", example = "[service-request:create]")
         List<String> permissions,
-        @Schema(description = "头像文件访问路径（未签名，展示时需换取签名地址）", nullable = true)
+        @Schema(description = "头像访问地址：本地上传返回短时签名 URL，QQ 登录返回 QQ 头像地址；为空时客户端显示默认头像",
+                nullable = true)
         String avatarPath,
         @Schema(description = "联系电话", nullable = true, example = "15700000000")
         String phone,
         @Schema(description = "成长与佩戴信息（等级/经验实时重算）", nullable = true)
         GrowthSummary growth) {
 
-    public static CurrentUserResponse from(AuthenticatedUser user) {
+    public static CurrentUserResponse from(AuthenticatedUser user, String avatarPath) {
         return new CurrentUserResponse(
                 user.userId(),
                 user.campusId(),
@@ -49,7 +50,7 @@ public record CurrentUserResponse(
                 user.roleCodes(),
                 user.roleScopes(),
                 user.permissionCodes(),
-                user.avatarFileId() == null ? null : "/api/common/files/view/" + user.avatarFileId(),
+                avatarPath,
                 user.phone(),
                 null);
     }

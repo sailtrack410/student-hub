@@ -9,6 +9,12 @@ public interface BinaryStorage {
 
     void put(String objectKey, byte[] content, String contentType);
 
+    /**
+     * 流式写入（安装包等大文件）：实现方必须边读边写，不得整包读入内存。
+     * size 必须为真实字节数（MinIO 需要）。
+     */
+    void putStream(String objectKey, InputStream content, long size, String contentType);
+
     InputStream get(String objectKey);
 
     default boolean exists(String objectKey) {

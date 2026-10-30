@@ -26,6 +26,8 @@
             '    <div class="brand-foot">Student Hub 智慧校园平台 · 2026</div>',
             '  </div>',
             '  <div class="login-panel">',
+            '    <div class="login-panel-inner">',
+            '    <div class="login-panel-head"><span class="login-kicker"><i></i>Campus OS · 管理控制面</span><span class="login-env">DEV ENV</span></div>',
             '    <form class="login-card" @submit.prevent="submit">',
             '      <h2>欢迎登录</h2>',
             '      <div class="sub">使用 Student Hub 管理台账号继续</div>',
@@ -37,9 +39,19 @@
             '        <label>密码</label>',
             '        <input v-model="password" type="password" placeholder="请输入密码" autocomplete="current-password" @keyup.enter="submit" />',
             '      </div>',
+            '      <div class="login-field" v-if="captcha.enabled">',
+            '        <label>图形验证码</label>',
+            '        <div class="login-captcha">',
+            '          <input v-model.trim="captchaCode" type="text" maxlength="8" placeholder="输入右侧字符" autocomplete="off" @keyup.enter="submit" />',
+            '          <img :src="captcha.image" alt="图形验证码" title="点击刷新验证码" @click="loadCaptcha" />',
+            '        </div>',
+            '        <div class="login-captcha-tip" @click="loadCaptcha">看不清？换一张</div>',
+            '      </div>',
             '      <button type="button" class="login-btn" :disabled="loading" @click="submit">{{ loading ? "登录中…" : "登 录" }}</button>',
             '      <div class="login-tip">生产环境请使用企业统一账号体系；开发环境可在 application 配置中开启密码登录。</div>',
             '    </form>',
+            '    <div class="login-panel-foot"><span>仅限授权管理员访问</span><span>操作留痕 · 会话可追溯</span></div>',
+            '    </div>',
             '  </div>',
             '</div>'
         ].join('\n'),
@@ -51,18 +63,45 @@
             var username = Vue.ref('');
             var password = Vue.ref('');
             var loading = Vue.ref(false);
+            var captcha = Vue.reactive({ enabled: false, id: '', image: '' });
+            var captchaCode = Vue.ref('');
+
+            function loadCaptcha() {
+                api.get('/api/common/auth/captcha', { skipUnauthorized: true })
+                    .then(function (data) {
+                        captcha.enabled = !!(data && data.enabled);
+                        captcha.id = (data && data.captchaId) || '';
+                        captcha.image = (data && data.image) || '';
+                        captchaCode.value = '';
+                    })
+                    .catch(function () {
+                        /* 验证码接口不可用时保持关闭，不阻断密码登录；服务端启用后仍会拒绝无验证码登录。 */
+                        captcha.enabled = false;
+                        captcha.id = '';
+                        captcha.image = '';
+                    });
+            }
 
             function submit() {
                 if (!username.value || !password.value) {
                     El.ElMessage.warning('请输入用户名和密码');
                     return;
                 }
+                if (captcha.enabled && !captchaCode.value) {
+                    El.ElMessage.warning('请输入图形验证码');
+                    return;
+                }
                 loading.value = true;
-                api.post('/api/common/auth/login', { username: username.value, password: password.value },
+                var payload = { username: username.value, password: password.value };
+                if (captcha.enabled) {
+                    payload.captchaId = captcha.id;
+                    payload.captchaCode = captchaCode.value;
+                }
+                api.post('/api/common/auth/login', payload,
                         { skipUnauthorized: true })
                     .then(function (data) {
                         var perms = (data.user && data.user.permissions) || [];
-                        var allowed = ['workorders', 'users', 'ai', 'knowledge'].filter(function (route) {
+                        var allowed = Object.keys(window.AdminApp.routePermission).filter(function (route) {
                             return window.AdminApp.routePermission[route].some(function (p) {
                                 return perms.indexOf(p) >= 0;
                             });
@@ -75,20 +114,39 @@
                         }
                         api.setToken(data.accessToken);
                         window.AdminApp.state.user = data.user;
-                        location.hash = '#/' + allowed[0];
+                        /* 先加载校区上下文（/api/admin/context），再进入首个路由：
+                           这样目标页面的首个 /api/admin/** 请求就带 X-Campus-Id。
+                           上下文失败不阻断登录，保留用户信息并提示，避免白屏。 */
+                        var contextReady = (window.AdminContext && typeof window.AdminContext.load === 'function')
+                            ? window.AdminContext.load().catch(function (error) {
+                                El.ElMessage.warning('校区上下文加载失败：'
+                                    + ((error && error.message) || '未知错误') + '，已使用账号默认校区');
+                            })
+                            : Promise.resolve();
+                        contextReady.then(function () {
+                            location.hash = '#/' + allowed[0];
+                        });
                     })
                     .catch(function (error) {
                         El.ElMessage.error(error.message || '登录失败');
+                        if (captcha.enabled) {
+                            loadCaptcha();
+                        }
                     })
                     .finally(function () {
                         loading.value = false;
                     });
             }
 
+            Vue.onMounted(loadCaptcha);
+
             return {
                 username: username,
                 password: password,
                 loading: loading,
+                captcha: captcha,
+                captchaCode: captchaCode,
+                loadCaptcha: loadCaptcha,
                 submit: submit
             };
         }

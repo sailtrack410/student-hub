@@ -119,15 +119,15 @@ public class AdminAiProviderController {
     }
 
     @GetMapping("/defaults")
-    @Operation(summary = "查询类型默认模型", description = "返回 CHAT/VISION 两类默认模型设置。",
-            operationId = "adminListAiDefaults")
+    @Operation(summary = "查询类型默认模型", description = "返回 CHAT/VISION/ASR/EMBEDDING 默认模型设置；"
+            + "EMBEDDING 会返回知识库向量锁定状态。", operationId = "adminListAiDefaults")
     public Result<List<AiDefaultModelResponse>> defaults() {
         return Result.success(aiProviderAdminService.listDefaults());
     }
 
     @PutMapping("/defaults")
-    @Operation(summary = "设置类型默认模型", description = "modelId 为空表示清除该类型默认。",
-            operationId = "adminSetAiDefault")
+    @Operation(summary = "设置类型默认模型", description = "modelId 为空表示清除该类型默认；"
+            + "知识库已有向量时禁止更换/清除 EMBEDDING 默认模型。", operationId = "adminSetAiDefault")
     public Result<AiDefaultModelResponse> setDefault(@RequestBody @Valid AiDefaultModelSetRequest request) {
         return Result.success(aiProviderAdminService.setDefault(
                 currentUserProvider.currentUserIdOrSystem(), request));

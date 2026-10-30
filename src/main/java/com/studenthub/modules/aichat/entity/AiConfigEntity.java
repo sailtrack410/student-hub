@@ -26,4 +26,16 @@ public class AiConfigEntity extends BaseEntity {
     private Integer hourlyMessageLimit;
     private Integer historyWindow;
     private Integer maxMessageCharacters;
+
+    // ---- 上下文策略（V54）----
+    private Integer maxContextTokens;
+    private Integer contextSafetyMarginTokens;
+    private Integer maxOutputTokens;
+    private java.math.BigDecimal historyTokenRatio;
+    private java.math.BigDecimal ragTokenRatio;
+    private java.math.BigDecimal attachmentTokenRatio;
+    private Boolean summaryEnabled;
+    private java.math.BigDecimal summaryTriggerRatio;
+    private Integer summaryKeepRecentTurns;
+    private java.math.BigDecimal tokenEstimateCharsPerToken;
 }

@@ -4,6 +4,9 @@ studenthub:
     password-login-enabled: false
   wechat:
     mode: real
+  mail:
+    # 生产环境绝不把邮箱验证码返回客户端；SMTP 通过环境变量开启并配置。
+    dev-return-code: false
 
 springdoc:
   api-docs:

@@ -7,6 +7,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -51,6 +53,14 @@ public class GlobalExceptionHandler {
                 .collect(Collectors.joining("；"));
         return ResponseEntity.badRequest()
                 .body(Result.failed(ErrorCode.INVALID_PARAMETER.getCode(), message));
+    }
+
+    /** 未注册的路由/静态资源不应被当成 500：统一返回 404，避免前端把「接口不存在」误判为系统繁忙。 */
+    @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
+    public ResponseEntity<Result<Void>> handleNotFound(Exception exception, HttpServletRequest request) {
+        log.warn("接口或资源不存在, method={}, path={}", request.getMethod(), request.getRequestURI());
+        return ResponseEntity.status(ErrorCode.NOT_FOUND.getHttpStatus())
+                .body(Result.failed(ErrorCode.NOT_FOUND.getCode(), "接口不存在"));
     }
 
     @ExceptionHandler(Exception.class)

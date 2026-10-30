@@ -177,6 +177,7 @@ public class ScheduleSyncWorker {
         private final int endSection;
         private final String weeks;
         private final int weekParity;
+        private final String timeRange;
         private final Set<Long> users = new HashSet<>();
 
         CourseAggregate(String signature) {
@@ -189,12 +190,14 @@ public class ScheduleSyncWorker {
             this.endSection = Integer.parseInt(parts[5]);
             this.weeks = parts[6];
             this.weekParity = Integer.parseInt(parts[7]);
+            this.timeRange = parts.length > 8 ? parts[8] : null;
         }
 
         static String signatureOf(JwCourseEntry course) {
             return course.courseName() + "|" + course.teacher() + "|" + course.location() + "|"
                     + course.dayOfWeek() + "|" + course.startSection() + "|" + course.endSection() + "|"
-                    + course.weeks() + "|" + course.weekParity();
+                    + course.weeks() + "|" + course.weekParity() + "|"
+                    + java.util.Objects.toString(course.timeRange(), "");
         }
 
         static String signatureOf(ScheduleClassCourseEntity entity) {
@@ -227,6 +230,7 @@ public class ScheduleSyncWorker {
             entity.setEndSection(endSection);
             entity.setWeeks(weeks);
             entity.setWeekParity(weekParity);
+            entity.setTimeRange(timeRange);
             return entity;
         }
     }

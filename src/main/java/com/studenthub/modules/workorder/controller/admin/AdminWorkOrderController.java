@@ -4,9 +4,14 @@ import com.studenthub.common.PageResult;
 import com.studenthub.common.Result;
 import com.studenthub.modules.identity.security.CurrentUserProvider;
 import com.studenthub.modules.workorder.controller.dto.AssignWorkOrderRequest;
+import com.studenthub.modules.workorder.controller.dto.BatchAssignWorkOrderRequest;
+import com.studenthub.modules.workorder.controller.dto.BatchAssignWorkOrderResponse;
+import com.studenthub.modules.workorder.controller.dto.ReassignWorkOrderRequest;
 import com.studenthub.modules.workorder.controller.dto.WorkOrderDetailResponse;
 import com.studenthub.modules.workorder.controller.dto.WorkOrderPageQuery;
+import com.studenthub.modules.workorder.controller.dto.WorkOrderSlaStatsResponse;
 import com.studenthub.modules.workorder.controller.dto.WorkOrderSummaryResponse;
+import com.studenthub.modules.workorder.controller.dto.WorkloadItemResponse;
 import com.studenthub.modules.workorder.controller.dto.RejectWorkOrderRequest;
 import com.studenthub.modules.workorder.service.WorkOrderService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -21,6 +26,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/admin/work-orders")
 @Tag(name = "管理端-工单调度", description = "工单队列查询、派发与驳回")
@@ -32,14 +39,28 @@ public class AdminWorkOrderController {
     private final CurrentUserProvider currentUserProvider;
 
     @GetMapping
-    @Operation(summary = "分页查询调度队列", description = "按调度员组织数据范围返回工单，可按状态过滤。",
+    @Operation(summary = "分页查询调度队列", description = "按调度员组织数据范围返回工单，可按状态、超时/即将超时过滤。",
             operationId = "pageWorkOrderQueue")
     public Result<PageResult<WorkOrderSummaryResponse>> pageQueue(WorkOrderPageQuery query) {
         return Result.success(workOrderService.pageQueue(currentUserProvider.requireCurrentUser(), query));
     }
 
+    @GetMapping("/workload")
+    @Operation(summary = "服务人员负载", description = "按调度员数据范围返回在岗服务人员的进行中/超时/即将超时/待确认工单数。",
+            operationId = "getWorkOrderWorkload")
+    public Result<List<WorkloadItemResponse>> workload() {
+        return Result.success(workOrderService.workload(currentUserProvider.requireCurrentUser()));
+    }
+
+    @GetMapping("/stats")
+    @Operation(summary = "工单 SLA 统计", description = "返回待派发、进行中、超时、即将超时数量与平均处理时长，供调度看板。",
+            operationId = "getWorkOrderSlaStats")
+    public Result<WorkOrderSlaStatsResponse> stats() {
+        return Result.success(workOrderService.slaStats(currentUserProvider.requireCurrentUser()));
+    }
+
     @GetMapping("/{orderId}")
-    @Operation(summary = "查询工单详情", description = "返回工单与关联申请的表单内容，需在调度员数据范围内。",
+    @Operation(summary = "查询工单详情", description = "返回工单、关联申请表单、SLA 与处理时间线，需在调度员数据范围内。",
             operationId = "getWorkOrderDetailForDispatcher")
     public Result<WorkOrderDetailResponse> detail(@PathVariable Long orderId) {
         return Result.success(workOrderService.detailForDispatcher(currentUserProvider.requireCurrentUser(), orderId));
@@ -51,6 +72,22 @@ public class AdminWorkOrderController {
     public Result<Void> assign(@PathVariable Long orderId, @RequestBody @Valid AssignWorkOrderRequest request) {
         workOrderService.assign(currentUserProvider.requireCurrentUser(), orderId, request);
         return Result.success();
+    }
+
+    @PostMapping("/{orderId}/reassign")
+    @Operation(summary = "改派工单", description = "把已派发或处理中的工单转给其他服务人员，记录时间线并通知新旧处理人。",
+            operationId = "reassignWorkOrder")
+    public Result<Void> reassign(@PathVariable Long orderId, @RequestBody @Valid ReassignWorkOrderRequest request) {
+        workOrderService.reassign(currentUserProvider.requireCurrentUser(), orderId, request);
+        return Result.success();
+    }
+
+    @PostMapping("/batch-assign")
+    @Operation(summary = "批量派单", description = "对待派发工单批量指派同一服务人员，逐条返回失败原因。",
+            operationId = "batchAssignWorkOrders")
+    public Result<BatchAssignWorkOrderResponse> batchAssign(
+            @RequestBody @Valid BatchAssignWorkOrderRequest request) {
+        return Result.success(workOrderService.batchAssign(currentUserProvider.requireCurrentUser(), request));
     }
 
     @PostMapping("/{orderId}/reject")

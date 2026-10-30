@@ -18,7 +18,9 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -48,6 +50,15 @@ public class AdminNoticeController {
     @PreAuthorize("hasAuthority('platform:all') or hasAuthority('announcement:manage')")
     public Result<AdminNoticeResponse> create(@RequestBody @Valid NoticeUpsertRequest request) {
         return Result.success(screenAdminService.create(request, currentUserProvider.requireCurrentUser().userId()));
+    }
+
+    @PostMapping("/cover")
+    @Operation(summary = "上传公告封面（N01）",
+            description = "PNG/JPEG/WebP，≤2MB；服务端按内容嗅探校验，返回稳定公开地址供预览与发布使用。",
+            operationId = "adminUploadNoticeCover")
+    @PreAuthorize("hasAuthority('platform:all') or hasAuthority('announcement:manage')")
+    public Result<String> uploadCover(@RequestPart("file") MultipartFile file) {
+        return Result.success(screenAdminService.uploadCover(file));
     }
 
     @PutMapping("/{id}")

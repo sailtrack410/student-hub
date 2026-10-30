@@ -27,6 +27,10 @@ public class WorkOrderEntity extends BaseEntity {
     private String assigneeName;
     private String status;
     private String priority;
+    /** SLA 承诺时限快照（小时），创建工单时按服务项 slaHours 写入，缺省 24 */
+    private Integer slaHours;
+    /** SLA 截止时间；历史数据为空时服务层按 created_at + slaHours 兜底计算 */
+    private LocalDateTime dueAt;
     private String completeRemark;
     private Boolean photoWorkflowRequired;
     private Long arrivalPhotoFileId;

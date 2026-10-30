@@ -8,54 +8,97 @@
 
     window.AdminPages.AiTestPage = {
         name: 'AiTestPage',
-        template: [
-            '<div class="pgw" style="display:flex;flex-direction:column;gap:16px;flex:1;min-height:0">',
-            '  <div class="lcard" style="flex:1;min-height:0;gap:12px">',
-            '    <div class="cap" style="font-size:15px">流式对话测试<span class="cnt">验证协议分流与 SSE 逐 token 输出 · 不选则走默认语言模型</span></div>',
-            '    <div style="display:flex;gap:8px">',
-            '      <div class="pin" style="flex:1.2"><select v-model="providerId" @change="onProviderChange" style="width:100%">',
-            '        <option :value="null">默认语言模型</option>',
-            '        <option v-for="p in providers" :key="p.providerId" :value="p.providerId">{{ p.providerName }}（{{ p.protocol || \'OPENAI_CHAT\' }}）</option>',
-            '      </select></div>',
-            '      <div class="pin" style="flex:1"><select v-model="modelId" :disabled="!providerId" style="width:100%">',
-            '        <option value="">该供应商默认（第一个启用模型）</option>',
-            '        <option v-for="m in providerModels" :key="m.modelId" :value="m.providerModelId">{{ m.providerModelId }}</option>',
-            '      </select></div>',
-            '      <div class="pin" style="flex:1.2"><select v-model="knowledgeBaseId" style="width:100%">',
-            '        <option :value="null">不联动知识库</option>',
-            '        <option v-for="k in knowledgeBases" :key="k.id" :value="k.id">{{ k.name }}（Top {{ k.topK || 5 }}）</option>',
-            '      </select></div>',
-            '    </div>',
-            '    <div ref="box" style="flex:1;min-height:0;overflow:auto;border:1px solid var(--tk-stroke);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px">',
-            '      <div v-if="!messages.length" style="margin:auto;text-align:center;color:var(--tk-muted)">',
-            '        <div style="font-size:14px;margin-bottom:6px">发送一条消息开始测试</div>',
-            '        <div style="font-size:12px">流式开启：逐 token 显示 · 流式关闭：整段返回</div>',
-            '      </div>',
-            '      <div v-for="(m, i) in messages" :key="i" :style="m.role === \'user\'',
-            '        ? \'align-self:flex-end;max-width:75%;background:var(--tk-brand);color:#fff;border-radius:12px 4px 12px 12px;padding:10px 14px;font-size:13px;white-space:pre-wrap\'',
-            '        : \'align-self:flex-start;max-width:85%;background:var(--tk-subtle);color:var(--tk-text2);border-radius:4px 12px 12px 12px;padding:10px 14px;font-size:13px\'">',
-            '        <md-view v-if="m.role === \'ai\'" :source="m.text" :streaming="m.streaming" />',
-            '        <template v-else>{{ m.text }}</template>',
-            '        <span v-if="m.streaming" style="color:var(--tk-info)">▍</span>',
-            '        <div v-if="m.role === \'ai\' && m.sources && m.sources.length" style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--tk-stroke)">',
-            '          <div style="font-size:11px;color:var(--tk-muted);margin-bottom:4px">引用片段（{{ m.sources.length }}）</div>',
-            '          <div v-for="(s, si) in m.sources" :key="si" style="font-size:11px;color:var(--tk-text3);margin:3px 0;line-height:1.5">',
-            '            <span style="color:var(--tk-info)">[{{ si + 1 }}]</span> {{ s.fileName }}<template v-if="s.page"> 第 {{ s.page }} 页</template> · 相关度 {{ (s.score * 100).toFixed(0) }}% — {{ s.snippet }}',
-            '          </div>',
-            '        </div>',
-            '      </div>',
-            '    </div>',
-            '    <div v-if="meta" style="font-size:12px;color:var(--tk-muted)">{{ meta }}</div>',
-            '    <div v-if="errorText" style="font-size:13px;color:var(--tk-bad)">{{ errorText }}</div>',
-            '    <div style="display:flex;gap:10px;align-items:center;height:44px;padding:0 14px;border:1px solid var(--tk-stroke);border-radius:10px;background:var(--tk-input)">',
-            '      <input v-model="input" :disabled="running" @keyup.enter="send"',
-            '             style="flex:1;border:0;outline:0;background:none;font:inherit;font-size:13px;color:var(--tk-text)"',
-            '             placeholder="输入测试内容，Enter 发送" />',
-            '      <button class="btn2 sm pri" style="height:30px" :disabled="running" @click="send">{{ running ? "生成中…" : "发送" }}</button>',
-            '    </div>',
-            '  </div>',
-            '</div>'
-        ].join('\n'),
+        template: `
+<div class="ax-pane ax-test">
+  <div class="ax-test-grid">
+    <section class="ax-panel ax-chat">
+      <div class="ax-panel-head">
+        <div><b class="ax-panel-title">流式对话</b><span class="ax-panel-sub">验证协议分流与 SSE 逐 token 输出</span></div>
+        <div class="ax-hero-actions">
+          <span class="ax-status" :class="running ? 'warn' : 'ok'">{{ running ? "生成中" : "就绪" }}</span>
+          <button class="ax-btn" type="button" :disabled="running" @click="clearChat">清空</button>
+        </div>
+      </div>
+      <div ref="box" class="ax-chat-log">
+        <div v-if="!messages.length" class="ax-chat-empty">
+          <span class="ax-chat-empty-ico">AI</span>
+          <b>发送一条消息开始测试</b>
+          <em>流式开启时逐 token 显示；不选供应商时走默认语言模型</em>
+        </div>
+        <div v-for="(m, i) in messages" :key="i" class="ax-msg" :class="m.role === 'user' ? 'user' : 'ai'">
+          <span v-if="m.role === 'ai'" class="ax-msg-role">AI</span>
+          <div class="ax-msg-body">
+            <md-view v-if="m.role === 'ai'" :source="m.text" :streaming="m.streaming" />
+            <template v-else>{{ m.text }}</template>
+            <span v-if="m.streaming" class="ax-cursor">▍</span>
+            <div v-if="m.role === 'ai' && m.sources && m.sources.length" class="ax-sources">
+              <div class="ax-sources-h">引用片段 {{ m.sources.length }}</div>
+              <div v-for="(s, si) in m.sources" :key="si" class="ax-source">
+                <span class="ax-source-n">[{{ si + 1 }}]</span>{{ s.fileName }}<template v-if="s.page"> 第 {{ s.page }} 页</template>
+                <em>相关度 {{ (s.score * 100).toFixed(0) }}% · {{ s.snippet }}</em>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div v-if="errorText" class="ax-error">{{ errorText }}</div>
+      <div class="ax-composer">
+        <input v-model="input" :disabled="running" @keyup.enter="send" placeholder="输入测试内容，Enter 发送" />
+        <button class="ax-btn primary" type="button" :disabled="running" @click="send">{{ running ? "生成中…" : "发送" }}</button>
+      </div>
+      <div class="ax-chat-foot">
+        <span>SSE · delta / done / error 事件</span>
+        <span v-if="meta">{{ meta }}</span>
+        <span v-else>当前会话 {{ messages.length }} 条消息</span>
+      </div>
+    </section>
+
+    <aside class="ax-test-side">
+      <section class="ax-panel">
+        <div class="ax-panel-head"><div><b class="ax-panel-title">测试目标</b></div></div>
+        <div class="ax-side-body">
+          <label class="ax-field"><span>供应商</span>
+            <select v-model="providerId" @change="onProviderChange">
+              <option :value="null">默认语言模型</option>
+              <option v-for="p in providers" :key="p.providerId" :value="p.providerId">{{ p.providerName }}{{ p.enabled ? "" : "（停用）" }}</option>
+            </select>
+          </label>
+          <label class="ax-field"><span>模型</span>
+            <select v-model="modelId" :disabled="!providerId">
+              <option value="">该供应商默认（首个启用模型）</option>
+              <option v-for="m in providerModels" :key="m.modelId" :value="m.providerModelId">{{ m.providerModelId }}</option>
+            </select>
+          </label>
+          <label class="ax-field"><span>知识库联动</span>
+            <select v-model="knowledgeBaseId">
+              <option :value="null">不联动知识库</option>
+              <option v-for="k in knowledgeBases" :key="k.id" :value="k.id">{{ k.name }}（Top {{ k.topK || 5 }}）</option>
+            </select>
+          </label>
+          <div class="ax-hint">指定供应商和模型可验证协议分流；联动知识库会先检索再生成，并返回引用片段。</div>
+        </div>
+      </section>
+
+      <section class="ax-panel">
+        <div class="ax-panel-head"><div><b class="ax-panel-title">运行信息</b></div></div>
+        <div class="ax-run-list">
+          <div><span>协议</span><b>{{ selectedProtocol }}</b></div>
+          <div><span>模型</span><b>{{ modelId || "供应商默认" }}</b></div>
+          <div><span>知识库</span><b>{{ selectedKnowledgeName }}</b></div>
+          <div><span>最近用量</span><b>{{ meta || "—" }}</b></div>
+        </div>
+      </section>
+
+      <section class="ax-panel ax-quick-panel">
+        <div class="ax-panel-head"><div><b class="ax-panel-title">快捷测试</b></div></div>
+        <div class="ax-quick">
+          <button v-for="p in quickPrompts" :key="p" type="button" @click="quick(p)">{{ p }}</button>
+        </div>
+      </section>
+    </aside>
+  </div>
+</div>
+        `,
         setup: function () {
             var Vue = window.Vue;
             var El = window.ElementPlus;
@@ -73,6 +116,7 @@
             var modelId = Vue.ref('');
             var knowledgeBases = Vue.ref([]);
             var knowledgeBaseId = Vue.ref(null);
+            var quickPrompts = ['只回复：OK', '用一句话解释什么是 SSE 流式输出', '列出当前可用的语言模型'];
 
             var providerModels = Vue.computed(function () {
                 if (!providerId.value) return [];
@@ -81,6 +125,30 @@
                 });
             });
             function onProviderChange() { modelId.value = ''; }
+            var selectedProvider = Vue.computed(function () {
+                var pid = providerId.value;
+                if (!pid) return null;
+                return providers.value.find(function (p) { return String(p.providerId) === String(pid); }) || null;
+            });
+            var selectedProtocol = Vue.computed(function () {
+                return selectedProvider.value ? (selectedProvider.value.protocol || 'OPENAI_CHAT') : '默认模型路由';
+            });
+            var selectedKnowledgeName = Vue.computed(function () {
+                if (!knowledgeBaseId.value) return '不联动';
+                var base = knowledgeBases.value.find(function (k) { return String(k.id) === String(knowledgeBaseId.value); });
+                return base ? base.name : '已选择';
+            });
+            function clearChat() {
+                if (running.value) return;
+                messages.splice(0, messages.length);
+                meta.value = '';
+                errorText.value = '';
+            }
+            function quick(text) {
+                if (running.value) return;
+                input.value = text;
+                send();
+            }
 
             function loadTargets() {
                 api.get('/api/admin/ai/providers').then(function (list) { providers.value = list || []; })
@@ -104,6 +172,7 @@
                 meta.value = '';
                 messages.push({ role: 'user', text: text });
                 var aiMsg = Vue.reactive({ role: 'ai', text: '', streaming: true });
+                var finished = false;
                 messages.push(aiMsg);
                 input.value = '';
                 running.value = true;
@@ -145,6 +214,7 @@
                             aiMsg.text += data;
                             scrollBottom();
                         } else if (eventName === 'done') {
+                            finished = true;
                             try {
                                 var d = JSON.parse(data);
                                 meta.value = '模型 ' + (d.model || '-') + ' · 输入 ' + (d.promptTokens ?? '-') + ' tokens · 输出 ' + (d.completionTokens ?? '-') + ' tokens';
@@ -153,7 +223,8 @@
                             // 知识库召回片段：挂到当前 AI 气泡下方展示
                             try { aiMsg.sources = JSON.parse(data); } catch (ignored) { }
                         } else if (eventName === 'error') {
-                            errorText.value = data;
+                            finished = true;
+                            errorText.value = data || '生成失败';
                         }
                         eventName = 'message';
                         dataLines = [];
@@ -187,7 +258,10 @@
                     }
                     return pump();
                 }).catch(function (error) {
-                    errorText.value = error.message || '请求失败';
+                    // 部分代理会在一段完整 SSE 之后以网络错误关闭读流；done 已到达时不再提示错误。
+                    if (!finished) {
+                        errorText.value = error.message || '请求失败';
+                    }
                     aiMsg.streaming = false;
                     running.value = false;
                 });
@@ -197,6 +271,8 @@
 
             return { messages: messages, input: input, running: running, meta: meta, errorText: errorText, box: box, send: send,
                 providers: providers, providerId: providerId, modelId: modelId, providerModels: providerModels, onProviderChange: onProviderChange,
+                selectedProvider: selectedProvider, selectedProtocol: selectedProtocol, selectedKnowledgeName: selectedKnowledgeName,
+                clearChat: clearChat, quick: quick, quickPrompts: quickPrompts,
                 knowledgeBases: knowledgeBases, knowledgeBaseId: knowledgeBaseId };
         }
     };

@@ -35,4 +35,6 @@ public class CommunityReportEntity extends BaseEntity {
     private Long handledBy;
     private LocalDateTime handledAt;
     private String handleNote;
+    /** 处理时限（V71）：为空时业务侧按 createdAt + 24h 计算 */
+    private LocalDateTime dueAt;
 }

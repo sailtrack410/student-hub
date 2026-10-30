@@ -19,6 +19,7 @@ import java.util.UUID;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -76,7 +77,7 @@ class ServiceRequestFlowIntegrationTest {
                         .header("Idempotency-Key", idempotencyKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"itemId":%d,"formData":{"contactPhone":"13800000001","address":"X栋101","faultType":"水电维修","description":"台灯不亮","expectDate":"2026-09-05"}}
+                                {"itemId":%d,"formData":{"contactPhone":"13800000001","dormBuilding":"博宁社区-博梦1","address":"302","faultType":"灯","description":"台灯不亮","expectDate":"2026-09-05"}}
                                 """.formatted(repairItemId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("SUBMITTED"))
@@ -91,7 +92,7 @@ class ServiceRequestFlowIntegrationTest {
                         .header("Idempotency-Key", idempotencyKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"itemId":%d,"formData":{"contactPhone":"13800000001","address":"X栋101","faultType":"水电维修","description":"台灯不亮"}}
+                                {"itemId":%d,"formData":{"contactPhone":"13800000001","dormBuilding":"博宁社区-博梦1","address":"302","faultType":"灯","description":"台灯不亮"}}
                                 """.formatted(repairItemId)))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -118,6 +119,26 @@ class ServiceRequestFlowIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"assigneeId\":%d,\"comment\":\"请尽快上门\"}".formatted(workerId)))
                 .andExpect(status().isOk());
+
+        // 4.1 我的申请列表返回真实工单摘要，供 App 的“处理中/待验收”筛选使用
+        MvcResult myListResult = mockMvc.perform(get("/api/app/service-requests")
+                        .param("pageNum", "1")
+                        .param("pageSize", "100")
+                        .header("Authorization", "Bearer " + requesterToken))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode myRecords = objectMapper.readTree(myListResult.getResponse().getContentAsString())
+                .path("data").path("records");
+        JsonNode myRecord = null;
+        for (JsonNode record : myRecords) {
+            if (record.path("requestId").asLong() == requestId) {
+                myRecord = record;
+                break;
+            }
+        }
+        assertNotNull(myRecord, "我的申请列表应包含刚提交的申请");
+        assertEquals("ASSIGNED", myRecord.path("workOrderStatus").asText());
+        assertEquals(orderId, myRecord.path("workOrderId").asLong());
 
         // 5. 服务人员开始工单，走拍照工作流：现场拍照 → 完工拍照提交确认 → 报修人确认
         mockMvc.perform(get("/api/app/work-orders/assigned")
@@ -173,7 +194,7 @@ class ServiceRequestFlowIntegrationTest {
                 .andExpect(jsonPath("$.code").value("EVALUATION_409_01"));
 
         // 8. 评价后学生收到派单/办结相关通知
-        mockMvc.perform(get("/api/app/notifications")
+        mockMvc.perform(get("/api/app/notifications?pageSize=100")
                         .header("Authorization", "Bearer " + requesterToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.records[?(@.title == '申请已完成')]").exists());
@@ -182,7 +203,7 @@ class ServiceRequestFlowIntegrationTest {
         MvcResult newRequest = mockMvc.perform(post("/api/app/service-requests")
                         .header("Authorization", "Bearer " + requesterToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"itemId\":%d,\"formData\":{\"contactPhone\":\"13800000001\",\"address\":\"X栋101\",\"faultType\":\"门窗维修\",\"description\":\"门锁松动\"}}"
+                        .content("{\"itemId\":%d,\"formData\":{\"contactPhone\":\"13800000001\",\"dormBuilding\":\"博宁社区-博梦1\",\"address\":\"303\",\"faultType\":\"门窗\",\"description\":\"门锁松动\"}}"
                                 .formatted(repairItemId)))
                 .andExpect(status().isOk())
                 .andReturn();

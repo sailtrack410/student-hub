@@ -4,34 +4,29 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
-    <title>Student Hub 管理台</title>
-    <link rel="stylesheet" href="/admin/vendor/element-plus.css">
-    <link rel="stylesheet" href="/admin/css/admin.css">
-    <link rel="stylesheet" href="/admin/css/pages.css">
-    <script>document.documentElement.dataset.theme = localStorage.getItem('admin_theme') || 'dark';</script>
+    <title>Campus OS · Student Hub 管理控制面</title>
+    <link rel="stylesheet" href="/admin/vendor/element-plus.css?v=cf520a57f546f4ba">
+    <link rel="stylesheet" href="/admin/css/admin.css?v=97eb4f93b6de7dae">
+    <link rel="stylesheet" href="/admin/css/pages.css?v=8a2f4c8a6aa65497">
+    <link rel="stylesheet" href="/admin/css/campus-os.css?v=7f45d30763360663">
+    <link rel="stylesheet" href="/admin/css/design-system.css?v=b43a5e00eaaf094e">
+    <script>document.documentElement.dataset.theme = localStorage.getItem('admin_theme') || 'light';</script>
+<!-- admin-importmap:start -->
+<script type="importmap">{"imports":{"/admin/js/app.js":"/admin/js/app.js?v=d077ee9d0500a809","/admin/js/core/api.js":"/admin/js/core/api.js?v=6aa9c601051c2ad1","/admin/js/core/context.js":"/admin/js/core/context.js?v=ed541e37af04e4ea","/admin/js/core/page-loader.js":"/admin/js/core/page-loader.js?v=2aa760d8ac00a26c","/admin/js/core/registry.js":"/admin/js/core/registry.js?v=546fea2b0b9d022a","/admin/js/core/router.js":"/admin/js/core/router.js?v=58f7d1dca85d2e37","/admin/js/core/asset-manifest.js":"/admin/js/core/asset-manifest.js?v=7a5629f1114c707d"}}</script>
+<!-- admin-importmap:end -->
 </head>
 <body>
 <div id="app"></div>
-<script src="/admin/vendor/vue.global.prod.js"></script>
-<script src="/admin/vendor/element-plus.full.min.js"></script>
-<script src="/admin/vendor/element-plus.zh-cn.locale.min.js"></script>
-<script src="/admin/vendor/element-icons.iife.min.js"></script>
-<script src="/admin/vendor/marked.min.js"></script>
-<script src="/admin/vendor/dompurify.min.js"></script>
-<script src="/admin/js/md-view.js"></script>
-<script src="/admin/js/api.js"></script>
-<script src="/admin/js/pages/login.js"></script>
-<script src="/admin/js/pages/dashboard.js"></script>
-<script src="/admin/js/pages/requests.js"></script>
-<script src="/admin/js/pages/eval.js"></script>
-<script src="/admin/js/pages/community.js"></script>
-<script src="/admin/js/pages/aitest.js"></script>
-<script src="/admin/js/pages/workorders.js"></script>
-<script src="/admin/js/pages/users.js"></script>
-<script src="/admin/js/pages/aiconfig.js"></script>
-<script src="/admin/js/pages/knowledge.js"></script>
-<script src="/admin/js/pages/services.js"></script>
-<script src="/admin/js/pages/design.js"></script>
-<script src="/admin/js/app.js"></script>
+<!-- 依赖：vendor 同步加载，保证 core / pages 执行时 Vue、Element Plus、图标库已就绪 -->
+<script src="/admin/vendor/vue.global.prod.js?v=b50eeefe35d41636"></script>
+<script src="/admin/vendor/element-plus.full.min.js?v=3934e8d470c626de"></script>
+<script src="/admin/vendor/element-plus.zh-cn.locale.min.js?v=a63ae2272516a1c1"></script>
+<script src="/admin/vendor/element-icons.iife.min.js?v=0b65b24e39ab2252"></script>
+<script src="/admin/vendor/marked.min.js?v=15fabce5b65898b3"></script>
+<script src="/admin/vendor/dompurify.min.js?v=c0845096a7c4a674"></script>
+<script src="/admin/js/md-view.js?v=402094041d92af1b"></script>
+
+<!-- 页面按路由动态加载；壳层：登录守卫、侧栏、顶栏（含校区切换）、命令面板、健康状态、主题 -->
+<script type="module" src="/admin/js/app.js?v=d077ee9d0500a809"></script>
 </body>
 </html>

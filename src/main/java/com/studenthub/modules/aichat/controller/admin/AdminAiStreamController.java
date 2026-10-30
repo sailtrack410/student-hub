@@ -26,8 +26,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /**
  * 管理端 AI 流式对话测试：SSE 推送增量 token，用于测试页签验证
@@ -47,11 +45,7 @@ public class AdminAiStreamController {
     private final AiProvider aiProvider;
     /** RAG 关闭（如 test profile）时该 bean 不装配，用 Provider 懒解析避免硬依赖阻断上下文启动 */
     private final ObjectProvider<KnowledgeBaseService> knowledgeBaseServiceProvider;
-    private final ExecutorService streamExecutor = Executors.newCachedThreadPool(r -> {
-        Thread t = new Thread(r, "ai-stream-test");
-        t.setDaemon(true);
-        return t;
-    });
+    private final com.studenthub.modules.aichat.service.execution.AiExecutionResources executionResources;
 
     public record StreamTestRequest(List<Item> messages, Long providerId, String model, Long knowledgeBaseId) {
         public record Item(String role, String content) {
@@ -69,34 +63,36 @@ public class AdminAiStreamController {
                 .toList();
         Long providerId = request.providerId();
         Long knowledgeBaseId = request.knowledgeBaseId();
-        streamExecutor.execute(() -> {
+        var session = new com.studenthub.modules.aichat.service.execution.AiStreamSession(emitter, executionResources);
+        session.execute(() -> {
             try {
                 // 知识库联动：最后一条用户消息做检索，召回片段注入 system 前置消息
                 List<AiMessage> effective = messages;
                 if (knowledgeBaseId != null) {
-                    effective = applyKnowledge(messages, knowledgeBaseId, emitter);
+                    effective = applyKnowledge(messages, knowledgeBaseId, session);
                 }
                 final List<AiMessage> finalMessages = effective;
                 if (providerId != null) {
                     AiModelBinding binding = aiConfigService.resolveBinding(providerId, request.model());
                     aiProvider.chatStreamWithBinding(binding,
                             new AiChatRequest(binding.model(), finalMessages),
-                            delta -> send(emitter, "delta", delta),
+                            delta -> session.send("delta", delta),
                             (model, promptTokens, completionTokens) -> {
-                                send(emitter, "done", doneJson(model, promptTokens, completionTokens));
-                                emitter.complete();
+                                session.complete("done", doneJson(model, promptTokens, completionTokens));
                             });
                 } else {
                     aiChatService.chatStream(finalMessages,
-                            delta -> send(emitter, "delta", delta),
+                            delta -> session.send("delta", delta),
                             done -> {
-                                send(emitter, "done", doneJson(done.model(), done.promptTokens(), done.completionTokens()));
-                                emitter.complete();
+                                session.complete("done", doneJson(done.model(), done.promptTokens(), done.completionTokens()));
                             });
                 }
+            } catch (java.util.concurrent.CancellationException exception) {
+                throw exception;
             } catch (Exception exception) {
-                send(emitter, "error", exception.getMessage() == null ? "AI 调用失败" : exception.getMessage());
-                emitter.complete();
+                session.complete("error", new com.studenthub.modules.aichat.controller.dto.AiStreamError(
+                        com.studenthub.common.ErrorCode.AI_PROVIDER_ERROR.getCode(),
+                        exception.getMessage() == null ? "AI 调用失败" : exception.getMessage()));
             }
         });
         return emitter;
@@ -106,7 +102,7 @@ public class AdminAiStreamController {
      * 知识库检索注入：取最后一条用户消息做混合检索，召回片段拼成系统上下文插到消息最前。
      * 检索失败不阻断对话（降级为普通对话），sources 事件把引用片段推给前端展示。
      */
-    private List<AiMessage> applyKnowledge(List<AiMessage> messages, Long knowledgeBaseId, SseEmitter emitter) {
+    private List<AiMessage> applyKnowledge(List<AiMessage> messages, Long knowledgeBaseId, com.studenthub.modules.aichat.service.execution.AiStreamSession session) {
         String question = null;
         for (int i = messages.size() - 1; i >= 0; i--) {
             if ("user".equals(messages.get(i).role())) { question = messages.get(i).content(); break; }
@@ -114,19 +110,19 @@ public class AdminAiStreamController {
         if (!StringUtils.hasText(question)) return messages;
         KnowledgeBaseService knowledgeBaseService = knowledgeBaseServiceProvider.getIfAvailable();
         if (knowledgeBaseService == null) {
-            send(emitter, "error", "知识库服务未启用");
+            session.send("error", "知识库服务未启用");
             return messages;
         }
         try {
             KnowledgeBaseEntity base = knowledgeBaseService.requireBase(knowledgeBaseId);
             if (base == null) {
-                send(emitter, "error", "知识库不存在");
+                session.send("error", "知识库不存在");
                 return messages;
             }
             List<RagTestResponse.RagHit> hits = knowledgeBaseService.retrieve(List.of(knowledgeBaseId),
                     question, base.getTopK() == null ? 5 : base.getTopK(), base.getScoreThreshold());
             if (hits.isEmpty()) {
-                send(emitter, "sources", "[]");
+                session.send("sources", "[]");
                 List<AiMessage> injected = new ArrayList<>(messages.size() + 1);
                 injected.add(new AiMessage("system", (StringUtils.hasText(base.getSystemPrompt())
                         ? base.getSystemPrompt() + "\n\n" : "") + "知识库中未检索到相关资料，请如实说明未找到，不要编造。"));
@@ -136,13 +132,15 @@ public class AdminAiStreamController {
             String context = hits.stream()
                     .map(h -> "【" + h.fileName() + (h.page() != null ? " 第" + h.page() + "页" : "") + "】\n" + h.content())
                     .collect(java.util.stream.Collectors.joining("\n\n"));
-            send(emitter, "sources", sourcesJson(hits));
+            session.send("sources", sourcesJson(hits));
             List<AiMessage> injected = new ArrayList<>(messages.size() + 1);
             injected.add(new AiMessage("system", (StringUtils.hasText(base.getSystemPrompt())
                     ? base.getSystemPrompt() + "\n\n" : "")
                     + "请优先依据下列知识库资料回答；资料没有的内容如实说明，不要编造。回答末尾用「来源：」列出引用的文件名。\n\n资料：\n" + context));
             injected.addAll(messages);
             return injected;
+        } catch (java.util.concurrent.CancellationException exception) {
+            throw exception;
         } catch (Exception exception) {
             log.warn("知识库检索失败，降级为普通对话: {}", exception.getMessage());
             return messages;
@@ -193,11 +191,4 @@ public class AdminAiStreamController {
                 + promptTokens + ",\"completionTokens\":" + completionTokens + "}";
     }
 
-    private void send(SseEmitter emitter, String event, String data) {
-        try {
-            emitter.send(SseEmitter.event().name(event).data(data == null ? "" : data));
-        } catch (Exception ignored) {
-            // 客户端断开时 send 抛异常，忽略即可；emitter 由超时/complete 回收
-        }
-    }
 }

@@ -6,13 +6,16 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-@Schema(description = "管理端公告项")
+@Schema(description = "管理端公告项（含正文与封面，V71）")
 public record AdminNoticeResponse(
         @Schema(description = "公告 ID") Long id,
         @Schema(description = "类型：NOTICE/NEWS/ACTIVITY") String noticeType,
         @Schema(description = "类型中文") String typeText,
         @Schema(description = "标题") String title,
         @Schema(description = "摘要", nullable = true) String summary,
+        @Schema(description = "正文", nullable = true) String content,
+        @Schema(description = "封面图地址", nullable = true) String coverImageUrl,
+        @Schema(description = "正文字数（未填为 0）") int contentLength,
         @Schema(description = "发布日期 yyyy-MM-dd", nullable = true) LocalDate publishDate,
         @Schema(description = "投放渠道：SCREEN/APP") String channel,
         @Schema(description = "发布状态：DRAFT/SCHEDULED/PUBLISHED/OFFLINE") String publishStatus,
@@ -22,9 +25,11 @@ public record AdminNoticeResponse(
         @Schema(description = "是否启用") boolean enabled) {
 
     public static AdminNoticeResponse from(ScreenNoticeEntity entity, String typeText) {
+        String content = entity.getContent();
         return new AdminNoticeResponse(entity.getId(), entity.getNoticeType(), typeText,
-                entity.getTitle(), entity.getSummary(), entity.getPublishDate(),
-                entity.getChannel(), entity.getPublishStatus(), entity.getPublishAt(),
+                entity.getTitle(), entity.getSummary(), content, entity.getCoverImageUrl(),
+                content == null ? 0 : content.length(),
+                entity.getPublishDate(), entity.getChannel(), entity.getPublishStatus(), entity.getPublishAt(),
                 entity.getSortOrder(), entity.getAuthor(), Boolean.TRUE.equals(entity.getEnabled()));
     }
 }

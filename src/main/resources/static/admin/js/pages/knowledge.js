@@ -9,23 +9,23 @@
             '<div class="page-h"><div><h1>知识库</h1><div class="sub">校园服务知识文档与向量索引 · 上传后自动解析、分块并向量化</div></div></div>',
             '<div class="duo" style="flex:1;min-height:0">',
             '<aside class="lcard" style="width:300px;flex:none;gap:12px">',
-            '<div class="cap" style="font-size:15px">知识库<span class="r"><span class="op" style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;background:var(--tk-info-bg);cursor:pointer" @click="openCreate" title="新建知识库"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--tk-info)" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></span></div>',
+            '<div class="cap" style="font-size:14px">知识库<span class="r"><span class="op" style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;background:var(--tk-info-bg);cursor:pointer" @click="openCreate" title="新建知识库"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--tk-info)" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></span></div>',
             '<div style="display:flex;flex-direction:column;gap:6px;overflow:auto">',
             '<div v-for="b in bases" :key="b.id" class="node" :class="{on:b.id===selectedId}" style="align-items:flex-start;gap:10px" @click="select(b.id)">',
             '<span class="dot" :style="{width:\'6px\',height:\'6px\',borderRadius:\'999px\',marginTop:\'6px\',flex:\'none\',background:b.enabled?\'var(--tk-ok)\':\'var(--tk-muted)\'}"></span>',
-            '<span style="display:flex;flex-direction:column;gap:1px;min-width:0"><b style="font-size:13px;color:var(--tk-text)">{{ b.name }}</b>',
+            '<span style="display:flex;flex-direction:column;gap:1px;min-width:0"><span style="display:flex;align-items:center;gap:4px"><b style="font-size:13px;color:var(--tk-text)">{{ b.name }}</b><span v-if="b.assistantEnabled" class="bdg i">AI</span></span>',
             '<span style="font-size:11px;color:var(--tk-text3)">{{ b.documentCount || 0 }} 文档 · {{ b.chunkCount || 0 }} 分块</span></span></div>',
             '<div v-if="!bases.length" style="font-size:12px;color:var(--tk-muted);padding:12px 0;text-align:center">创建第一个知识库</div>',
             '</div></aside>',
 
             '<section style="flex:1;display:flex;flex-direction:column;gap:16px;min-width:0;min-height:0" v-loading="loading">',
             '<template v-if="current">',
-            '<div class="lcard" style="gap:14px">',
-            '<div class="cap" style="font-size:15px"><span style="width:38px;height:38px;border-radius:10px;background:var(--tk-info-bg);display:grid;place-items:center;font-size:15px;font-weight:650;color:var(--tk-info)">知</span>',
-            '<span style="display:flex;flex-direction:column"><b style="font-size:15px">{{ current.name }}</b><span style="font-size:11px;color:var(--tk-text3);font-weight:400">{{ current.description || \'未填写描述\' }} · {{ current.visibility === \'PUBLIC\' ? \'公开\' : \'内部\' }}</span></span>',
+            '<div class="lcard" style="gap:12px">',
+            '<div class="cap" style="font-size:14px"><span style="width:38px;height:38px;border-radius:10px;background:var(--tk-info-bg);display:grid;place-items:center;font-size:14px;font-weight:650;color:var(--tk-info)">知</span>',
+            '<span style="display:flex;flex-direction:column"><span style="display:flex;align-items:center;gap:6px"><b style="font-size:14px">{{ current.name }}</b><span v-if="current.assistantEnabled" class="bdg i">AI 检索</span></span><span style="font-size:11px;color:var(--tk-text3);font-weight:400">{{ current.description || \'未填写描述\' }} · {{ current.visibility === \'PUBLIC\' ? \'公开\' : \'内部\' }}</span></span>',
             '<span class="r" style="gap:10px"><span class="switch" :class="{off:!current.enabled}" @click="current.enabled=!current.enabled;saveEnabled()"><i></i></span>',
-            '<button class="btn2 sm" style="height:30px" @click="editBase">编辑</button>',
-            '<button class="btn2 sm" style="height:30px;color:var(--tk-bad)" @click="removeBase">删除</button></span></div>',
+            '<button class="btn2 sm" style="" @click="editBase">编辑</button>',
+            '<button class="btn2 sm" style="color:var(--tk-bad)" @click="removeBase">删除</button></span></div>',
             '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">',
             '<div style="background:var(--tk-subtle);border-radius:10px;padding:12px 14px"><div style="font-size:12px;color:var(--tk-text3)">分块大小</div><div style="font-size:16px;font-weight:650;color:var(--tk-text);margin-top:2px">{{ current.chunkSize }}</div></div>',
             '<div style="background:var(--tk-subtle);border-radius:10px;padding:12px 14px"><div style="font-size:12px;color:var(--tk-text3)">重叠字符</div><div style="font-size:16px;font-weight:650;color:var(--tk-text);margin-top:2px">{{ current.chunkOverlap }}</div></div>',
@@ -34,8 +34,8 @@
             '</div></div>',
 
             '<div class="lcard" style="gap:12px;flex:1;min-height:0">',
-            '<div class="cap" style="font-size:15px">文档与索引<span class="cnt">支持 PDF、DOCX、TXT、MD</span>',
-            '<span class="r"><el-upload :show-file-list="false" :http-request="upload"><button class="btn2 sm pri" style="height:32px" :disabled="uploading">{{ uploading ? "上传中…" : "+ 上传文档" }}</button></el-upload></span></div>',
+            '<div class="cap" style="font-size:14px">文档与索引<span class="cnt">支持 PDF、DOCX、TXT、MD</span>',
+            '<span class="r"><el-upload :show-file-list="false" :http-request="upload"><button class="btn2 sm pri" style="" :disabled="uploading">{{ uploading ? "上传中…" : "+ 上传文档" }}</button></el-upload></span></div>',
             '<div class="tblw" style="flex:1;min-height:0;overflow:auto"><table class="pk">',
             '<colgroup><col style="width:220px"><col style="width:100px"><col style="width:80px"><col><col style="width:170px"><col style="width:130px"></colgroup>',
             '<thead><tr><th>文件名</th><th>状态</th><th>分块</th><th>错误信息</th><th>索引时间</th><th class="r">操作</th></tr></thead>',
@@ -44,17 +44,17 @@
             '<tr v-for="d in documents" :key="d.id">',
             '<td style="color:var(--tk-text)">{{ d.fileName }}</td>',
             '<td><span class="bdg" :class="statusTone(d.status)">{{ statusText(d.status) }}</span></td>',
-            '<td>{{ d.chunkCount }}</td>',
+            '<td>{{ d.chunkCount }}<small v-if="d.status===\'PROCESSING\' || d.status===\'QUEUED\'" style="display:block">{{ d.processedChunks || 0 }}/{{ d.totalChunks || \'-\' }} · 第 {{ d.indexAttempts || 0 }} 次</small></td>',
             '<td style="color:var(--tk-bad)">{{ d.errorMessage || "-" }}</td>',
             '<td style="color:var(--tk-text3)">{{ fmt(d.indexedAt) }}</td>',
-            '<td class="r"><span class="op" @click="reindex(d)">重建</span> · <span class="op r" @click="removeDocument(d)">删除</span></td>',
+            '<td class="r"><button class="op" :disabled="d.status===\'QUEUED\' || d.status===\'PROCESSING\'" @click="reindex(d)">重建</button> · <span class="op r" @click="removeDocument(d)">删除</span></td>',
             '</tr></tbody></table></div></div>',
 
             '<div class="lcard" style="gap:12px">',
-            '<div class="cap" style="font-size:15px">检索测试<span class="cnt">查看召回片段、分数和最终回答，便于调节分块与阈值</span></div>',
+            '<div class="cap" style="font-size:14px">检索测试<span class="cnt">查看召回片段、分数和最终回答，便于调节分块与阈值</span></div>',
             '<textarea class="ta2" v-model="question" maxlength="2000" placeholder="输入问题，例如：图书馆周末几点闭馆？"></textarea>',
             '<div style="display:flex;align-items:center;gap:12px">',
-            '<button class="btn2 sm pri" style="height:32px" :disabled="testing" @click="test">{{ testing ? "检索中…" : "开始检索与回答" }}</button>',
+            '<button class="btn2 sm pri" style="" :disabled="testing" @click="test">{{ testing ? "检索中…" : "开始检索与回答" }}</button>',
             '<span v-if="result" style="font-size:12px;color:var(--tk-muted)">召回 {{ result.hits.length }} 条 · 检索 {{ result.retrievalMs }}ms · 生成 {{ result.generationMs }}ms</span>',
             '</div>',
             '<div v-if="result && result.answer" class="psum" style="background:var(--tk-ok-bg)"><div class="l1" style="color:var(--tk-ok)">{{ result.answer }}</div></div>',
@@ -77,6 +77,13 @@
             '<div class="fld"><label>可见性</label><div style="display:flex;gap:16px">',
             '<label class="radio" :class="{on:form.visibility===\'INTERNAL\'}" style="cursor:pointer" @click="form.visibility=\'INTERNAL\'"><span class="dot"></span>内部</label>',
             '<label class="radio" :class="{on:form.visibility===\'PUBLIC\'}" style="cursor:pointer" @click="form.visibility=\'PUBLIC\'"><span class="dot"></span>公开</label></div></div>',
+            '<div class="fld"><label>供 AI 助手检索</label><div style="display:flex;align-items:center;gap:10px;height:40px">',
+            '<span class="switch" :class="{off:!form.assistantEnabled}" @click="form.assistantEnabled=!form.assistantEnabled"><i></i></span>',
+            '<span style="font-size:13px;color:#3A3A3C">{{ form.assistantEnabled ? "启用：App AI 助手会检索该知识库" : "停用：不参与 AI 助手检索" }}</span></div></div>',
+            '<div class="frow">',
+            '<div class="fld"><label>知识库 token 预算</label><div class="pin"><input type="number" v-model.number="form.ragTokenBudget" min="200" max="32000" step="500" /></div></div>',
+            '<div class="fld"><label>助手优先级</label><div class="pin"><input type="number" v-model.number="form.assistantPriority" min="-100" max="100" /></div></div>',
+            '</div>',
             '<div class="frow">',
             '<div class="fld"><label>分块大小</label><div class="pin"><input type="number" v-model.number="form.chunkSize" min="300" max="3000" /></div></div>',
             '<div class="fld"><label>重叠字符</label><div class="pin"><input type="number" v-model.number="form.chunkOverlap" min="0" max="600" /></div></div>',
@@ -89,22 +96,34 @@
             '</div>'
         ].join(''),
         setup: function () {
-            var bases=V.ref([]), selectedId=V.ref(null), documents=V.ref([]), loading=V.ref(false), uploading=V.ref(false), testing=V.ref(false), question=V.ref(''), result=V.ref(null), dialog=V.ref(false), editId=V.ref(null), form=V.reactive({name:'',description:'',visibility:'INTERNAL',enabled:true,chunkSize:800,chunkOverlap:120,topK:6,scoreThreshold:0.3,systemPrompt:''});
+            var bases=V.ref([]), selectedId=V.ref(null), documents=V.ref([]), loading=V.ref(false), uploading=V.ref(false), testing=V.ref(false), question=V.ref(''), result=V.ref(null), dialog=V.ref(false), editId=V.ref(null), form=V.reactive({name:'',description:'',visibility:'INTERNAL',enabled:true,chunkSize:800,chunkOverlap:120,topK:6,scoreThreshold:0.3,systemPrompt:'',assistantEnabled:true,ragTokenBudget:3000,assistantPriority:0});
             var current=V.computed(function(){return bases.value.find(function(x){return x.id===selectedId.value})||null;});
             function load(){loading.value=true;api.get('/api/admin/knowledge-bases').then(function(x){bases.value=x||[];if(!selectedId.value&&bases.value.length)select(bases.value[0].id);else if(selectedId.value)loadDocs();}).catch(function(e){E.ElMessage.error(e.message);}).finally(function(){loading.value=false;});}
             function select(id){selectedId.value=id;loadDocs();result.value=null;}
-            function loadDocs(){if(!selectedId.value)return;api.get('/api/admin/knowledge-bases/'+selectedId.value+'/documents').then(function(x){documents.value=x||[];});}
-            function openCreate(){editId.value=null;Object.assign(form,{name:'',description:'',visibility:'INTERNAL',enabled:true,chunkSize:800,chunkOverlap:120,topK:6,scoreThreshold:0.3,systemPrompt:''});dialog.value=true;}
-            function editBase(){editId.value=current.value.id;Object.assign(form,current.value);dialog.value=true;}
-            function requestPayload(){return {name:form.name,description:form.description,visibility:form.visibility,enabled:form.enabled,chunkSize:form.chunkSize,chunkOverlap:form.chunkOverlap,topK:form.topK,scoreThreshold:form.scoreThreshold,systemPrompt:form.systemPrompt};}
+            var pollTimer=null, disposed=false;
+            V.onUnmounted(function(){disposed=true;clearTimeout(pollTimer);});
+            function loadDocs(){
+                clearTimeout(pollTimer);
+                if(!selectedId.value||disposed)return;
+                var baseId=selectedId.value;
+                return api.get('/api/admin/knowledge-bases/'+baseId+'/documents').then(function(x){
+                    if(disposed||baseId!==selectedId.value)return;
+                    documents.value=x||[];
+                    if(documents.value.some(function(d){return d.status==='QUEUED'||d.status==='PROCESSING';}))pollTimer=setTimeout(loadDocs,4000);
+                }).catch(function(e){if(!disposed&&baseId===selectedId.value)E.ElMessage.error(e.message);});
+            }
+            function openCreate(){editId.value=null;Object.assign(form,{name:'',description:'',visibility:'INTERNAL',enabled:true,chunkSize:800,chunkOverlap:120,topK:6,scoreThreshold:0.3,systemPrompt:'',assistantEnabled:true,ragTokenBudget:3000,assistantPriority:0});dialog.value=true;}
+            function editBase(){editId.value=current.value.id;Object.assign(form,current.value);form.assistantEnabled=current.value.assistantEnabled!==false;form.ragTokenBudget=current.value.ragTokenBudget==null?3000:current.value.ragTokenBudget;form.assistantPriority=current.value.assistantPriority==null?0:current.value.assistantPriority;dialog.value=true;}
+            function intOr(value,fallback){if(value===null||value===undefined||value==='')return fallback;var n=Number(value);return isFinite(n)?Math.floor(n):fallback;}
+            function requestPayload(){return {name:form.name,description:form.description,visibility:form.visibility,enabled:form.enabled,chunkSize:form.chunkSize,chunkOverlap:form.chunkOverlap,topK:form.topK,scoreThreshold:form.scoreThreshold,systemPrompt:form.systemPrompt,assistantEnabled:!!form.assistantEnabled,ragTokenBudget:intOr(form.ragTokenBudget,3000),assistantPriority:intOr(form.assistantPriority,0)};}
             function saveBase(){var req=requestPayload();(editId.value?api.put('/api/admin/knowledge-bases/'+editId.value,req):api.post('/api/admin/knowledge-bases',req)).then(function(){dialog.value=false;load();E.ElMessage.success('已保存');}).catch(function(e){E.ElMessage.error(e.message);});}
-            function saveEnabled(){var b=current.value;api.put('/api/admin/knowledge-bases/'+b.id,{name:b.name,description:b.description,visibility:b.visibility,enabled:b.enabled,chunkSize:b.chunkSize,chunkOverlap:b.chunkOverlap,topK:b.topK,scoreThreshold:b.scoreThreshold,systemPrompt:b.systemPrompt}).catch(function(e){E.ElMessage.error(e.message);load();});}
+            function saveEnabled(){var b=current.value;api.put('/api/admin/knowledge-bases/'+b.id,{name:b.name,description:b.description,visibility:b.visibility,enabled:b.enabled,chunkSize:b.chunkSize,chunkOverlap:b.chunkOverlap,topK:b.topK,scoreThreshold:b.scoreThreshold,systemPrompt:b.systemPrompt,assistantEnabled:b.assistantEnabled!==false,ragTokenBudget:b.ragTokenBudget==null?3000:b.ragTokenBudget,assistantPriority:b.assistantPriority==null?0:b.assistantPriority}).catch(function(e){E.ElMessage.error(e.message);load();});}
             function removeBase(){E.ElMessageBox.confirm('删除知识库及其索引？','确认',{type:'warning'}).then(function(){return api.delete('/api/admin/knowledge-bases/'+current.value.id);}).then(function(){selectedId.value=null;load();});}
-            function upload(o){uploading.value=true;api.upload('/api/admin/knowledge-bases/'+selectedId.value+'/documents',o.file).then(function(d){if(d&&d.status==='FAILED'){E.ElMessage.error(d.errorMessage||'文档索引失败');}else if(d&&d.status==='PROCESSING'){E.ElMessage.success('文档已进入索引队列');}else{E.ElMessage.success('文档已完成索引');}load();loadDocs();}).catch(function(e){E.ElMessage.error(e.message);}).finally(function(){uploading.value=false;});}
-            function reindex(d){api.post('/api/admin/knowledge-bases/'+selectedId.value+'/documents/'+d.id+'/reindex').then(function(){E.ElMessage.success('已重建');loadDocs();}).catch(function(e){E.ElMessage.error(e.message);});}
+            function upload(o){uploading.value=true;api.upload('/api/admin/knowledge-bases/'+selectedId.value+'/documents',o.file).then(function(d){if(d&&d.status==='FAILED'){E.ElMessage.error(d.errorMessage||'文档索引失败');}else if(d&&(d.status==='PROCESSING'||d.status==='QUEUED')){E.ElMessage.success('文档已进入索引队列');}else{E.ElMessage.success('文档已完成索引');}load();loadDocs();}).catch(function(e){E.ElMessage.error(e.message);}).finally(function(){uploading.value=false;});}
+            function reindex(d){api.post('/api/admin/knowledge-bases/'+selectedId.value+'/documents/'+d.id+'/reindex').then(function(){E.ElMessage.success('已进入重建队列，现有索引在完成前继续可用');loadDocs();}).catch(function(e){E.ElMessage.error(e.message);});}
             function removeDocument(d){E.ElMessageBox.confirm('删除该文档及索引？','确认',{type:'warning'}).then(function(){return api.delete('/api/admin/knowledge-bases/'+selectedId.value+'/documents/'+d.id);}).then(loadDocs);}
             function test(){if(!question.value.trim())return;testing.value=true;api.post('/api/admin/knowledge-bases/'+selectedId.value+'/test',{question:question.value,generateAnswer:true}).then(function(x){result.value=x;}).catch(function(e){E.ElMessage.error(e.message);}).finally(function(){testing.value=false;});}
-            function fmt(x){return api.fmtDateTime(x);} function statusText(x){return {PENDING:'待处理',PROCESSING:'处理中',SUCCESS:'成功',FAILED:'失败'}[x]||x;} function statusTone(x){return {SUCCESS:'g',FAILED:'r',PROCESSING:'a'}[x]||'i';} function statusType(x){return x==='SUCCESS'?'success':x==='FAILED'?'danger':x==='PROCESSING'?'warning':'info';}
+            function fmt(x){return api.fmtDateTime(x);} function statusText(x){return {PENDING:'待处理',QUEUED:'排队中',PROCESSING:'处理中',SUCCESS:'成功',FAILED:'失败'}[x]||x;} function statusTone(x){return {SUCCESS:'g',FAILED:'r',QUEUED:'a',PROCESSING:'a'}[x]||'i';} function statusType(x){return x==='SUCCESS'?'success':x==='FAILED'?'danger':(x==='PROCESSING'||x==='QUEUED')?'warning':'info';}
             load(); return {bases:bases,current:current,selectedId:selectedId,documents:documents,loading:loading,uploading:uploading,testing:testing,question:question,result:result,dialog:dialog,editId:editId,form:form,select:select,openCreate:openCreate,editBase:editBase,saveBase:saveBase,saveEnabled:saveEnabled,removeBase:removeBase,upload:upload,reindex:reindex,removeDocument:removeDocument,test:test,fmt:fmt,statusText:statusText,statusTone:statusTone,statusType:statusType,Plus:ElementPlusIconsVue.Plus};
         }
     };

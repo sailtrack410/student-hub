@@ -4,6 +4,7 @@ import com.studenthub.common.PageResult;
 import com.studenthub.modules.screen.controller.dto.AdminNoticeResponse;
 import com.studenthub.modules.screen.controller.dto.AppAnnouncementResponse;
 import com.studenthub.modules.screen.controller.dto.NoticeUpsertRequest;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -25,6 +26,9 @@ public interface ScreenAdminService {
     AdminNoticeResponse changeStatus(Long id, String publishStatus);
 
     void delete(Long id);
+
+    /** 上传公告封面（PNG/JPEG/WebP，≤2MB，服务端内容嗅探），返回可公开访问的稳定地址 */
+    String uploadCover(MultipartFile file);
 
     /** 定时发布扫描：把到点的 SCHEDULED 置为 PUBLISHED；返回本轮上线数 */
     int publishDueScheduled();

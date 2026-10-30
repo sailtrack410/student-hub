@@ -30,7 +30,7 @@ public interface AiConversationService {
     void sendMessageStream(AuthenticatedUser user, Long conversationId, SendMessageRequest request,
                            java.util.function.Consumer<String> onDelta,
                            java.util.function.Consumer<AiMessageResponse> onDone,
-                           java.util.function.Consumer<String> onError);
+                           java.util.function.Consumer<com.studenthub.modules.aichat.controller.dto.AiStreamError> onError);
 
     /**
      * 上传的音频文件转写为文本，供发送消息使用；未配置 ASR 模型时抛业务异常。

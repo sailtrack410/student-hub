@@ -3,7 +3,6 @@ package com.studenthub.modules.rag.config;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -11,14 +10,30 @@ import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
-@ConditionalOnBean(name = "ragJdbcTemplate")
 @RequiredArgsConstructor
 public class RagSchemaInitializer {
     @Qualifier("ragJdbcTemplate")
     private final JdbcTemplate jdbc;
+    private final RagProperties properties;
 
     @EventListener(ApplicationReadyEvent.class)
     public void initialize() {
+        initializeIfEnabled();
+    }
+
+    /** RAG 启用时确保向量表/索引存在；管理端启用或切换数据库后也会调用。 */
+    public synchronized void initializeIfEnabled() {
+        if (!properties.isEnabled()) {
+            return;
+        }
+        try {
+            doInitialize();
+        } catch (Exception exception) {
+            log.warn("RAG 向量库初始化失败（RAG 可能暂不可用）: {}", exception.getMessage());
+        }
+    }
+
+    private void doInitialize() {
         jdbc.execute("CREATE TABLE IF NOT EXISTS ai_knowledge_chunk ("
                 + "id BIGSERIAL PRIMARY KEY, "
                 + "knowledge_base_id BIGINT NOT NULL, "
@@ -46,13 +61,13 @@ public class RagSchemaInitializer {
         } catch (Exception e) {
             log.warn("pg_trgm 扩展不可用，词法召回将退化为全表扫描：{}", e.getMessage());
         }
-        // 分块级去重：同一知识库内相同内容只保留一条，减少重复命中挤占排序位
-        try {
-            jdbc.execute("CREATE UNIQUE INDEX IF NOT EXISTS uk_ai_kc_content "
-                    + "ON ai_knowledge_chunk(knowledge_base_id, content_hash)");
-        } catch (Exception e) {
-            log.warn("分块去重索引创建失败（可能存在历史重复分块）：{}", e.getMessage());
-        }
+        // Reindex builds a private generation; readers only see the active table.
+        jdbc.execute("DROP INDEX IF EXISTS uk_ai_kc_content");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_ai_kc_content_hash ON ai_knowledge_chunk(knowledge_base_id, content_hash)");
+        jdbc.execute("CREATE TABLE IF NOT EXISTS ai_knowledge_chunk_stage (LIKE ai_knowledge_chunk INCLUDING DEFAULTS)");
+        jdbc.execute("ALTER TABLE ai_knowledge_chunk_stage ADD COLUMN IF NOT EXISTS index_token VARCHAR(36)");
+        jdbc.execute("CREATE UNIQUE INDEX IF NOT EXISTS uk_ai_kc_stage_job ON ai_knowledge_chunk_stage(index_token, ordinal)");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_ai_kc_stage_doc ON ai_knowledge_chunk_stage(document_id)");
         log.info("RAG 向量库表已就绪（未安装 pgvector 时使用精确余弦 + pg_trgm 词法混合召回）");
     }
 }

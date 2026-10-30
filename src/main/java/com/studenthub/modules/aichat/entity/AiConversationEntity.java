@@ -18,4 +18,12 @@ public class AiConversationEntity extends BaseEntity {
     private Long userId;
     private String title;
     private String status;
+
+    // ---- 上下文压缩状态（V54）----
+    private String summary;
+    private Long summaryUntilMessageId;
+    private java.time.LocalDateTime summaryUpdatedAt;
+    private Integer lastPromptTokens;
+    private Integer lastContextTokens;
+    private Integer compactCount;
 }
