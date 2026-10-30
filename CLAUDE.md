@@ -249,17 +249,23 @@ test: 1、补充工单状态测试
 | 配置变更 | 环境变量清单、开发/测试/生产说明 |
 | 安全策略变更 | 认证、授权、隐私和日志规则 |
 
-建议后续补充以下文档：
+文档索引见 `docs/README.md`，命名与分层规则见 `docs/规范/文档命名与目录规范.md`。新增、移动、归档文档必须同步更新索引；文档按类型分层，禁止在 `docs/` 根目录平铺新建：
 
 ```text
-README.md                         # 项目介绍、启动和部署
-docs/architecture.md              # 架构和模块边界
-docs/api-conventions.md           # API 和错误码
-docs/auth-and-permissions.md      # 认证、角色、权限矩阵
-docs/campus-integrations/         # 各校园系统适配器契约
-docs/ai-policy.md                 # 模型、提示词、工具和数据保留策略
-db/migrations/                    # 数据库迁移脚本
+README.md                          # 项目介绍、启动和部署
+docs/README.md                     # 文档索引与状态表
+docs/规范/文档命名与目录规范.md    # 文档命名、分层、引用与归档规则
+docs/规范/认证与权限规范.md        # 认证、角色、权限矩阵
+docs/规范/服务申请与工单规范.md    # 申请/工单状态机与权限
+docs/规范/API接口参考.md           # 接口参考
+docs/设计/移动端设计规范.md        # 移动端设计系统与状态清单
+docs/计划/                         # 阶段性开发计划（文件名带 YYYY-MM-DD 前缀）
+docs/报告/                         # 评审、审计、交付报告（文件名带 YYYY-MM-DD 前缀）
+docs/归档/                         # 已完成或被取代、不再维护的文档
+db/migrations/                     # 数据库迁移脚本
 ```
+
+仍待补充（按上述规范命名）：`docs/规范/架构与模块边界规范.md`、`docs/规范/API约定与错误码规范.md`、`docs/规范/AI策略规范.md`、`docs/规范/校园系统契约/`。
 
 ## 13. 当前不做的事情
 
