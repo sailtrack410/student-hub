@@ -2,7 +2,7 @@ name: smartcampus_app
 description: "SmartCampus Mobile App (Flutter)"
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.1.7+7
 
 environment:
   sdk: ^3.13.5
@@ -11,9 +11,26 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
-  http: ^1.2.0
+  crypto: ^3.0.3
+  open_filex: ^4.5.0
+  http: ^1.6.0
+  web_socket_channel: ^3.0.0
+  file_picker: ^12.3.0
+  flutter_highlight: ^0.7.0
+  markdown: ^7.3.1
+  geolocator: ^13.0.2
+  image: ^4.3.0
+  zxing2: ^0.2.3
+  record: ^7.1.2
+  flutter_markdown: ^0.7.7+1
   shared_preferences: ^2.2.0
   flutter_animate: ^4.5.0
+  image_picker: ^1.2.4
+  http_parser: ^4.1.2
+  url_launcher: ^6.3.3
+  webview_flutter: ^4.14.1
+  path_provider: ^2.1.6
+  tencent_qq: ^1.0.0
 
 dev_dependencies:
   flutter_test:
@@ -24,3 +41,10 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    - assets/images/home/
+    - assets/images/badges/
+
+# QQ 互联移动应用配置：app_id 会由 tencent_qq 插件写入 AndroidManifest。
+# QQ App Key 只放在服务端 .env，绝不能出现在 Flutter 代码或 pubspec 中。
+tencent_qq:
+  app_id: "1905799882"

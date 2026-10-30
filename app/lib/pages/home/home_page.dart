@@ -1,100 +1,319 @@
-import 'package:flutter/foundation.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+
+import '../../api/ad_slot_api.dart';
 import '../../api/auth_service.dart';
+import '../../api/community_api.dart';
+import '../../api/feature_flags.dart';
+import '../../models/community_models.dart';
+import '../../models/home_dashboard_model.dart';
+import '../../models/service_catalog_models.dart';
 import '../../models/user_session.dart';
+import '../../services/app_update_service.dart';
+import '../../services/badge_catalog_sync.dart';
+import '../../services/community_socket.dart';
+import '../../services/system_notification.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/user_avatar.dart';
+import '../../widgets/app_bottom_navigation.dart';
+import '../../widgets/community_ad_card.dart';
+import 'home_dashboard_controller.dart';
+import 'home_navigation.dart';
+import 'widgets/home_action_card.dart';
+import 'widgets/home_campus_header.dart';
+import 'widgets/home_community_preview.dart';
+import 'widgets/home_course_card.dart';
+import 'widgets/home_service_hub.dart';
+import 'widgets/home_section_status.dart';
+import '../community/post_detail_page.dart';
 import '../login/login_page.dart';
+import '../profile/jw_auth_page.dart';
+import '../schedule/schedule_page.dart';
+import '../service/my_requests_page.dart';
 import '../service/repair_apply_page.dart';
 import '../service/service_hall_page.dart';
+import '../service/service_apply_page.dart';
 
-/// 智慧校园 · 移动端主页 (APP-首页)
-/// 严格依据 Ardot 设计画布节点 APP-首页 (5:1) 375 × 812 真实尺寸与层级还原
-/// 融入微动效、卡片触控弹性反馈与平滑转场
+/// 首页按课程、待办、服务和资讯排列，业务数据来自真实聚合接口。
 class HomePage extends StatefulWidget {
   final UserSession session;
   final AuthService authService;
   final int initialTabIndex;
+  final HomeDashboardGateway? dashboardGateway;
 
   const HomePage({
     super.key,
     required this.session,
     required this.authService,
     this.initialTabIndex = 0,
+    this.dashboardGateway,
   });
 
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
+class _HomePageState extends State<HomePage>
+    with SingleTickerProviderStateMixin {
   late int _currentTabIndex;
+  final List<Widget?> _tabPages = List<Widget?>.filled(5, null);
+
+  /// feature.ai 当前值：关闭时不构建 AIAssistantPage，改为停用说明页（真实降级）
+  bool _aiEnabled = FeatureFlags.aiEnabled;
+
+  late final HomeDashboardController _home;
+  HomeDashboardData? get _dashboardData => _home.dashboard.data;
+  HomeAnnouncementModel? get _announcement =>
+      _dashboardData?.announcement ??
+      (_home.announcements.data?.isNotEmpty == true
+          ? _home.announcements.data!.first
+          : null);
+  List<ServiceItemData> get _serviceItems => _home.orderedServices;
+  bool get _servicesLoading =>
+      _home.services.loading && _home.services.data == null;
+  CommunityPost? _hotPost;
   bool _isLiked = false;
-  int _likeCount = 234;
+  int _likeCount = 0;
+  bool _isLiking = false;
+
+  /// 首页 BANNER 广告位（开关关闭/无数据时为 null，不占位）
+  CommunityAd? _bannerAd;
+  final Set<String> _reportedAdImpressions = <String>{};
+  StreamSubscription<DirectMessage>? _socketSubscription;
+  StreamSubscription<AppNotificationEvent>? _notificationSubscription;
 
   @override
   void initState() {
     super.initState();
-    _currentTabIndex = widget.initialTabIndex;
+    UserSession.currentUserId = widget.session.userId;
+    UserSession.currentUserName = widget.session.displayName;
+    _currentTabIndex = widget.initialTabIndex < 0
+        ? 0
+        : (widget.initialTabIndex > 4 ? 4 : widget.initialTabIndex);
+    FeatureFlags.revision.addListener(_onFeatureFlagsChanged);
+    _home = HomeDashboardController(
+      gateway:
+          widget.dashboardGateway ??
+          ApiHomeDashboardGateway(widget.authService.client),
+      accountId: widget.session.userId,
+      baseUrl: widget.authService.client.baseUrl,
+    )..addListener(_homeChanged);
+    unawaited(_home.loadPins());
+    _fetchHomeData();
+    _startSocket();
+    // 徽章字典懒同步：启动时静默拉一次 state，catalogVersion 变化时才拉 catalog。
+    unawaited(BadgeCatalogSync.sync());
+    // App 版本检查：首帧后触发，不阻塞启动；全局只提示一次，失败静默。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(() async {
+        try {
+          await AppUpdateService.checkAndPrompt(context);
+        } catch (_) {
+          // 版本检查失败不影响首页使用。
+        }
+      }());
+    });
   }
 
-  // 8项常用办事服务数据定义（严格对齐画布 5:45 金刚区）
-  final List<_ServiceItemData> _services = const [
-    _ServiceItemData(
-      title: '我的课表',
-      icon: Icons.calendar_month_rounded,
-      bgColor: Color(0xFFEFF6FF), // 浅蓝
-      iconColor: Color(0xFF2563EB),
-    ),
-    _ServiceItemData(
-      title: '宿舍报修',
-      icon: Icons.handyman_rounded,
-      bgColor: Color(0xFFFEF3C7), // 浅琥珀
-      iconColor: Color(0xFFD97706),
-    ),
-    _ServiceItemData(
-      title: '请假申请',
-      icon: Icons.description_rounded,
-      bgColor: Color(0xFFDCFCE7), // 浅绿
-      iconColor: Color(0xFF16A34A),
-    ),
-    _ServiceItemData(
-      title: '在读证明',
-      icon: Icons.workspace_premium_rounded,
-      bgColor: Color(0xFFF3E8FF), // 浅紫
-      iconColor: Color(0xFF9333EA),
-    ),
-    _ServiceItemData(
-      title: '场地申请',
-      icon: Icons.location_on_rounded,
-      bgColor: Color(0xFFE0F2FE), // 浅天蓝
-      iconColor: Color(0xFF0284C7),
-    ),
-    _ServiceItemData(
-      title: '校园咨询',
-      icon: Icons.chat_bubble_rounded,
-      bgColor: Color(0xFFFFE4E6), // 浅粉
-      iconColor: Color(0xFFE11D48),
-    ),
-    _ServiceItemData(
-      title: '教室报修',
-      icon: Icons.meeting_room_rounded,
-      bgColor: Color(0xFFCCFBF1), // 浅青
-      iconColor: Color(0xFF0D9488),
-    ),
-    _ServiceItemData(
-      title: '更多服务',
-      icon: Icons.grid_view_rounded,
-      bgColor: Color(0xFFF1F5F9), // 浅灰蓝
-      iconColor: Color(0xFF475569),
-    ),
-  ];
+  void _startSocket() {
+    _socketSubscription = CommunitySocket.shared.messages.listen((message) {
+      if (!mounted) return;
+      if (message.senderId == widget.session.userId) return;
+      final current = _dashboardData;
+      if (current == null) {
+        _fetchHomeData();
+        return;
+      }
+      _home.incrementUnread();
+    });
+    _notificationSubscription = CommunitySocket.shared.notificationEvents
+        .listen((event) {
+          if (!mounted) return;
+          final current = _dashboardData;
+          if (current != null) {
+            _home.incrementUnread();
+          }
+          showSystemNotification(event.title, event.content);
+          final messenger = ScaffoldMessenger.maybeOf(context);
+          messenger?.showSnackBar(
+            SnackBar(
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 4),
+              content: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    event.title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                  if (event.content.isNotEmpty)
+                    Text(
+                      event.content,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                ],
+              ),
+              action: SnackBarAction(
+                label: '查看',
+                onPressed: () => setState(() => _currentTabIndex = 3),
+              ),
+            ),
+          );
+        });
+    CommunitySocket.shared.connect();
+  }
+
+  @override
+  void dispose() {
+    FeatureFlags.revision.removeListener(_onFeatureFlagsChanged);
+    _socketSubscription?.cancel();
+    _notificationSubscription?.cancel();
+    _home.removeListener(_homeChanged);
+    _home.dispose();
+    super.dispose();
+  }
+
+  /// 功能开关到达/变化：广告关闭时立刻移除 BANNER，开启时补拉；AI 关闭时切换到停用页。
+  void _onFeatureFlagsChanged() {
+    if (!mounted) return;
+    final aiEnabled = FeatureFlags.aiEnabled;
+    if (aiEnabled != _aiEnabled) {
+      setState(() {
+        _aiEnabled = aiEnabled;
+        _tabPages[2] = null;
+        _ensureTab(2);
+      });
+    }
+    if (!FeatureFlags.communityAdsEnabled) {
+      if (_bannerAd != null) setState(() => _bannerAd = null);
+      return;
+    }
+    unawaited(_loadBannerAd());
+  }
+
+  /// 拉取首页 BANNER 广告位；开关关闭/无数据/失败时保持不展示。
+  Future<void> _loadBannerAd() async {
+    await FeatureFlags.waitReady();
+    if (!mounted || !FeatureFlags.communityAdsEnabled) return;
+    final ads = await AdSlotApi.fetchAds(AdSlot.banner);
+    if (!mounted || !FeatureFlags.communityAdsEnabled) return;
+    final ad = ads.isEmpty ? null : ads.first;
+    if (_bannerAd?.clickId == ad?.clickId) return;
+    setState(() => _bannerAd = ad);
+    if (ad != null) _reportBannerAdImpression(ad);
+  }
+
+  void _reportBannerAdImpression(CommunityAd ad) {
+    if (ad.clickId.isEmpty || !FeatureFlags.communityAdsEnabled) return;
+    if (!_reportedAdImpressions.add(ad.clickId)) return;
+    unawaited(AdSlotApi.reportImpression(ad));
+  }
+
+  Future<void> _openBannerAd(CommunityAd ad) {
+    return AdSlotApi.openLanding(context, ad, onError: _showAdSnack);
+  }
+
+  void _showAdSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  void _homeChanged() {
+    if (!mounted) return;
+    final posts = _home.posts.data;
+    final nextPost = posts?.isNotEmpty == true ? posts!.first : null;
+    setState(() {
+      if (!identical(nextPost, _hotPost)) {
+        _hotPost = nextPost;
+        _isLiked = nextPost?.isLiked ?? false;
+        _likeCount = nextPost?.likeCount ?? 0;
+      }
+    });
+  }
+
+  Future<void> _fetchHomeData() async {
+    unawaited(_loadBannerAd());
+    await _home.refresh();
+  }
+
+  /// 主 Tab（0 首页 / 1 社区 / 2 绵宝AI / 3 消息 / 4 我的）
+  void _switchTab(int index) {
+    if (index == _currentTabIndex) return;
+    setState(() {
+      _currentTabIndex = index;
+      _ensureTab(index);
+    });
+  }
+
+  /// 懒加载并缓存 Tab 页面，切回时保留滚动位置与状态
+  void _ensureTab(int index) {
+    if (index <= 0 || index >= _tabPages.length || _tabPages[index] != null) {
+      return;
+    }
+    _tabPages[index] = HomeNavigation.tab(
+      index,
+      aiEnabled: _aiEnabled,
+      session: widget.session,
+      authService: widget.authService,
+      switchTab: _switchTab,
+      onUnreadChanged: _fetchHomeData,
+    );
+  }
 
   void _handleServiceTap(String title) {
+    if (title == '账号设置' || title == '个人中心' || title == '退出登录') {
+      _showMyProfileSheet();
+      return;
+    }
+    if (title == '进行中工单' || title == '我的申请') {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const MyRequestsPage(initialFilterIndex: 1),
+        ),
+      );
+      return;
+    }
+    if (title == '全局搜索') {
+      _showSearchModal();
+      return;
+    }
+    if (title == '校园公告' || title == '图书馆公告详情') {
+      final ann = _announcement ?? _dashboardData?.announcement;
+      if (ann == null) {
+        // 没有真实公告时不伪造内容
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('暂无公告'),
+            duration: const Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+        return;
+      }
+      _showAnnouncementModal(ann);
+      return;
+    }
     if (title == '教室报修') {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => const RepairApplyPage(title: '教室与公共区域报修'),
+          builder: (_) =>
+              const RepairApplyPage(title: '教室与公共区域报修', itemId: '1002'),
         ),
       );
       return;
@@ -102,13 +321,92 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     if (title == '宿舍报修') {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => const RepairApplyPage(title: '宿舍设施故障报修'),
+          builder: (_) => const RepairApplyPage(title: '宿舍报修', itemId: '1001'),
         ),
       );
       return;
     }
+    if (title == '我的课表' || title == '完整课表') {
+      Navigator.of(context)
+          .push(MaterialPageRoute(builder: (_) => const SchedulePage()));
+      return;
+    }
+    if (title == '教务学籍认证') {
+      Navigator.of(context)
+          .push(MaterialPageRoute(builder: (_) => const JwAuthPage()))
+          .then((_) => _fetchHomeData());
+      return;
+    }
+    if (title == '消息通知') {
+      // 消息为一级 Tab，不再 push 二级页
+      _switchTab(3);
+      return;
+    }
+    if (title == '在读证明') {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) =>
+              const ServiceApplyPage(itemId: '3001', itemName: '在读证明申请'),
+        ),
+      );
+      return;
+    }
+    if (title == '请假申请') {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) =>
+              const ServiceApplyPage(itemId: '2001', itemName: '请假申请'),
+        ),
+      );
+      return;
+    }
+    if (title == '场地申请') {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) =>
+              const ServiceApplyPage(itemId: '2002', itemName: '活动场地申请'),
+        ),
+      );
+      return;
+    }
+    if (title == '校园咨询') {
+      _switchTab(2);
+      return;
+    }
     if (title == '服务大厅' || title == '更多服务') {
-      setState(() => _currentTabIndex = 1);
+      // 服务大厅为二级入口：带返回、无底栏
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const ServiceHallPage(showBack: true),
+        ),
+      );
+      return;
+    }
+    if (title == '社区广场') {
+      _switchTab(1);
+      return;
+    }
+    if (title == '讨论详情') {
+      final hotPost = _hotPost;
+      if (hotPost == null) {
+        // 没有真实热帖时进入社区广场，不伪造帖子详情
+        _switchTab(1);
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('暂无热门讨论，已为你打开社区广场'),
+            duration: const Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+        return;
+      }
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => PostDetailPage(post: hotPost)));
       return;
     }
 
@@ -123,852 +421,56 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     );
   }
 
-  void _handleLikeToggle() {
+  /// 真实点赞微互动联动后端
+  Future<void> _handleLikeToggle() async {
+    final post = _hotPost;
+    if (_isLiking || post == null) return;
+    _isLiking = true;
+    final beforeLiked = _isLiked;
+    final beforeCount = _likeCount;
     setState(() {
-      _isLiked = !_isLiked;
-      _likeCount += _isLiked ? 1 : -1;
+      _isLiked = !beforeLiked;
+      _likeCount = (beforeCount + (_isLiked ? 1 : -1)).clamp(0, 1 << 31);
     });
+    CommunityPost? updated;
+    try {
+      updated = await CommunityApi.togglePostLikeResult(postId: post.id);
+    } catch (_) {}
+    if (mounted && _hotPost?.id == post.id) {
+      setState(() {
+        _isLiked = updated?.isLiked ?? beforeLiked;
+        _likeCount = updated?.likeCount ?? beforeCount;
+      });
+      if (updated == null) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('点赞保存失败，请重试')));
+      }
+    }
+    _isLiking = false;
   }
 
   Future<void> _handleLogout() async {
     await widget.authService.logout();
     if (!mounted) return;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        pageBuilder: (_, __, ___) => LoginPage(authService: widget.authService),
-        transitionsBuilder: (_, animation, __, child) =>
-            FadeTransition(opacity: animation, child: child),
+        transitionDuration: reduceMotion
+            ? Duration.zero
+            : const Duration(milliseconds: 300),
+        reverseTransitionDuration: reduceMotion
+            ? Duration.zero
+            : const Duration(milliseconds: 300),
+        pageBuilder: (context, anim, secAnim) =>
+            LoginPage(authService: widget.authService),
+        transitionsBuilder: (context, animation, secAnim, child) => reduceMotion
+            ? child
+            : FadeTransition(opacity: animation, child: child),
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    final isDesktop = size.width > 600;
-
-    return Scaffold(
-      backgroundColor: isDesktop ? const Color(0xFFF1F5F9) : const Color(0xFFF7FAF9),
-      body: Center(
-        child: Container(
-          width: isDesktop ? 375 : double.infinity,
-          height: isDesktop ? 812 : double.infinity,
-          clipBehavior: isDesktop ? Clip.antiAlias : Clip.none,
-          decoration: BoxDecoration(
-            color: const Color(0xFFF7FAF9),
-            borderRadius: isDesktop ? BorderRadius.circular(24) : BorderRadius.zero,
-            border: isDesktop ? Border.all(color: const Color(0xFFE2E8F0), width: 1) : null,
-          ),
-          child: _currentTabIndex == 1
-              ? ServiceHallPage(
-                  currentTabIndex: _currentTabIndex,
-                  onTabChanged: (index) {
-                    if (index == 4) {
-                      _showMyProfileSheet();
-                      return;
-                    }
-                    setState(() => _currentTabIndex = index);
-                  },
-                )
-              : Stack(
-                  children: [
-              // 1. 顶部双色氛围光晕（5:2 节点：375 × 240，线性渐变）
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                height: 240,
-                child: Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Color(0x2E2563EB), // 宝蓝 18%
-                        Color(0x1414B8A6), // 青绿 8%
-                        Color(0x00F7FAF9), // 渐隐完全透明
-                      ],
-                      stops: [0.0, 0.6, 1.0],
-                    ),
-                  ),
-                ),
-              ),
-
-              // 2. 主页面可滚动内容区（保证多端弹性触控与平滑滚动体验）
-              Positioned.fill(
-                bottom: 74, // 为底栏留出位置
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.only(bottom: 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 50),
-                      // 头部问候行与搜索通知动作按钮
-                      _buildHeaderSection(),
-
-                      const SizedBox(height: 14),
-                      // 校园广播条（5:25 节点）
-                      _buildBroadcastBar(),
-
-                      const SizedBox(height: 12),
-                      // 课表日程胶囊（5:30 节点）
-                      _buildScheduleCapsule(),
-
-                      const SizedBox(height: 16),
-                      // 常用办事服务标题行（5:42 节点）
-                      _buildSectionHeader(
-                        title: '常用办事服务',
-                        actionText: '服务大厅 (7项) ›',
-                        onAction: () => _handleServiceTap('服务大厅'),
-                      ),
-
-                      const SizedBox(height: 8),
-                      // 服务金刚区 8 宫格（5:45 节点）
-                      _buildServiceGrid(),
-
-                      const SizedBox(height: 16),
-                      // 校园新鲜事标题行（5:102 节点）
-                      _buildSectionHeader(
-                        title: '校园新鲜事 · 热门动态',
-                        actionText: '进入社区广场 ›',
-                        actionColor: AppColors.brand,
-                        onAction: () => _handleServiceTap('社区广场'),
-                      ),
-
-                      const SizedBox(height: 8),
-                      // 热帖精选卡（5:105 节点）
-                      _buildTrendingCard(),
-
-                      const SizedBox(height: 14),
-                      // 待办引导卡（5:121 节点）
-                      _buildPendingActionCard(),
-                    ],
-                  ),
-                ),
-              ),
-
-              // 3. 悬浮底栏 TabBar（5:131 节点：375 × 84，液态毛玻璃与微动效）
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                height: 74,
-                child: _buildBottomTabBar(),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// 头部问候与功能按钮（对齐 5:15, 5:16, 5:17, 5:21）
-  Widget _buildHeaderSection() {
-    final name = widget.session.displayName.isNotEmpty
-        ? widget.session.displayName
-        : '李同学';
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // 左侧文本列
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '早安，$name',
-                style: const TextStyle(
-                  fontFamily: 'Noto Sans SC',
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
-                  height: 1.2,
-                  letterSpacing: -0.2,
-                ),
-              ),
-              const SizedBox(height: 3),
-              const Text(
-                '绵阳城市学院 · 周四 第8周',
-                style: TextStyle(
-                  fontFamily: 'Noto Sans SC',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w400,
-                  color: Color(0xFF64748B),
-                  height: 1.2,
-                ),
-              ),
-            ],
-          ).animate().fadeIn(duration: 350.ms).slideY(begin: -0.08, end: 0),
-
-          // 右侧搜索与通知按钮
-          Row(
-            children: [
-              _buildCircularActionBtn(
-                icon: Icons.search_rounded,
-                tooltip: '搜索',
-                onTap: () => _handleServiceTap('全局搜索'),
-              ),
-              const SizedBox(width: 8),
-              _buildCircularActionBtn(
-                icon: Icons.notifications_none_rounded,
-                tooltip: '通知中心',
-                hasBadge: true,
-                onTap: () => _handleServiceTap('消息通知'),
-              ),
-            ],
-          ).animate().fadeIn(duration: 350.ms, delay: 50.ms).scale(begin: const Offset(0.9, 0.9), end: const Offset(1, 1)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCircularActionBtn({
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback onTap,
-    bool hasBadge = false,
-  }) {
-    return _AnimatedPressButton(
-      onTap: onTap,
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.circle,
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x0F0D1B33),
-              offset: Offset(0, 2),
-              blurRadius: 8,
-            ),
-          ],
-        ),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Icon(icon, size: 18, color: const Color(0xFF64748B)),
-            if (hasBadge)
-              Positioned(
-                top: 7,
-                right: 7,
-                child: Container(
-                  width: 6.5,
-                  height: 6.5,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFEF4444),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// 校园广播条（5:25 节点：343 × 34，圆角 17，#F0F6FF）
-  Widget _buildBroadcastBar() {
-    return Center(
-      child: _AnimatedPressButton(
-        onTap: () => _handleServiceTap('图书馆公告详情'),
-        child: Container(
-          width: 343,
-          height: 34,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF0F5FF),
-            borderRadius: BorderRadius.circular(17),
-          ),
-          child: Row(
-            children: [
-              // 喇叭图标（微动效：轻微缩放呼吸）
-              const Icon(
-                Icons.campaign_rounded,
-                size: 16,
-                color: AppColors.brand,
-              )
-                  .animate(onPlay: (c) => c.repeat(reverse: true))
-                  .scale(begin: const Offset(0.92, 0.92), end: const Offset(1.08, 1.08), duration: 1000.ms),
-              const SizedBox(width: 8),
-              const Expanded(
-                child: Text(
-                  '【通知】本周五图书馆闭馆检修，请提前归还图书',
-                  style: TextStyle(
-                    fontFamily: 'Noto Sans SC',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w400,
-                    color: Color(0xFF334155),
-                    height: 1.0,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ).animate().fadeIn(duration: 400.ms, delay: 100.ms).slideY(begin: 0.08, end: 0);
-  }
-
-  /// 课表日程胶囊（5:30 节点：343 × 66，圆角 18，白色浮动）
-  Widget _buildScheduleCapsule() {
-    return Center(
-      child: _AnimatedPressButton(
-        onTap: () => _handleServiceTap('完整课表'),
-        child: Container(
-          width: 343,
-          height: 66,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x0F0D1B33),
-                offset: Offset(0, 4),
-                blurRadius: 12,
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              // 左侧日历图标容器
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.calendar_today_rounded,
-                  size: 20,
-                  color: AppColors.brand,
-                ),
-              ),
-              const SizedBox(width: 12),
-
-              // 中间课程信息
-              const Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '下一节 · 大学英语 (四)',
-                      style: TextStyle(
-                        fontFamily: 'Noto Sans SC',
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF0F172A),
-                        height: 1.2,
-                      ),
-                    ),
-                    SizedBox(height: 3),
-                    Text(
-                      '08:00-09:35 · B202 阶梯教室',
-                      style: TextStyle(
-                        fontFamily: 'Noto Sans SC',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w400,
-                        color: Color(0xFF64748B),
-                        height: 1.2,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // 右侧跳转
-              const Text(
-                '全部课表 ›',
-                style: TextStyle(
-                  fontFamily: 'Noto Sans SC',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.brand,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ).animate().fadeIn(duration: 450.ms, delay: 150.ms).slideY(begin: 0.08, end: 0);
-  }
-
-  /// 通用板块标题行（5:42, 5:102 节点：343 × 20）
-  Widget _buildSectionHeader({
-    required String title,
-    required String actionText,
-    Color? actionColor,
-    required VoidCallback onAction,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontFamily: 'Noto Sans SC',
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF0F172A),
-            ),
-          ),
-          GestureDetector(
-            onTap: onAction,
-            behavior: HitTestBehavior.opaque,
-            child: Text(
-              actionText,
-              style: TextStyle(
-                fontFamily: 'Noto Sans SC',
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: actionColor ?? const Color(0xFF64748B),
-              ),
-            ),
-          ),
-        ],
-      ),
-    ).animate().fadeIn(duration: 350.ms, delay: 200.ms);
-  }
-
-  /// 服务金刚区 8 宫格（5:45 节点：343 × 132，2行4列）
-  Widget _buildServiceGrid() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: List.generate(4, (i) => _buildServiceTile(_services[i], i)),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: List.generate(4, (i) => _buildServiceTile(_services[i + 4], i + 4)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildServiceTile(_ServiceItemData item, int index) {
-    return _AnimatedPressButton(
-      onTap: () => _handleServiceTap(item.title),
-      child: SizedBox(
-        width: 76,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: item.bgColor,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(
-                item.icon,
-                size: 22,
-                color: item.iconColor,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              item.title,
-              style: const TextStyle(
-                fontFamily: 'Noto Sans SC',
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF334155),
-                height: 1.1,
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 1,
-            ),
-          ],
-        ),
-      ),
-    )
-        .animate()
-        .fadeIn(duration: 350.ms, delay: (200 + index * 30).ms)
-        .slideY(begin: 0.12, end: 0, curve: Curves.easeOutBack);
-  }
-
-  /// 热帖精选卡（5:105 节点：343 × 160，圆角 18，白色浮动）
-  Widget _buildTrendingCard() {
-    return Center(
-      child: _AnimatedPressButton(
-        onTap: () => _handleServiceTap('讨论详情'),
-        child: Container(
-          width: 343,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x0F0D1B33),
-                offset: Offset(0, 4),
-                blurRadius: 12,
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 作者信息行
-              Row(
-                children: [
-                  // 头像圆形
-                  Container(
-                    width: 24,
-                    height: 24,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFFFE4E6),
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: const Text(
-                      '李',
-                      style: TextStyle(
-                        fontFamily: 'Noto Sans SC',
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFFE11D48),
-                        height: 1.0,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Text(
-                    '李同学 · 计算机学院',
-                    style: TextStyle(
-                      fontFamily: 'Noto Sans SC',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF334155),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  // Lv.4 徽章
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEFF6FF),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Text(
-                      'Lv.4',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.brand,
-                        height: 1.0,
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                  // 热门讨论标签
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEF3C7),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Text(
-                      '热门讨论',
-                      style: TextStyle(
-                        fontFamily: 'Noto Sans SC',
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFFD97706),
-                        height: 1.0,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 8),
-              // 帖子标题
-              const Text(
-                '图书馆占座现象，大家怎么看？',
-                style: TextStyle(
-                  fontFamily: 'Noto Sans SC',
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
-                  height: 1.25,
-                ),
-              ),
-
-              const SizedBox(height: 5),
-              // 摘要文本
-              const Text(
-                '每天早上去自习室，很多位置放着书却一上午没人来，期末自习越来越紧张了，大家觉得应该怎么规范比较好？',
-                style: TextStyle(
-                  fontFamily: 'Noto Sans SC',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w400,
-                  color: Color(0xFF64748B),
-                  height: 1.4,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-
-              const SizedBox(height: 10),
-              // 底部话题与互动数据
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF3E8FF),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Text(
-                      '# 校园生活',
-                      style: TextStyle(
-                        fontFamily: 'Noto Sans SC',
-                        fontSize: 10,
-                        fontWeight: FontWeight.normal,
-                        color: Color(0xFF7E22CE),
-                        height: 1.0,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  // 点赞微互动
-                  Flexible(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerRight,
-                      child: GestureDetector(
-                        onTap: _handleLikeToggle,
-                        behavior: HitTestBehavior.opaque,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              '浏览 1.2k · 评论 56 · ',
-                              style: const TextStyle(
-                                fontFamily: 'Noto Sans SC',
-                                fontSize: 10,
-                                color: Color(0xFF94A3B8),
-                              ),
-                            ),
-                            AnimatedScale(
-                              scale: _isLiked ? 1.2 : 1.0,
-                              duration: const Duration(milliseconds: 150),
-                              curve: Curves.easeOutBack,
-                              child: Icon(
-                                _isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                                size: 12,
-                                color: _isLiked ? const Color(0xFFEF4444) : const Color(0xFF94A3B8),
-                              ),
-                            ),
-                            const SizedBox(width: 2),
-                            Text(
-                              '赞 $_likeCount',
-                              style: TextStyle(
-                                fontFamily: 'Noto Sans SC',
-                                fontSize: 10,
-                                color: _isLiked ? const Color(0xFFEF4444) : const Color(0xFF94A3B8),
-                                fontWeight: _isLiked ? FontWeight.bold : FontWeight.normal,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    ).animate().fadeIn(duration: 450.ms, delay: 350.ms).slideY(begin: 0.08, end: 0);
-  }
-
-  /// 待办引导卡（5:121 节点：343 × 56，圆角 16，#F1F5FD）
-  Widget _buildPendingActionCard() {
-    return Center(
-      child: _AnimatedPressButton(
-        onTap: () => _handleServiceTap('教务学籍认证'),
-        child: Container(
-          width: 343,
-          height: 56,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF1F5FD),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            children: [
-              // 星光图标底
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8F0FC),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.auto_awesome_rounded,
-                  size: 16,
-                  color: AppColors.brand,
-                ),
-              ),
-              const SizedBox(width: 10),
-
-              // 文本列
-              const Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '教务待办 · 待认证',
-                      style: TextStyle(
-                        fontFamily: 'Noto Sans SC',
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF0F172A),
-                        height: 1.2,
-                      ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      '完成认证，解锁成绩与全学期课表',
-                      style: TextStyle(
-                        fontFamily: 'Noto Sans SC',
-                        fontSize: 10,
-                        fontWeight: FontWeight.w400,
-                        color: Color(0xFF64748B),
-                        height: 1.2,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // 去完成按钮（微光扫光微动效）
-              Container(
-                width: 62,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: AppColors.brand,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                alignment: Alignment.center,
-                child: const Text(
-                  '去完成',
-                  style: TextStyle(
-                    fontFamily: 'Noto Sans SC',
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    height: 1.0,
-                  ),
-                ),
-              )
-                  .animate(onPlay: (c) => c.repeat(period: 3.seconds))
-                  .shimmer(duration: 1200.ms, color: Colors.white.withValues(alpha: 0.35)),
-            ],
-          ),
-        ),
-      ),
-    ).animate().fadeIn(duration: 450.ms, delay: 400.ms).slideY(begin: 0.08, end: 0);
-  }
-
-  /// 悬浮底栏 TabBar（5:131 节点：375 × 74，半透明高斯模糊）
-  Widget _buildBottomTabBar() {
-    final tabs = const [
-      _TabItemData('首页', Icons.home_rounded, Icons.home_outlined),
-      _TabItemData('服务', Icons.grid_view_rounded, Icons.grid_view_outlined),
-      _TabItemData('AI助手', Icons.auto_awesome_rounded, Icons.auto_awesome_outlined),
-      _TabItemData('社区', Icons.forum_rounded, Icons.forum_outlined),
-      _TabItemData('我的', Icons.person_rounded, Icons.person_outline_rounded),
-    ];
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.96),
-        border: const Border(
-          top: BorderSide(
-            color: Color(0xFFE2E8F0),
-            width: 0.6,
-          ),
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: List.generate(tabs.length, (index) {
-          final tab = tabs[index];
-          final isActive = _currentTabIndex == index;
-
-          return GestureDetector(
-            onTap: () {
-              if (index == 4) {
-                // 点击「我的」支持退出登录切换测试
-                _showMyProfileSheet();
-                return;
-              }
-              setState(() => _currentTabIndex = index);
-            },
-            behavior: HitTestBehavior.opaque,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOutCubic,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AnimatedScale(
-                    scale: isActive ? 1.08 : 1.0,
-                    duration: const Duration(milliseconds: 180),
-                    child: Icon(
-                      isActive ? tab.activeIcon : tab.inactiveIcon,
-                      size: 22,
-                      color: isActive ? AppColors.brand : const Color(0xFF64748B),
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    tab.label,
-                    style: TextStyle(
-                      fontFamily: 'Noto Sans SC',
-                      fontSize: 10,
-                      fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-                      color: isActive ? AppColors.brand : const Color(0xFF64748B),
-                      height: 1.0,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
-
-  /// 「我的」快速弹层（支持退出登录与账号信息预览）
+  /// 「我的」快捷账号弹层（支持退出登录与账号信息预览）
   void _showMyProfileSheet() {
     showModalBottomSheet(
       context: context,
@@ -985,31 +487,37 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
           children: [
             Row(
               children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFFE4E6),
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: const Text(
-                    '李',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFFE11D48)),
-                  ),
+                UserAvatar(
+                  name: widget.session.displayName.isNotEmpty
+                      ? widget.session.displayName
+                      : '同学',
+                  avatarPath: widget.session.avatarPath,
+                  size: 48,
+                  baseUrl: widget.authService.client.baseUrl,
+                  gradientColors: const [Color(0xFFFB7185), Color(0xFFE11D48)],
+                  fontSize: 20,
                 ),
                 const SizedBox(width: 14),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      widget.session.displayName.isNotEmpty ? widget.session.displayName : '李同学',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                      widget.session.displayName.isNotEmpty
+                          ? widget.session.displayName
+                          : '同学',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '学号: ${widget.session.username} · 绵阳城市学院',
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                      '账号: ${widget.session.username} · 绵阳城市学院',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF64748B),
+                      ),
                     ),
                   ],
                 ),
@@ -1027,7 +535,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                 backgroundColor: const Color(0xFFF1F5F9),
                 foregroundColor: const Color(0xFFE11D48),
                 elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 padding: const EdgeInsets.symmetric(vertical: 12),
               ),
             ),
@@ -1036,6 +546,894 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       ),
     );
   }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final isDesktop = size.width > 600;
+    _ensureTab(_currentTabIndex);
+
+    final tabChildren = <Widget>[
+      _buildHomeTab(),
+      for (int i = 1; i < 5; i++) _tabPages[i] ?? const SizedBox.shrink(),
+    ];
+
+    return Scaffold(
+      backgroundColor: isDesktop
+          ? const Color(0xFFF1F5F9)
+          : AppColors.background,
+      body: Center(
+        child: Container(
+          width: isDesktop ? 375 : double.infinity,
+          height: isDesktop ? 812 : double.infinity,
+          clipBehavior: isDesktop ? Clip.antiAlias : Clip.none,
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            borderRadius: isDesktop
+                ? BorderRadius.circular(24)
+                : BorderRadius.zero,
+            border: isDesktop
+                ? Border.all(color: AppColors.border, width: 1)
+                : null,
+          ),
+          child: Column(
+            children: [
+              Expanded(
+                child: IndexedStack(
+                  index: _currentTabIndex,
+                  children: tabChildren,
+                ),
+              ),
+              _buildBottomTabBar(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHomeTab() {
+    final announcement = _announcement;
+    final fallbackName = widget.session.displayName.isNotEmpty
+        ? widget.session.displayName
+        : '同学';
+    final greeting = _dashboardData?.greeting.isNotEmpty == true
+        ? _dashboardData!.greeting
+        : '你好，$fallbackName';
+    final academic = _dashboardData?.academicInfo?.formattedDate;
+    final hasAnnouncement =
+        announcement != null && announcement.title.isNotEmpty;
+    return RefreshIndicator(
+      color: AppColors.brand,
+      backgroundColor: Colors.white,
+      onRefresh: _fetchHomeData,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        padding: EdgeInsets.zero,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            HomeCampusHeader(
+              greeting: greeting,
+              date: academic?.isNotEmpty == true ? academic! : '发现校园里的每一种可能',
+              unreadCount: _dashboardData?.unreadMessageCount ?? 0,
+              onSearch: () => _handleServiceTap('全局搜索'),
+              onNotifications: () => _handleServiceTap('消息通知'),
+              onAi: () => _switchTab(2),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Transform.translate(
+                offset: const Offset(0, -22),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    HomeSectionStatus(
+                      title: '课程与待办',
+                      loading: _home.dashboard.loading,
+                      failed: _home.dashboard.failed,
+                      hasData: _dashboardData != null,
+                      onRetry: _home.reloadDashboard,
+                    ),
+                    if (_dashboardData != null) _buildScheduleCapsule(),
+                  ],
+                ),
+              ),
+            ),
+            if (_home.announcements.failed && announcement == null)
+              HomeSectionStatus(
+                title: '公告',
+                loading: false,
+                failed: true,
+                hasData: false,
+                onRetry: _home.reloadAnnouncements,
+              )
+            else if (hasAnnouncement)
+              _buildBroadcastBar(),
+            if (_dashboardData?.inProgressRequest != null) ...[
+              const SizedBox(height: 6),
+              _buildPendingActionCard(),
+            ],
+            const SizedBox(height: 3),
+            _buildSectionHeader(
+              title: '校园服务台',
+              actionText: '全部服务',
+              onAction: () => _handleServiceTap('服务大厅'),
+            ),
+            HomeSectionStatus(
+              title: '常用服务',
+              loading: _home.services.loading,
+              failed: _home.services.failed,
+              hasData: _home.services.data != null,
+              onRetry: _home.reloadServices,
+            ),
+            if (!_servicesLoading && _serviceItems.isNotEmpty)
+              HomeServiceHub(
+                services: _serviceItems,
+                isPinned: _home.isPinned,
+                onTogglePin: _toggleServicePin,
+                onOpen: _handleServiceItemTap,
+                onOpenAll: () => _handleServiceTap('服务大厅'),
+              )
+            else
+              _buildServiceGrid(),
+            if (_bannerAd != null) ...[
+              const SizedBox(height: 20),
+              _buildHomeBannerAd(_bannerAd!),
+            ],
+            const SizedBox(height: 1),
+            ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 40),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.asset(
+                        'assets/images/home/home-sky-campus-background.jpg',
+                        width: 34,
+                        height: 28,
+                        fit: BoxFit.cover,
+                        alignment: Alignment.bottomCenter,
+                      ),
+                    ),
+                    const SizedBox(width: 9),
+                    const Expanded(
+                      child: Text(
+                        '此刻，校园里',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => _switchTab(1),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                      ),
+                      child: const Text('去社区看看 ›'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 2),
+            HomeSectionStatus(
+              title: '校园动态',
+              loading: _home.posts.loading,
+              failed: _home.posts.failed,
+              hasData: _home.posts.data != null,
+              onRetry: _home.reloadPosts,
+            ),
+            if (_home.posts.data != null) _buildTrendingCard(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _toggleServicePin(String id) async {
+    final saved = await _home.togglePin(id);
+    if (!mounted) return;
+    _showAdSnack(
+      saved ? (_home.isPinned(id) ? '已固定到常用服务前面' : '已取消固定') : '保存失败，已恢复原顺序',
+    );
+  }
+
+  Widget _buildBroadcastBar() {
+    final announcement = _announcement!;
+    final noticeText = announcement.title.startsWith('【')
+        ? announcement.title
+        : '${announcement.tag} · ${announcement.title}';
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Semantics(
+        button: true,
+        label: '校园公告：$noticeText',
+        child: InkWell(
+          onTap: () => _handleServiceTap('校园公告'),
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 48),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.brandSoft.withValues(alpha: 0.65),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.campaign_outlined,
+                  size: 18,
+                  color: AppColors.brand,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    noticeText,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textBody,
+                      height: 1.5,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: AppColors.textSecondary,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 首页 BANNER 广告卡：复用社区广告卡样式（推广标识 + 品牌 + CTA）。
+  Widget _buildHomeBannerAd(CommunityAd ad) {
+    return Center(
+      child: CommunityAdCard(
+        ad: ad,
+        onTap: () => _openBannerAd(ad),
+        onCtaTap: () => _openBannerAd(ad),
+      ),
+    );
+  }
+
+  Widget _buildScheduleCapsule() => HomeCourseCard(
+    course: _dashboardData?.nextSchedule,
+    onOpen: () => _handleServiceTap('完整课表'),
+  );
+
+  Widget _buildSectionHeader({
+    required String title,
+    required String actionText,
+    Color? actionColor,
+    required VoidCallback onAction,
+  }) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 40),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  height: 1.35,
+                ),
+              ),
+            ),
+            InkWell(
+              onTap: onAction,
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 4,
+                  vertical: 10,
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      actionText,
+                      style: TextStyle(
+                        color: actionColor ?? AppColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 16,
+                      color: actionColor ?? AppColors.textSecondary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 服务金刚区：后端服务目录前 7 项 + 固定「更多服务」；
+  /// 图标/配色仅作为渲染映射，不承载业务数据。
+  Widget _buildServiceGrid() {
+    if (_servicesLoading) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Column(
+          children: [
+            _buildServiceGridRow(
+              List.generate(4, (_) => _buildServiceSkeletonTile()),
+            ),
+            const SizedBox(height: 12),
+            _buildServiceGridRow(
+              List.generate(4, (_) => _buildServiceSkeletonTile()),
+            ),
+          ],
+        ),
+      );
+    }
+    if (_serviceItems.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Column(
+            children: [
+              const Icon(
+                Icons.apps_rounded,
+                size: 30,
+                color: Color(0xFF64748B),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '暂无常用服务',
+                style: TextStyle(
+                  fontFamily: 'Noto Sans SC',
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _home.services.failed ? '服务目录加载失败，请重试' : '当前没有上线的服务',
+                style: TextStyle(
+                  fontFamily: 'Noto Sans SC',
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  TextButton(
+                    onPressed: _home.reloadServices,
+                    child: const Text('重新加载'),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: () => _handleServiceTap('更多服务'),
+                    child: const Text('更多服务 ›'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final tiles = <Widget>[];
+    final display = _serviceItems.take(7).toList();
+    for (var i = 0; i < display.length; i++) {
+      final item = display[i];
+      final visual = _serviceVisual(item);
+      tiles.add(
+        _buildServiceTile(
+          title: HomeDashboardController.shortLabel(item),
+          semanticLabel: item.name,
+          pinned: _home.isPinned(item.itemId),
+          onLongPress: () async {
+            final saved = await _home.togglePin(item.itemId);
+            if (!mounted) return;
+            _showAdSnack(
+              saved
+                  ? (_home.isPinned(item.itemId) ? '已固定到常用服务前面' : '已取消固定')
+                  : '保存失败，已恢复原顺序',
+            );
+          },
+          icon: visual.icon,
+          iconColor: visual.iconColor,
+          index: i,
+          onTap: () => _handleServiceItemTap(item),
+        ),
+      );
+    }
+    tiles.add(
+      _buildServiceTile(
+        title: '更多服务',
+        icon: Icons.grid_view_rounded,
+        iconColor: AppColors.textBody,
+        index: tiles.length,
+        onTap: () => _handleServiceTap('更多服务'),
+      ),
+    );
+    while (tiles.length % 4 != 0) {
+      tiles.add(const SizedBox.shrink());
+    }
+    final rows = <Widget>[];
+    for (var i = 0; i < tiles.length; i += 4) {
+      if (i > 0) rows.add(const SizedBox(height: 10));
+      rows.add(_buildServiceGridRow(tiles.sublist(i, i + 4)));
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(children: rows),
+    );
+  }
+
+  Widget _buildServiceGridRow(List<Widget> children) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < children.length; i++) ...[
+          if (i > 0) const SizedBox(width: 10),
+          Expanded(child: children[i]),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildServiceSkeletonTile() {
+    return SizedBox(
+      width: double.infinity,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE2E8F0),
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: 40,
+            height: 8,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE2E8F0),
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildServiceTile({
+    required String title,
+    required IconData icon,
+    required Color iconColor,
+    required int index,
+    required VoidCallback onTap,
+    VoidCallback? onLongPress,
+    String? semanticLabel,
+    bool pinned = false,
+  }) {
+    return Semantics(
+      button: true,
+      label:
+          '${semanticLabel ?? title}${onLongPress == null ? '' : '，长按可固定或取消固定'}',
+      selected: pinned,
+      onLongPress: onLongPress,
+      child: Tooltip(
+        message: onLongPress == null ? title : '$title\n长按固定或取消固定',
+        child: InkWell(
+          key: ValueKey('home-service-$index'),
+          onTap: onTap,
+          onLongPress: onLongPress,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(minHeight: 88),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.divider),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 40,
+                  height: 32,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Center(child: Icon(icon, size: 26, color: iconColor)),
+                      if (pinned)
+                        Positioned(
+                          right: -2,
+                          top: -4,
+                          child: Icon(
+                            Icons.push_pin_rounded,
+                            size: 13,
+                            color: iconColor,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textBody,
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 服务项点击路由：REPAIR-* 报修、SCHEDULE-VIEW 课表、GUIDE-CONSULT 咨询，
+  /// 其余（AFFAIR / CERTIFICATE / 未知编码）统一进入服务申请页兜底。
+  void _handleServiceItemTap(ServiceItemData item) =>
+      HomeNavigation.openService(context, item, onOpenAi: () => _switchTab(2));
+
+  _ServiceVisual _serviceVisual(ServiceItemData item) {
+    const repair = _ServiceVisual(Icons.handyman_outlined, Color(0xFFB45309));
+    const affairs = _ServiceVisual(
+      Icons.description_outlined,
+      AppColors.accentDeep,
+    );
+    const certificate = _ServiceVisual(
+      Icons.workspace_premium_outlined,
+      Color(0xFF7C3AED),
+    );
+    return switch (item.itemCode) {
+      'SCHEDULE-VIEW' => const _ServiceVisual(
+        Icons.calendar_month_outlined,
+        AppColors.brand,
+      ),
+      'REPAIR-DORM' => repair,
+      'REPAIR-PUBLIC' => const _ServiceVisual(
+        Icons.meeting_room_outlined,
+        AppColors.accentDeep,
+      ),
+      'AFFAIR-LEAVE' => affairs,
+      'AFFAIR-VENUE' => const _ServiceVisual(
+        Icons.location_on_outlined,
+        Color(0xFF0284C7),
+      ),
+      'CERT-ENROLL' => certificate,
+      'GUIDE-CONSULT' => const _ServiceVisual(
+        Icons.chat_bubble_outline_rounded,
+        Color(0xFFBE123C),
+      ),
+      _ => switch (item.categoryCode) {
+        'REPAIR' => repair,
+        'AFFAIR' => affairs,
+        'CERTIFICATE' => certificate,
+        'GUIDE' => const _ServiceVisual(
+          Icons.chat_bubble_outline_rounded,
+          Color(0xFFBE123C),
+        ),
+        'APP' => const _ServiceVisual(
+          Icons.calendar_month_outlined,
+          AppColors.brand,
+        ),
+        _ => const _ServiceVisual(Icons.apps_rounded, AppColors.textBody),
+      },
+    };
+  }
+
+  Widget _buildTrendingCard() {
+    final posts = _home.posts.data ?? const <CommunityPost>[];
+    return HomeCommunityPreview(
+      post: _hotPost,
+      morePosts: posts.skip(1).take(2).toList(),
+      baseUrl: widget.authService.client.baseUrl,
+      liked: _isLiked,
+      likeCount: _likeCount,
+      likePending: _isLiking,
+      onOpen: _hotPost == null
+          ? () => _switchTab(1)
+          : () => _handleServiceTap('讨论详情'),
+      onOpenPost: (post) => Navigator.of(context)
+          .push(MaterialPageRoute(builder: (_) => PostDetailPage(post: post))),
+      onLike: _handleLikeToggle,
+    );
+  }
+
+  Widget _buildPendingActionCard() {
+    final inProgress = _dashboardData?.inProgressRequest;
+    return HomeActionCard(
+      request: inProgress,
+      onOpen: () => _handleServiceTap(inProgress == null ? '教务学籍认证' : '进行中工单'),
+    );
+  }
+
+  /// 全局搜索弹层
+  void _showSearchModal() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(context).size.height * 0.65,
+        padding: const EdgeInsets.all(20),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFCBD5E1),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              '校园全能搜索',
+              style: TextStyle(
+                fontFamily: 'Noto Sans SC',
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Row(
+                children: [
+                  Icon(
+                    Icons.search_rounded,
+                    size: 20,
+                    color: Color(0xFF64748B),
+                  ),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        hintText: '搜索办事服务、课表、通知、帖子...',
+                        hintStyle: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF64748B),
+                        ),
+                        filled: false,
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              '快捷推荐',
+              style: TextStyle(
+                fontFamily: 'Noto Sans SC',
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF64748B),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildSearchTag(ctx, '宿舍报修', () {
+                  Navigator.of(ctx).pop();
+                  _handleServiceTap('宿舍报修');
+                }),
+                _buildSearchTag(ctx, '我的课表', () {
+                  Navigator.of(ctx).pop();
+                  _handleServiceTap('我的课表');
+                }),
+                _buildSearchTag(ctx, '日常请假', () {
+                  Navigator.of(ctx).pop();
+                  _handleServiceTap('请假申请');
+                }),
+                _buildSearchTag(ctx, '在读证明', () {
+                  Navigator.of(ctx).pop();
+                  _handleServiceTap('在读证明');
+                }),
+                _buildSearchTag(ctx, '教室报修', () {
+                  Navigator.of(ctx).pop();
+                  _handleServiceTap('教室报修');
+                }),
+                _buildSearchTag(ctx, '校园AI助手', () {
+                  Navigator.of(ctx).pop();
+                  _switchTab(2);
+                }),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchTag(BuildContext ctx, String label, VoidCallback onTap) {
+    return _AnimatedPressButton(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: AppColors.textBody),
+        ),
+      ),
+    );
+  }
+
+  /// 公告详情底部弹层
+  void _showAnnouncementModal(HomeAnnouncementModel ann) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFCBD5E1),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    ann.tag.isNotEmpty ? ann.tag : '通知',
+                    style: const TextStyle(
+                      fontFamily: 'Noto Sans SC',
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.brand,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  '校园官方通告',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              ann.title,
+              style: const TextStyle(
+                fontFamily: 'Noto Sans SC',
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF0F172A),
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: const Text(
+                '绵阳城市学院校园服务保障团队温馨提示：请广大师生密切关注校园服务动态，如有疑问或需要协助，可随时通过「AI助手」或在线报修/咨询通道联系后勤与教务部门。',
+                style: TextStyle(
+                  fontFamily: 'Noto Sans SC',
+                  fontSize: 12,
+                  color: Color(0xFF475569),
+                  height: 1.5,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.brand,
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(44),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
+              ),
+              child: const Text(
+                '我知道了',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomTabBar() => AppBottomNavigation(
+    currentIndex: _currentTabIndex,
+    onDestinationSelected: _switchTab,
+    unreadCount: _dashboardData?.unreadMessageCount ?? 0,
+  );
 }
 
 /// 动效微交互包装组件：点击轻微下压回弹 (Scale press bounce)
@@ -1043,10 +1441,7 @@ class _AnimatedPressButton extends StatefulWidget {
   final Widget child;
   final VoidCallback onTap;
 
-  const _AnimatedPressButton({
-    required this.child,
-    required this.onTap,
-  });
+  const _AnimatedPressButton({required this.child, required this.onTap});
 
   @override
   State<_AnimatedPressButton> createState() => _AnimatedPressButtonState();
@@ -1066,8 +1461,12 @@ class _AnimatedPressButtonState extends State<_AnimatedPressButton> {
       onTapCancel: () => setState(() => _isPressed = false),
       behavior: HitTestBehavior.opaque,
       child: AnimatedScale(
-        scale: _isPressed ? 0.95 : 1.0,
-        duration: const Duration(milliseconds: 120),
+        scale: MediaQuery.disableAnimationsOf(context)
+            ? 1
+            : (_isPressed ? 0.95 : 1.0),
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 120),
         curve: Curves.easeInOut,
         child: widget.child,
       ),
@@ -1075,24 +1474,9 @@ class _AnimatedPressButtonState extends State<_AnimatedPressButton> {
   }
 }
 
-class _ServiceItemData {
-  final String title;
+class _ServiceVisual {
   final IconData icon;
-  final Color bgColor;
   final Color iconColor;
 
-  const _ServiceItemData({
-    required this.title,
-    required this.icon,
-    required this.bgColor,
-    required this.iconColor,
-  });
-}
-
-class _TabItemData {
-  final String label;
-  final IconData activeIcon;
-  final IconData inactiveIcon;
-
-  const _TabItemData(this.label, this.activeIcon, this.inactiveIcon);
+  const _ServiceVisual(this.icon, this.iconColor);
 }

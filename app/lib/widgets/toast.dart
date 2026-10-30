@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../theme/app_theme.dart';
 
 /// 异常状态提示条（严格对齐画布 APP-登录 4:33 节点）
@@ -6,17 +7,13 @@ import '../theme/app_theme.dart';
 class ErrorToastBanner extends StatelessWidget {
   final String message;
 
-  const ErrorToastBanner({
-    super.key,
-    required this.message,
-  });
+  const ErrorToastBanner({super.key, required this.message});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 327,
-      height: 38,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      constraints: const BoxConstraints(minHeight: 48),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.dangerSoft,
         borderRadius: BorderRadius.circular(10),
@@ -38,7 +35,7 @@ class ErrorToastBanner extends StatelessWidget {
                 '!',
                 style: TextStyle(
                   color: AppColors.danger,
-                  fontSize: 10,
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
                   height: 1.0,
                 ),
@@ -50,13 +47,11 @@ class ErrorToastBanner extends StatelessWidget {
           Flexible(
             child: Text(
               message,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: AppColors.danger,
                 fontSize: 12,
                 fontWeight: FontWeight.w400,
-                height: 1.0,
+                height: 1.5,
               ),
             ),
           ),

@@ -1,9 +1,14 @@
 /// 当前用户登录会话模型
 class UserSession {
+  /// 当前登录用户 ID（用于判断帖子作者本人等场景）
+  static String? currentUserId;
+  static String? currentUserName;
+
   final String token;
   final String userId;
   final String username;
   final String displayName;
+  final String? avatarPath;
   final String identityType;
   final String authorizationStatus;
   final bool isNewUser;
@@ -13,22 +18,52 @@ class UserSession {
     required this.userId,
     required this.username,
     required this.displayName,
+    this.avatarPath,
     required this.identityType,
     required this.authorizationStatus,
     required this.isNewUser,
   });
 
   factory UserSession.fromJson(Map<String, dynamic> json, String token) {
+    final userMap = json['user'] is Map<String, dynamic>
+        ? json['user'] as Map<String, dynamic>
+        : json;
+    final parsedToken = token.isNotEmpty
+        ? token
+        : (json['accessToken']?.toString() ?? json['token']?.toString() ?? '');
     return UserSession(
-      token: token,
-      userId: json['userId']?.toString() ?? '',
-      username: json['username']?.toString() ?? '',
-      displayName: json['displayName']?.toString() ?? '',
-      identityType: json['identityType']?.toString() ?? 'STUDENT',
-      authorizationStatus: json['authorizationStatus']?.toString() ?? 'BASIC',
+      token: parsedToken,
+      userId: userMap['userId']?.toString() ?? '',
+      username: userMap['username']?.toString() ?? '',
+      displayName: userMap['displayName']?.toString() ?? '',
+      avatarPath: userMap['avatarPath']?.toString(),
+      identityType: userMap['identityType']?.toString() ?? 'STUDENT',
+      authorizationStatus:
+          userMap['authorizationStatus']?.toString() ?? 'BASIC',
       isNewUser: json['isNewUser'] == true,
     );
   }
+
+  /// 解析资料与切换当前身份分开，避免过期请求恢复上一个账号。
+  void activate() {
+    currentUserId = userId;
+    currentUserName = displayName;
+  }
+
+  static void clearCurrentUser() {
+    currentUserId = null;
+    currentUserName = null;
+  }
+
+  Map<String, dynamic> toProfileJson() => {
+    'userId': userId,
+    'username': username,
+    'displayName': displayName,
+    'avatarPath': avatarPath,
+    'identityType': identityType,
+    'authorizationStatus': authorizationStatus,
+    'isNewUser': isNewUser,
+  };
 
   Map<String, dynamic> toJson() {
     return {
@@ -36,6 +71,7 @@ class UserSession {
       'userId': userId,
       'username': username,
       'displayName': displayName,
+      'avatarPath': avatarPath,
       'identityType': identityType,
       'authorizationStatus': authorizationStatus,
       'isNewUser': isNewUser,

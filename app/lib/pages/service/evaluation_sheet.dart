@@ -1,30 +1,43 @@
 import 'package:flutter/material.dart';
+
+import '../../api/service_request_api.dart';
 import '../../theme/app_theme.dart';
 
 /// APP-完工验收与评价弹层 (对应画布 5:1144 节点)
 class EvaluationBottomSheet extends StatefulWidget {
-  final String orderNo;
+  /// 申请 ID：评价接口按 requestId 提交。
+  final String requestId;
+
+  /// 关联工单 ID：仅在“未修好退回”时需要。
+  final String? workOrderId;
+  final String? requestNo;
   final String location;
   final VoidCallback? onSubmitted;
 
   const EvaluationBottomSheet({
     super.key,
-    required this.orderNo,
+    required this.requestId,
     required this.location,
+    this.workOrderId,
+    this.requestNo,
     this.onSubmitted,
   });
 
   static Future<bool?> show(
     BuildContext context, {
-    required String orderNo,
+    required String requestId,
     required String location,
+    String? workOrderId,
+    String? requestNo,
   }) {
     return showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => EvaluationBottomSheet(
-        orderNo: orderNo,
+        requestId: requestId,
+        workOrderId: workOrderId,
+        requestNo: requestNo,
         location: location,
       ),
     );
@@ -36,10 +49,9 @@ class EvaluationBottomSheet extends StatefulWidget {
 
 class _EvaluationBottomSheetState extends State<EvaluationBottomSheet> {
   int _rating = 5;
-  final Set<String> _selectedTags = {'响应神速', '技术精湛'};
-  final TextEditingController _feedbackController = TextEditingController(
-    text: '王师傅来得特别快，十来分钟就排查出是电源短路并修好了，投影特别清晰，点赞后勤效率！',
-  );
+  final Set<String> _selectedTags = {};
+  final TextEditingController _feedbackController = TextEditingController();
+  bool _submitting = false;
 
   final List<String> _tags = const ['响应神速', '技术精湛', '态度亲切', '清理现场'];
 
@@ -59,38 +71,73 @@ class _EvaluationBottomSheetState extends State<EvaluationBottomSheet> {
     });
   }
 
-  void _handleSubmit() {
-    Navigator.of(context).pop(true);
+  void _toast(String message, {Color color = const Color(0xFFDC2626)}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Row(
-          children: [
-            Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
-            SizedBox(width: 8),
-            Text('评价已提交，感谢您的反馈！'),
-          ],
-        ),
-        backgroundColor: const Color(0xFF16A34A),
+        content: Text(message),
+        backgroundColor: color,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }
 
-  void _handleReject() {
-    Navigator.of(context).pop(false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Row(
-          children: [
-            Icon(Icons.info_outline_rounded, color: Colors.white, size: 20),
-            SizedBox(width: 8),
-            Text('已退回工单，后勤调度中心将安排师傅重新处理'),
-          ],
-        ),
-        backgroundColor: const Color(0xFFD97706),
+  Future<void> _handleSubmit() async {
+    if (_submitting) return;
+    setState(() => _submitting = true);
+    final ok = await ServiceRequestApi.submitEvaluation(
+      requestId: widget.requestId,
+      rating: _rating,
+      comment: _feedbackController.text.trim(),
+      tags: _selectedTags.toList(),
+    );
+    if (!mounted) return;
+    setState(() => _submitting = false);
+    if (!ok) {
+      _toast('评价提交失败，请稍后重试');
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.of(context).pop(true);
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('评价已提交，感谢您的反馈！'),
+        backgroundColor: Color(0xFF16A34A),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  Future<void> _handleReject() async {
+    if (_submitting) return;
+    final reason = _feedbackController.text.trim();
+    if (reason.isEmpty) {
+      _toast('请先填写退回原因，便于师傅重新处理');
+      return;
+    }
+    final workOrderId = widget.workOrderId;
+    if (workOrderId == null || workOrderId.isEmpty) {
+      _toast('当前申请还没有关联工单，暂时不能退回');
+      return;
+    }
+    setState(() => _submitting = true);
+    final ok = await ServiceRequestApi.rejectWorkOrder(
+      workOrderId: workOrderId,
+      reason: reason,
+    );
+    if (!mounted) return;
+    setState(() => _submitting = false);
+    if (!ok) {
+      _toast('退回失败，请稍后重试');
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.of(context).pop(false);
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('已退回工单，后勤调度中心将安排师傅重新处理'),
+        backgroundColor: Color(0xFFD97706),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
@@ -171,7 +218,7 @@ class _EvaluationBottomSheetState extends State<EvaluationBottomSheet> {
                     '修好照片',
                     style: TextStyle(
                       fontFamily: 'Noto Sans SC',
-                      fontSize: 10,
+                      fontSize: 12,
                       color: Color(0xFF64748B),
                       fontWeight: FontWeight.w500,
                     ),
@@ -184,10 +231,14 @@ class _EvaluationBottomSheetState extends State<EvaluationBottomSheet> {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.check_rounded, size: 14, color: Color(0xFF16A34A)),
+                          Icon(
+                            Icons.check_rounded,
+                            size: 14,
+                            color: Color(0xFF16A34A),
+                          ),
                           SizedBox(width: 4),
                           Text(
-                            '师傅已拍照上传完工证明',
+                            '请核对工单照片与维修结果后确认',
                             style: TextStyle(
                               fontFamily: 'Noto Sans SC',
                               fontSize: 13,
@@ -202,7 +253,7 @@ class _EvaluationBottomSheetState extends State<EvaluationBottomSheet> {
                         '已更换主板电源保险丝，信号投屏完全正常',
                         style: TextStyle(
                           fontFamily: 'Noto Sans SC',
-                          fontSize: 11,
+                          fontSize: 12,
                           color: Color(0xFF64748B),
                           height: 1.3,
                         ),
@@ -249,7 +300,11 @@ class _EvaluationBottomSheetState extends State<EvaluationBottomSheet> {
               ),
               const SizedBox(width: 8),
               Text(
-                '$_rating.0 ${_rating == 5 ? "非常满意" : _rating >= 4 ? "满意" : "一般"}',
+                '$_rating.0 ${_rating == 5
+                    ? "非常满意"
+                    : _rating >= 4
+                    ? "满意"
+                    : "一般"}',
                 style: const TextStyle(
                   fontFamily: 'Noto Sans SC',
                   fontSize: 13,
@@ -270,13 +325,20 @@ class _EvaluationBottomSheetState extends State<EvaluationBottomSheet> {
               return GestureDetector(
                 onTap: () => _handleTagToggle(tag),
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
-                    color: isSelected ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC),
+                    color: isSelected
+                        ? const Color(0xFFEFF6FF)
+                        : const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: isSelected ? const Color(0xFFBFDBFE) : const Color(0xFFE2E8F0),
+                      color: isSelected
+                          ? const Color(0xFFBFDBFE)
+                          : const Color(0xFFE2E8F0),
                       width: 1,
                     ),
                   ),
@@ -285,8 +347,12 @@ class _EvaluationBottomSheetState extends State<EvaluationBottomSheet> {
                     style: TextStyle(
                       fontFamily: 'Noto Sans SC',
                       fontSize: 12,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                      color: isSelected ? AppColors.brand : const Color(0xFF64748B),
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.w400,
+                      color: isSelected
+                          ? AppColors.brand
+                          : const Color(0xFF64748B),
                     ),
                   ),
                 ),
@@ -314,7 +380,7 @@ class _EvaluationBottomSheetState extends State<EvaluationBottomSheet> {
               ),
               decoration: const InputDecoration.collapsed(
                 hintText: '写下您对本次服务的宝贵评价...',
-                hintStyle: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                hintStyle: TextStyle(color: Color(0xFF64748B), fontSize: 12),
               ),
             ),
           ),
@@ -328,13 +394,21 @@ class _EvaluationBottomSheetState extends State<EvaluationBottomSheet> {
                 child: SizedBox(
                   height: 46,
                   child: OutlinedButton(
-                    onPressed: _handleReject,
+                    onPressed: _submitting ? null : _handleReject,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFF64748B),
                       side: const BorderSide(color: Color(0xFFCBD5E1)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(23)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(23),
+                      ),
                     ),
-                    child: const Text('未修好，退回', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    child: const Text(
+                      '未修好，退回',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -344,14 +418,22 @@ class _EvaluationBottomSheetState extends State<EvaluationBottomSheet> {
                 child: SizedBox(
                   height: 46,
                   child: ElevatedButton(
-                    onPressed: _handleSubmit,
+                    onPressed: _submitting ? null : _handleSubmit,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.brand,
                       foregroundColor: Colors.white,
                       elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(23)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(23),
+                      ),
                     ),
-                    child: const Text('确认完工并提交评价', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                    child: const Text(
+                      '确认完工并提交评价',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
               ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../api/auth_service.dart';
 import '../../models/user_session.dart';
 import '../../theme/app_theme.dart';
@@ -63,7 +64,10 @@ class _HomePlaceholderPageState extends State<HomePlaceholderPage> {
           IconButton(
             tooltip: '退出登录',
             onPressed: _handleLogout,
-            icon: const Icon(Icons.logout_rounded, color: AppColors.textSecondary),
+            icon: const Icon(
+              Icons.logout_rounded,
+              color: AppColors.textSecondary,
+            ),
           ),
         ],
       ),
@@ -116,7 +120,9 @@ class _HomePlaceholderPageState extends State<HomePlaceholderPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              s.displayName.isNotEmpty ? s.displayName : s.username,
+                              s.displayName.isNotEmpty
+                                  ? s.displayName
+                                  : s.username,
                               style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
@@ -138,7 +144,10 @@ class _HomePlaceholderPageState extends State<HomePlaceholderPage> {
                   ),
                   const SizedBox(height: 16),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
@@ -152,7 +161,7 @@ class _HomePlaceholderPageState extends State<HomePlaceholderPage> {
                             '后端连通: ${widget.authService.client.baseUrl}',
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 11,
+                              fontSize: 12,
                               fontFamily: 'monospace',
                             ),
                             overflow: TextOverflow.ellipsis,
@@ -218,7 +227,10 @@ class _HomePlaceholderPageState extends State<HomePlaceholderPage> {
                   ),
                   if (_userInfo != null) ...[
                     const Divider(height: 24),
-                    _buildDetailRow('手机号', _userInfo!['phone']?.toString() ?? '未绑定'),
+                    _buildDetailRow(
+                      '手机号',
+                      _userInfo!['phone']?.toString() ?? '未绑定',
+                    ),
                     _buildDetailRow('当前等级', 'Lv.${_userInfo!['level'] ?? 1}'),
                   ],
                 ],
@@ -237,8 +249,12 @@ class _HomePlaceholderPageState extends State<HomePlaceholderPage> {
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.palette_outlined, color: AppColors.brand, size: 22),
-                  const SizedBox(width: 12),
+                  Icon(
+                    Icons.palette_outlined,
+                    color: AppColors.brand,
+                    size: 22,
+                  ),
+                  SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       '登录链路与会话保持已全通！\n下一步可继续依照画布实现 APP-首页 与服务大厅。',
@@ -266,7 +282,10 @@ class _HomePlaceholderPageState extends State<HomePlaceholderPage> {
         children: [
           Text(
             label,
-            style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary,
+            ),
           ),
           Text(
             value,
