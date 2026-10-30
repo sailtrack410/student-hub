@@ -38,11 +38,16 @@ CommunityPost post(
 class FakeGateway implements CommunityInteractionGateway {
   int likeCalls = 0;
   int followCalls = 0;
+  int bookmarkCalls = 0;
+  int hideCalls = 0;
   final followingReads = <String>[];
   Future<CommunityPost?> Function(String)? onLike;
   Future<CommunityPost?> Function(String)? onFetchPost;
   Future<bool?> Function(String, bool)? onFollow;
   Future<bool?> Function(String)? onFetchFollowing;
+  Future<bool?> Function(String, bool)? onBookmark;
+  Future<bool?> Function(String, bool)? onHide;
+  Map<String, List<String>> behaviorIds = {};
 
   @override
   Future<CommunityPost?> toggleLike(String id) async {
@@ -63,6 +68,22 @@ class FakeGateway implements CommunityInteractionGateway {
     followingReads.add(id);
     return onFetchFollowing == null ? false : await onFetchFollowing!(id);
   }
+
+  @override
+  Future<bool?> setBookmarked(String id, bool value) async {
+    bookmarkCalls++;
+    return onBookmark == null ? value : await onBookmark!(id, value);
+  }
+
+  @override
+  Future<bool?> setHidden(String id, bool value) async {
+    hideCalls++;
+    return onHide == null ? value : await onHide!(id, value);
+  }
+
+  @override
+  Future<List<String>?> fetchBehaviorIds(String kind) async =>
+      behaviorIds[kind];
 }
 
 class FakeApiClient extends ApiClient {
@@ -334,27 +355,36 @@ void main() {
         gateway: FakeGateway(),
       );
       addTearDown(store.dispose);
+      // 真实调用链（home/detail）都会先 initialize；此处对齐真实时序。
+      await store.initialize();
+      // P1 服务端化后 toggle 走服务端：本地 a=true → 目标取消 → 服务端确认 false，
+      // 本地缓存同步为 false。
       expect(await store.toggleBookmark(post('a')), isTrue);
       expect(store.apply(post('a')).isBookmarked, isFalse);
     },
   );
 
-  test('storage failure does not claim a bookmark or hidden state', () async {
-    final local = CommunityPreferencesStore(
-      accountId: 'viewer',
-      loadPreferences: () async => throw Exception('disk unavailable'),
-    );
-    final store = CommunityInteractionStore(
-      accountId: 'viewer',
-      gateway: FakeGateway(),
-      preferences: local,
-    );
-    addTearDown(store.dispose);
-    expect(await store.toggleBookmark(post('a')), isFalse);
-    expect(store.apply(post('a')).isBookmarked, isFalse);
-    expect(await store.setHidden('a', true), isFalse);
-    expect(store.isHidden('a'), isFalse);
-  });
+  test(
+    'server failure keeps the old bookmark state and does not claim success',
+    () async {
+      final local = CommunityPreferencesStore(accountId: 'viewer');
+      await local.setBookmarked('a', true);
+      final gateway = FakeGateway();
+      // 服务端失败（null）：toggle 不得声称成功，本地保持原状态。
+      gateway.onBookmark = (_, _) async => null;
+      gateway.onHide = (_, _) async => null;
+      final store = CommunityInteractionStore(
+        accountId: 'viewer',
+        gateway: gateway,
+        preferences: local,
+      );
+      addTearDown(store.dispose);
+      expect(await store.toggleBookmark(post('a')), isFalse);
+      expect(store.apply(post('a')).isBookmarked, isTrue);
+      expect(await store.setHidden('a', true), isFalse);
+      expect(store.isHidden('a'), isFalse);
+    },
+  );
 
   test(
     'failed platform writes restore the preferences cache for a reopened store',
@@ -559,8 +589,40 @@ void main() {
   );
 
   testWidgets(
-    'detail reports a failed bookmark write and keeps the old state',
+    'detail reports a failed bookmark request and keeps the old state',
     (tester) async {
+      // P1 服务端化后的失败语义：服务端请求失败（非本地写失败）才提示失败；
+      // 本地缓存写失败不改变"服务端已收藏"的事实（换设备由 me/behaviors 恢复）。
+      final gateway = FakeGateway();
+      gateway.onBookmark = (_, _) async => null;
+      final store = CommunityInteractionStore(
+        accountId: 'viewer',
+        gateway: gateway,
+      );
+      addTearDown(store.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PostDetailPage(post: post('a'), interactionStore: store),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('detail-local-bookmark')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('收藏操作失败，请重试'), findsOneWidget);
+      expect(find.byKey(const ValueKey('detail-local-bookmark')), findsOneWidget);
+      final reopened = CommunityPreferencesStore(accountId: 'viewer');
+      await reopened.initialize();
+      expect(reopened.isBookmarked('a'), isFalse);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
+    'detail keeps server-confirmed bookmark even if local cache write fails',
+    (tester) async {
+      // 服务端成功 + 本地平台写失败：服务端权威，UI 提示已收藏；
+      // 本地持久层失败只影响缓存，换设备登录后由服务端合并恢复。
       final platform = FailingPreferencesPlatform();
       SharedPreferencesStorePlatform.instance = platform;
       SharedPreferences.resetStatic();
@@ -577,13 +639,10 @@ void main() {
       await tester.pumpAndSettle();
       platform.failWrites = true;
       await tester.tap(find.byKey(const ValueKey('detail-local-bookmark')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('已收藏'), findsOneWidget);
       await tester.pumpAndSettle();
-      expect(find.text('收藏操作失败，请重试'), findsOneWidget);
-      expect(find.byKey(const ValueKey('detail-local-bookmark')), findsOneWidget);
-      expect(find.text('已存本机'), findsNothing);
-      final reopened = CommunityPreferencesStore(accountId: 'viewer');
-      await reopened.initialize();
-      expect(reopened.isBookmarked('a'), isFalse);
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );

@@ -76,6 +76,9 @@ class _CommunityHomePageState extends State<CommunityHomePage> {
     _feed.addListener(_onFeedChanged);
     _interactions.addListener(_onInteractionsChanged);
     unawaited(_interactions.initialize());
+    // P1 服务端化：登录进入社区后把服务端收藏/隐藏与本机存量合并一次
+    //（服务端为准恢复 + 本机独有补上报）。失败静默，下次进社区自然重试。
+    unawaited(_interactions.mergeServerBehaviors());
     FeatureFlags.revision.addListener(_onFeatureFlagsChanged);
     if (widget.initialPosts != null) {
       _feed.seed(widget.initialPosts!);

@@ -20,4 +20,19 @@ public interface CommunityService {
     CommunityCommentResponse pinComment(AuthenticatedUser user, Long commentId);
     void deleteComment(AuthenticatedUser user, Long commentId);
     CommunityAuthorProfileResponse authorProfile(AuthenticatedUser user, Long authorId);
+
+    /** 收藏/取消收藏帖子（P1 服务端化）：返回收藏后的权威状态 */
+    boolean toggleBookmark(AuthenticatedUser user, Long postId);
+
+    /** 隐藏/取消隐藏帖子（P1 服务端化）：仅影响本人信息流，返回隐藏后的权威状态 */
+    boolean toggleHide(AuthenticatedUser user, Long postId);
+
+    /** 查询用户已收藏/已隐藏的帖子 id（客户端登录后合并本机存量用） */
+    List<Long> listBehaviorPostIds(AuthenticatedUser user, String kind);
+
+    /** 我的收藏分页（P1.5 管理入口）：按收藏时间倒序，已删/下架帖子以失效状态返回 */
+    PageResult<CommunityBookmarkItemResponse> pageBookmarks(AuthenticatedUser user, long pageNum, long pageSize);
+
+    /** 已隐藏列表分页（P1.5 管理入口）：支持取消隐藏（清理操作） */
+    PageResult<CommunityBookmarkItemResponse> pageHidden(AuthenticatedUser user, long pageNum, long pageSize);
 }

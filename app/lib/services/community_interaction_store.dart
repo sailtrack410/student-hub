@@ -10,6 +10,9 @@ abstract interface class CommunityInteractionGateway {
   Future<CommunityPost?> fetchPost(String postId);
   Future<bool?> setFollowing(String authorId, bool following);
   Future<bool?> fetchFollowing(String authorId);
+  Future<bool?> setBookmarked(String postId, bool bookmarked);
+  Future<bool?> setHidden(String postId, bool hidden);
+  Future<List<String>?> fetchBehaviorIds(String kind);
 }
 
 class ApiCommunityInteractionGateway implements CommunityInteractionGateway {
@@ -28,6 +31,18 @@ class ApiCommunityInteractionGateway implements CommunityInteractionGateway {
   @override
   Future<bool?> fetchFollowing(String authorId) =>
       CommunityApi.fetchFollowing(authorId);
+
+  @override
+  Future<bool?> setBookmarked(String postId, bool bookmarked) =>
+      CommunityApi.setBookmarkResult(postId: postId, bookmarked: bookmarked);
+
+  @override
+  Future<bool?> setHidden(String postId, bool hidden) =>
+      CommunityApi.setHiddenResult(postId: postId, hidden: hidden);
+
+  @override
+  Future<List<String>?> fetchBehaviorIds(String kind) =>
+      CommunityApi.fetchBehaviorPostIds(kind: kind);
 }
 
 /// 同一登录会话的页面共用交互状态，最后一个页面离开后释放。
@@ -264,24 +279,80 @@ class CommunityInteractionStore extends ChangeNotifier {
   Future<bool> toggleBookmark(CommunityPost post) async {
     if (!_pendingBookmarks.add(post.id)) return false;
     _changed();
-    final ready = await _preferences.initialize();
-    final saved =
-        ready &&
-        await _preferences.setBookmarked(
-          post.id,
-          !_preferences.isBookmarked(post.id),
-        );
+    final before = _preferences.isBookmarked(post.id);
+    final next = !before;
+    bool? confirmed;
+    try {
+      // 服务端为权威（P1 服务端化）：成功返回 toggle 后的权威状态。
+      confirmed = await _gateway.setBookmarked(post.id, next);
+    } catch (_) {}
+    if (confirmed == null) {
+      // 服务端失败：不得声称成功，也不改本地缓存（保持原状态可重试）。
+      _pendingBookmarks.remove(post.id);
+      _changed();
+      return false;
+    }
+    // 写穿透：服务端权威态落到本地缓存；换设备以 me/behaviors 合并结果为准。
+    await _preferences.setBookmarked(post.id, confirmed);
     _pendingBookmarks.remove(post.id);
     _changed();
-    return saved;
+    return true;
   }
 
   Future<bool> setHidden(String postId, bool hidden) async {
     if (!_pendingHidden.add(postId)) return false;
-    final saved = await _preferences.setHidden(postId, hidden);
+    bool? confirmed;
+    try {
+      confirmed = await _gateway.setHidden(postId, hidden);
+    } catch (_) {}
+    if (confirmed == null) {
+      _pendingHidden.remove(postId);
+      return false;
+    }
+    await _preferences.setHidden(postId, confirmed);
     _pendingHidden.remove(postId);
-    if (saved) _changed();
-    return saved;
+    _changed();
+    return true;
+  }
+
+  /// 登录后合并本机存量（一次性）：服务端有 → 本机补上（换设备恢复）；
+  /// 本机有、服务端没有 → 补上报（旧版本 App 的本机收藏/隐藏迁移上来）。
+  /// 任一侧失败返回 false，调用方可稍后重试；不抛异常。
+  Future<bool> mergeServerBehaviors() async {
+    List<String>? serverBookmarks;
+    List<String>? serverHidden;
+    try {
+      serverBookmarks = await _gateway.fetchBehaviorIds('BOOKMARK');
+      serverHidden = await _gateway.fetchBehaviorIds('HIDE');
+    } catch (_) {
+      return false;
+    }
+    if (serverBookmarks == null || serverHidden == null) return false;
+    await _preferences.initialize();
+
+    // 1) 服务端状态落到本机缓存（服务端为准）。
+    await _preferences.replaceAllBookmarks(serverBookmarks);
+    await _preferences.replaceAllHidden(serverHidden);
+
+    // 2) 本机独有（旧 App 存量）补上报，上报成功后已在服务端，下轮合并自然收敛。
+    final localBookmarks = _preferences.allBookmarked();
+    for (final postId in localBookmarks) {
+      if (serverBookmarks.contains(postId)) continue;
+      try {
+        final confirmed = await _gateway.setBookmarked(postId, true);
+        if (confirmed != true) await _preferences.setBookmarked(postId, false);
+      } catch (_) {}
+    }
+    final localHidden = _preferences.allHidden();
+    for (final postId in localHidden) {
+      if (serverHidden.contains(postId)) continue;
+      try {
+        final confirmed = await _gateway.setHidden(postId, true);
+        if (confirmed != true) await _preferences.setHidden(postId, false);
+      } catch (_) {}
+    }
+    _changed();
+    return true;
   }
 
   @override

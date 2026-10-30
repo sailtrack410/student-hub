@@ -22,6 +22,10 @@ import com.studenthub.modules.community.mapper.CommunityCommentLikeMapper;
 import com.studenthub.modules.community.entity.CommunityTopicEntity;
 import com.studenthub.modules.community.entity.CommunityPostLikeEntity;
 import com.studenthub.modules.community.entity.CommunityCommentLikeEntity;
+import com.studenthub.modules.community.entity.CommunityUserBookmarkEntity;
+import com.studenthub.modules.community.entity.CommunityUserHideEntity;
+import com.studenthub.modules.community.mapper.CommunityUserBookmarkMapper;
+import com.studenthub.modules.community.mapper.CommunityUserHideMapper;
 import com.studenthub.modules.community.service.BannedWordService;
 import com.studenthub.modules.community.service.CommunityModerationService;
 import com.studenthub.modules.community.service.CommunityService;
@@ -70,6 +74,8 @@ public class CommunityServiceImpl implements CommunityService {
     private final SocialService socialService;
     private final BannedWordService bannedWordService;
     private final ObjectMapper objectMapper;
+    private final CommunityUserBookmarkMapper userBookmarkMapper;
+    private final CommunityUserHideMapper userHideMapper;
 
     @Override
     public List<CommunitySectionResponse> sections(Long campusId) {
@@ -98,10 +104,14 @@ public class CommunityServiceImpl implements CommunityService {
         final String search = normalizedKeyword != null && normalizedKeyword.startsWith("#")
                 ? normalizedKeyword.substring(1) : normalizedKeyword;
         boolean hot = "HOT".equalsIgnoreCase(sort);
+        // 隐藏过滤（P1 服务端化）：本人「不感兴趣」的帖子不进信息流；
+        // 分享/作者主页/搜索直达不受影响（那些走 detail/authorProfile 路径）。
+        List<Long> hiddenPostIds = hiddenPostIdsOf(user.userId());
         LambdaQueryWrapper<CommunityPostEntity> wrapper = new LambdaQueryWrapper<CommunityPostEntity>()
                 .eq(CommunityPostEntity::getCampusId, user.campusId())
                 .eq(CommunityPostEntity::getStatus, ENABLED)
                 .eq(sectionId != null, CommunityPostEntity::getSectionId, sectionId)
+                .notIn(!hiddenPostIds.isEmpty(), CommunityPostEntity::getId, hiddenPostIds)
                 .and(search != null && !search.isBlank(), query -> query
                         .like(CommunityPostEntity::getTitle, search)
                         .or().like(CommunityPostEntity::getContent, search)
@@ -410,6 +420,123 @@ public class CommunityServiceImpl implements CommunityService {
         return socialService.isFollowing(viewerId, authorId);
     }
 
+    // ==================== 用户行为服务端化（P1）：收藏与隐藏 ====================
+
+    @Override
+    public boolean toggleBookmark(AuthenticatedUser user, Long postId) {
+        requirePost(user, postId);
+        CommunityUserBookmarkEntity existing = userBookmarkMapper.selectOne(
+                new LambdaQueryWrapper<CommunityUserBookmarkEntity>()
+                        .eq(CommunityUserBookmarkEntity::getUserId, user.userId())
+                        .eq(CommunityUserBookmarkEntity::getPostId, postId));
+        if (existing == null) {
+            CommunityUserBookmarkEntity bookmark = new CommunityUserBookmarkEntity();
+            bookmark.setCampusId(user.campusId());
+            bookmark.setUserId(user.userId());
+            bookmark.setPostId(postId);
+            userBookmarkMapper.insert(bookmark);
+            return true;
+        }
+        userBookmarkMapper.deleteById(existing.getId());
+        return false;
+    }
+
+    @Override
+    public boolean toggleHide(AuthenticatedUser user, Long postId) {
+        requirePost(user, postId);
+        CommunityUserHideEntity existing = userHideMapper.selectOne(
+                new LambdaQueryWrapper<CommunityUserHideEntity>()
+                        .eq(CommunityUserHideEntity::getUserId, user.userId())
+                        .eq(CommunityUserHideEntity::getPostId, postId));
+        if (existing == null) {
+            CommunityUserHideEntity hide = new CommunityUserHideEntity();
+            hide.setCampusId(user.campusId());
+            hide.setUserId(user.userId());
+            hide.setPostId(postId);
+            userHideMapper.insert(hide);
+            return true;
+        }
+        userHideMapper.deleteById(existing.getId());
+        return false;
+    }
+
+    @Override
+    public List<Long> listBehaviorPostIds(AuthenticatedUser user, String kind) {
+        boolean bookmarks = "BOOKMARK".equalsIgnoreCase(kind);
+        if (!bookmarks && !"HIDE".equalsIgnoreCase(kind)) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "kind 仅支持 BOOKMARK / HIDE");
+        }
+        return bookmarks
+                ? userBookmarkMapper.selectList(new LambdaQueryWrapper<CommunityUserBookmarkEntity>()
+                        .eq(CommunityUserBookmarkEntity::getUserId, user.userId()))
+                        .stream().map(CommunityUserBookmarkEntity::getPostId).toList()
+                : userHideMapper.selectList(new LambdaQueryWrapper<CommunityUserHideEntity>()
+                        .eq(CommunityUserHideEntity::getUserId, user.userId()))
+                        .stream().map(CommunityUserHideEntity::getPostId).toList();
+    }
+
+    @Override
+    public PageResult<CommunityBookmarkItemResponse> pageBookmarks(AuthenticatedUser user, long pageNum, long pageSize) {
+        return pageBehaviorItems(user, pageNum, pageSize, true);
+    }
+
+    @Override
+    public PageResult<CommunityBookmarkItemResponse> pageHidden(AuthenticatedUser user, long pageNum, long pageSize) {
+        return pageBehaviorItems(user, pageNum, pageSize, false);
+    }
+
+    /** 收藏/隐藏列表共用分页：按操作时间倒序；帖子已被删/下架时以 removed=true 返回（客户端展示失效态+清理入口） */
+    private PageResult<CommunityBookmarkItemResponse> pageBehaviorItems(
+            AuthenticatedUser user, long pageNum, long pageSize, boolean bookmarks) {
+        long safePage = Math.max(1, pageNum);
+        long safeSize = Math.min(Math.max(1, pageSize), 50);
+        Page<CommunityUserBookmarkEntity> bookmarkPage = null;
+        Page<CommunityUserHideEntity> hidePage = null;
+        if (bookmarks) {
+            bookmarkPage = userBookmarkMapper.selectPage(new Page<>(safePage, safeSize),
+                    new LambdaQueryWrapper<CommunityUserBookmarkEntity>()
+                            .eq(CommunityUserBookmarkEntity::getUserId, user.userId())
+                            .orderByDesc(CommunityUserBookmarkEntity::getCreatedAt));
+        } else {
+            hidePage = userHideMapper.selectPage(new Page<>(safePage, safeSize),
+                    new LambdaQueryWrapper<CommunityUserHideEntity>()
+                            .eq(CommunityUserHideEntity::getUserId, user.userId())
+                            .orderByDesc(CommunityUserHideEntity::getCreatedAt));
+        }
+        List<Long> postIds = bookmarks
+                ? bookmarkPage.getRecords().stream().map(CommunityUserBookmarkEntity::getPostId).toList()
+                : hidePage.getRecords().stream().map(CommunityUserHideEntity::getPostId).toList();
+        List<java.time.LocalDateTime> actedAt = bookmarks
+                ? bookmarkPage.getRecords().stream().map(CommunityUserBookmarkEntity::getCreatedAt).toList()
+                : hidePage.getRecords().stream().map(CommunityUserHideEntity::getCreatedAt).toList();
+        Map<Long, CommunityPostEntity> posts = postIds.isEmpty() ? Map.of()
+                : postMapper.selectBatchIds(postIds).stream()
+                        .collect(Collectors.toMap(CommunityPostEntity::getId,
+                                java.util.function.Function.identity(), (a, b) -> a));
+        List<CommunityBookmarkItemResponse> items = new ArrayList<>();
+        for (int i = 0; i < postIds.size(); i++) {
+            CommunityPostEntity post = posts.get(postIds.get(i));
+            // removed=true：帖子已删（作者删或治理下架），列表不可点入，客户端提供取消收藏/隐藏清理操作
+            boolean removed = post == null || !"ENABLED".equals(post.getStatus());
+            items.add(new CommunityBookmarkItemResponse(
+                    postIds.get(i),
+                    post == null ? "" : post.getTitle(),
+                    removed ? "REMOVED" : "ACTIVE",
+                    removed,
+                    post == null ? null : post.getStatus(),
+                    actedAt.get(i)));
+        }
+        long total = bookmarks ? bookmarkPage.getTotal() : hidePage.getTotal();
+        return PageResult.of(safePage, safeSize, total, items);
+    }
+
+    /** 当前用户已隐藏的帖子 id（pagePosts 过滤用）；隐藏量级小（百级内），全量取出无压力 */
+    private List<Long> hiddenPostIdsOf(Long userId) {
+        return userHideMapper.selectList(new LambdaQueryWrapper<CommunityUserHideEntity>()
+                        .eq(CommunityUserHideEntity::getUserId, userId))
+                .stream().map(CommunityUserHideEntity::getPostId).toList();
+    }
+
     private String firstNonBlank(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
     }
@@ -476,6 +603,11 @@ public class CommunityServiceImpl implements CommunityService {
                         .eq(CommunityPostLikeEntity::getUserId, viewerId)
                         .in(CommunityPostLikeEntity::getPostId, postIds))
                         .stream().map(CommunityPostLikeEntity::getPostId).collect(Collectors.toSet());
+        Set<Long> bookmarkedPostIds = viewerId == null || postIds.isEmpty() ? Set.of()
+                : userBookmarkMapper.selectList(new LambdaQueryWrapper<CommunityUserBookmarkEntity>()
+                        .eq(CommunityUserBookmarkEntity::getUserId, viewerId)
+                        .in(CommunityUserBookmarkEntity::getPostId, postIds))
+                        .stream().map(CommunityUserBookmarkEntity::getPostId).collect(Collectors.toSet());
 
         return posts.stream().map(post -> {
             UserEntity author = authors.get(post.getAuthorId());
@@ -496,7 +628,8 @@ public class CommunityServiceImpl implements CommunityService {
                     parseTopics(post.getTopics()),
                     post.getCommentCount() == null ? 0 : post.getCommentCount(),
                     post.getLikeCount() == null ? 0 : post.getLikeCount(),
-                    likedPostIds.contains(post.getId()), post.getCreatedAt(),
+                    likedPostIds.contains(post.getId()), bookmarkedPostIds.contains(post.getId()),
+                    post.getCreatedAt(),
                     post.getLocationName(), post.getLocationAddress(),
                     post.getLatitude(), post.getLongitude(), post.getPoiId());
         }).toList();

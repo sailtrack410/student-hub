@@ -149,6 +149,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
   Future<void> _handleToggleBookmark() async {
     if (_loadingBookmark || _interactions.bookmarkPending(_post.id)) return;
+    final wasBookmarked = _post.isBookmarked;
     final saved = await _interactions.toggleBookmark(_post);
     if (!mounted) return;
     ScaffoldMessenger.of(context)
@@ -157,7 +158,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
         SnackBar(
           content: Text(
             saved
-                ? (_post.isBookmarked ? '已收藏' : '已取消收藏')
+                ? (wasBookmarked ? '已取消收藏' : '已收藏')
                 : '收藏操作失败，请重试',
           ),
           duration: const Duration(seconds: 1),

@@ -82,6 +82,45 @@ public class AppCommunityController {
         return Result.success(communityService.toggleCommentLike(currentUserProvider.requireCurrentUser(), commentId));
     }
 
+    @PostMapping("/posts/{postId}/bookmark")
+    @Operation(summary = "收藏或取消收藏帖子", description = "服务端权威存储（P1 服务端化），换设备登录后按账号恢复。",
+            operationId = "toggleCommunityPostBookmark")
+    public Result<Boolean> bookmarkPost(@PathVariable Long postId) {
+        return Result.success(communityService.toggleBookmark(currentUserProvider.requireCurrentUser(), postId));
+    }
+
+    @PostMapping("/posts/{postId}/hide")
+    @Operation(summary = "隐藏或取消隐藏帖子（不感兴趣）", description = "仅过滤本人信息流；分享、作者主页、搜索等入口不受影响。服务端权威存储。",
+            operationId = "toggleCommunityPostHide")
+    public Result<Boolean> hidePost(@PathVariable Long postId) {
+        return Result.success(communityService.toggleHide(currentUserProvider.requireCurrentUser(), postId));
+    }
+
+    @GetMapping("/me/behaviors")
+    @Operation(summary = "查询我的收藏/隐藏帖子 id 列表", description = "kind=BOOKMARK|HIDE；客户端登录后合并本机存量用。",
+            operationId = "listMyCommunityBehaviorPostIds")
+    public Result<List<Long>> myBehaviorPostIds(@RequestParam(defaultValue = "BOOKMARK") String kind) {
+        return Result.success(communityService.listBehaviorPostIds(currentUserProvider.requireCurrentUser(), kind));
+    }
+
+    @GetMapping("/me/bookmarks")
+    @Operation(summary = "我的收藏分页", description = "按收藏时间倒序；已删/下架帖子 removed=true，客户端展示失效态并提供清理操作。",
+            operationId = "pageMyCommunityBookmarks")
+    public Result<PageResult<CommunityBookmarkItemResponse>> myBookmarks(
+            @RequestParam(defaultValue = "1") long pageNum,
+            @RequestParam(defaultValue = "10") long pageSize) {
+        return Result.success(communityService.pageBookmarks(currentUserProvider.requireCurrentUser(), pageNum, pageSize));
+    }
+
+    @GetMapping("/me/hidden")
+    @Operation(summary = "已隐藏帖子分页", description = "按隐藏时间倒序；支持取消隐藏（清理操作）。",
+            operationId = "pageMyCommunityHidden")
+    public Result<PageResult<CommunityBookmarkItemResponse>> myHidden(
+            @RequestParam(defaultValue = "1") long pageNum,
+            @RequestParam(defaultValue = "10") long pageSize) {
+        return Result.success(communityService.pageHidden(currentUserProvider.requireCurrentUser(), pageNum, pageSize));
+    }
+
     @PostMapping("/comments/{commentId}/pin")
     @Operation(summary = "置顶或取消置顶作者评论", operationId = "pinCommunityComment")
     public Result<CommunityCommentResponse> pinComment(@PathVariable Long commentId) {

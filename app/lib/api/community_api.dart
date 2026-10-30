@@ -558,6 +558,68 @@ class CommunityApi {
     }
   }
 
+  /// 收藏/取消收藏（P1 服务端化）。null=请求失败；bool 为服务端确认的 toggle 后状态。
+  static Future<bool?> setBookmarkResult({
+    required String postId,
+    required bool bookmarked,
+  }) => _instance.setBookmarkResultRaw(postId: postId, bookmarked: bookmarked);
+
+  Future<bool?> setBookmarkResultRaw({
+    required String postId,
+    required bool bookmarked,
+  }) async {
+    if (postId.isEmpty) return null;
+    try {
+      // 后端 Result<Boolean>：apiClient 成功时已剥壳，直接拿到裸 bool。
+      final res = await apiClient.post(
+        '/api/app/community/posts/$postId/bookmark',
+        body: {},
+      );
+      return res is bool ? res : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 隐藏/取消隐藏（P1 服务端化，仅过滤本人信息流）。null=失败；bool 为 toggle 后状态。
+  static Future<bool?> setHiddenResult({
+    required String postId,
+    required bool hidden,
+  }) => _instance.setHiddenResultRaw(postId: postId, hidden: hidden);
+
+  Future<bool?> setHiddenResultRaw({
+    required String postId,
+    required bool hidden,
+  }) async {
+    if (postId.isEmpty) return null;
+    try {
+      final res = await apiClient.post(
+        '/api/app/community/posts/$postId/hide',
+        body: {},
+      );
+      return res is bool ? res : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 查询我的收藏/隐藏帖子 id 列表（登录后合并本机存量用）。
+  /// 后端 Result<List<Long>>：apiClient 解包后即 List。
+  static Future<List<String>?> fetchBehaviorPostIds({required String kind}) =>
+      _instance.fetchBehaviorPostIdsRaw(kind: kind);
+
+  Future<List<String>?> fetchBehaviorPostIdsRaw({required String kind}) async {
+    try {
+      final res = await apiClient.get(
+        '/api/app/community/me/behaviors?kind=$kind',
+      );
+      if (res is List) return res.map((e) => e.toString()).toList();
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   static Map<String, dynamic>? _responseMap(dynamic response) {
     if (response is! Map<String, dynamic> || response['success'] == false) {
       return null;

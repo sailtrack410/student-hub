@@ -86,4 +86,43 @@ class CommunityPreferencesStore {
       return false;
     }
   }
+
+  // ==================== P1 服务端化：服务端权威合并支持 ====================
+
+  Set<String> allBookmarked() => Set<String>.of(_bookmarks);
+  Set<String> allHidden() => Set<String>.of(_hidden);
+
+  /// 服务端合并后整体替换本地收藏缓存（服务端为准）。
+  Future<bool> replaceAllBookmarks(List<String> postIds) =>
+      _replaceAll(postIds, bookmark: true);
+
+  /// 服务端合并后整体替换本地隐藏缓存（服务端为准）。
+  Future<bool> replaceAllHidden(List<String> postIds) =>
+      _replaceAll(postIds, bookmark: false);
+
+  Future<bool> _replaceAll(List<String> postIds, {required bool bookmark}) {
+    final result = Completer<bool>();
+    _writes = _writes.then((_) async {
+      try {
+        if (!await initialize()) {
+          result.complete(false);
+          return;
+        }
+        final next = postIds.where((id) => id.isNotEmpty).toSet();
+        final key = _key(bookmark ? 'bookmarks' : 'hidden');
+        final saved = await _save(key, next);
+        if (saved) {
+          if (bookmark) {
+            _bookmarks = next;
+          } else {
+            _hidden = next;
+          }
+        }
+        result.complete(saved);
+      } catch (_) {
+        result.complete(false);
+      }
+    });
+    return result.future;
+  }
 }
