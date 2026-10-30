@@ -249,6 +249,45 @@ class _PostDetailPageState extends State<PostDetailPage> {
     likeCount: comment.likeCount + (comment.isLiked ? -1 : 1),
   );
 
+  /// 「不感兴趣」：仅把此帖从当前设备的信息流隐藏（首页/分区列表过滤）。
+  /// 不影响分享、作者主页、搜索等其他入口进入本帖——这是本地隐藏的边界。
+  /// 写入成功才提示，失败如实报错，可撤销。
+  Future<void> _hideFromFeed() async {
+    final saved = await _interactions.setHidden(_post.id, true);
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    if (!saved) {
+      messenger
+        ..removeCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('隐藏设置保存失败，请重试'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      return;
+    }
+    messenger
+      ..removeCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: const Text('已在信息流隐藏此帖（仅本机，不影响分享与主页查看）'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: '撤销',
+            onPressed: () async {
+              final restored = await _interactions.setHidden(_post.id, false);
+              if (!mounted) return;
+              if (!restored) {
+                _showInteractionMessage('撤销失败，请重试');
+              }
+            },
+          ),
+        ),
+      );
+  }
+
   /// 点击评论的"回复"：输入框进入楼中楼模式并聚焦
   void _startReply(CommunityComment comment) {
     setState(() => _replyTo = comment);
@@ -394,20 +433,12 @@ class _PostDetailPageState extends State<PostDetailPage> {
                   color: Color(0xFF334155),
                 ),
                 title: const Text(
-                  '不感兴趣 / 减少类似推荐',
+                  '不感兴趣（在信息流隐藏此帖）',
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                 ),
                 onTap: () {
                   Navigator.of(ctx).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('已为您减少此类内容推荐'),
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  );
+                  _hideFromFeed();
                 },
               ),
               if (isAuthor)
