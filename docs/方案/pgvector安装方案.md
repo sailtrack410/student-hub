@@ -44,10 +44,10 @@ docker exec 1Panel-postgresql-iIW9 sh -c 'cd /tmp/pgvector && make && make insta
 docker exec 1Panel-postgresql-iIW9 sh -c 'ls /usr/local/lib/postgresql/vector.so /usr/local/share/postgresql/extension/vector.control'
 
 # 6) 创建扩展（用现有 RAG 账号）
-psql -h ***REDACTED-HOST*** -p 5435 -U user_GJpKeA -d postgres -c 'CREATE EXTENSION vector;'
+psql -h <RAG_DB_HOST> -p 5435 -U user_GJpKeA -d postgres -c 'CREATE EXTENSION vector;'
 
 # 7) 确认
-psql -h ***REDACTED-HOST*** -p 5435 -U user_GJpKeA -d postgres -c "select extname, extversion from pg_extension where extname='vector';"
+psql -h <RAG_DB_HOST> -p 5435 -U user_GJpKeA -d postgres -c "select extname, extversion from pg_extension where extname='vector';"
 ```
 
 **注意**：`make install` 写入的是容器可写层，**容器重建即丢失**。清理建议放在最后（`apk del build-base git` 与删 `/tmp/pgvector`）以减小镜像层，但清理掉的也仅是可写层。

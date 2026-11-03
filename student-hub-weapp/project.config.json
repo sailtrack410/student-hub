@@ -52,7 +52,7 @@
   },
   "compileType": "miniprogram",
   "libVersion": "3.3.4",
-  "appid": "***REMOVED***",
+  "appid": "",
   "projectname": "student-hub-miniapp",
   "condition": {},
   "simulatorPluginLibVersion": {},

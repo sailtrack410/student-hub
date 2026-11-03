@@ -4,7 +4,7 @@
 
 ## 〇、实测确认的环境约束（2026-09-15，已据此调整方案）
 
-在真实 RAG 库（`***REDACTED-HOST***:5435`，PostgreSQL 18.6 Alpine 容器）实测，并 SSH 查证容器层：
+在真实 RAG 库（`<RAG_DB_HOST>:5435`，PostgreSQL 18.6 Alpine 容器）实测，并 SSH 查证容器层：
 
 | 扩展 | 当前可用性 | 影响 |
 |---|---|---|
