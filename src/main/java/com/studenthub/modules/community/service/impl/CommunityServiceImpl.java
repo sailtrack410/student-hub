@@ -149,7 +149,7 @@ public class CommunityServiceImpl implements CommunityService {
                     CommunityCommentResponse base = byId.get(comment.getId());
                     boolean isPostAuthor = post.getAuthorId() != null && post.getAuthorId().equals(comment.getAuthorId());
                     return new CommunityCommentResponse(base.commentId(), base.parentCommentId(), base.authorId(),
-                            base.authorName(), base.avatarUrl(), base.authorOfficial(), base.authorOfficialTitle(),
+                            base.authorName(), base.authorLevel(), base.avatarUrl(), base.authorOfficial(), base.authorOfficialTitle(),
                             base.content(), base.imageUrls(),
                             base.thumbnailUrls(), base.likeCount(), base.weight(), base.liked(), base.pinned(),
                             isPostAuthor, base.createdAt());
@@ -569,7 +569,7 @@ public class CommunityServiceImpl implements CommunityService {
         CommunityCommentResponse response = assembleComments(List.of(comment), viewerId).get(comment.getId());
         boolean isPostAuthor = postAuthorId != null && postAuthorId.equals(comment.getAuthorId());
         return new CommunityCommentResponse(response.commentId(), response.parentCommentId(), response.authorId(),
-                response.authorName(), response.avatarUrl(), response.authorOfficial(), response.authorOfficialTitle(),
+                response.authorName(), response.authorLevel(), response.avatarUrl(), response.authorOfficial(), response.authorOfficialTitle(),
                 response.content(), response.imageUrls(),
                 response.thumbnailUrls(), response.likeCount(), response.weight(), response.liked(), response.pinned(),
                 isPostAuthor, response.createdAt());
@@ -608,14 +608,18 @@ public class CommunityServiceImpl implements CommunityService {
                         .eq(CommunityUserBookmarkEntity::getUserId, viewerId)
                         .in(CommunityUserBookmarkEntity::getPostId, postIds))
                         .stream().map(CommunityUserBookmarkEntity::getPostId).collect(Collectors.toSet());
+        // 作者真实等级批量算（等级=f(总经验)，与作者主页/成就页同口径；2026-11-05 等级统一）
+        Map<Long, Integer> authorExp = achievementService.totalExpBatch(authorIds);
 
         return posts.stream().map(post -> {
             UserEntity author = authors.get(post.getAuthorId());
             CommunitySectionEntity section = sections.get(post.getSectionId());
+            Integer authorExpValue = authorExp.get(post.getAuthorId());
+            Integer authorLevelValue = authorExpValue == null ? null : com.studenthub.modules.achievement.service.AchievementService.levelOf(authorExpValue);
             return new CommunityPostResponse(post.getId(), post.getSectionId(),
                     section == null ? null : section.getSectionName(), section == null ? null : section.getIcon(),
                     post.getAuthorId(), author == null ? "同学" : author.getDisplayName(), avatarUrl(author),
-                    null,
+                    authorLevelValue,
                     author == null ? null : author.getWornBadgeCode(),
                     author != null && Boolean.TRUE.equals(author.getOfficial()),
                     author == null ? null : author.getOfficialTitle(),
@@ -651,11 +655,15 @@ public class CommunityServiceImpl implements CommunityService {
                         .eq(CommunityCommentLikeEntity::getUserId, viewerId)
                         .in(CommunityCommentLikeEntity::getCommentId, commentIds))
                         .stream().map(CommunityCommentLikeEntity::getCommentId).collect(Collectors.toSet());
+        // 作者真实等级批量算（等级=f(总经验)，与作者主页/成就页同口径）
+        Map<Long, Integer> authorExp = achievementService.totalExpBatch(authorIds);
         Map<Long, CommunityCommentResponse> result = new java.util.LinkedHashMap<>();
         for (CommunityCommentEntity comment : comments) {
             UserEntity author = authors.get(comment.getAuthorId());
+            Integer authorExpValue = authorExp.get(comment.getAuthorId());
+            Integer authorLevelValue = authorExpValue == null ? null : com.studenthub.modules.achievement.service.AchievementService.levelOf(authorExpValue);
             result.put(comment.getId(), new CommunityCommentResponse(comment.getId(), comment.getParentCommentId(),
-                    comment.getAuthorId(), author == null ? "同学" : author.getDisplayName(), avatarUrl(author),
+                    comment.getAuthorId(), author == null ? "同学" : author.getDisplayName(), authorLevelValue, avatarUrl(author),
                     author != null && Boolean.TRUE.equals(author.getOfficial()),
                     author == null ? null : author.getOfficialTitle(),
                     comment.getContent(), signImages(JsonIds.parse(comment.getImageFileIds())),

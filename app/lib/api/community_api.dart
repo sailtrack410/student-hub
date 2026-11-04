@@ -287,14 +287,17 @@ class CommunityApi {
     Map<String, dynamic> m, {
     List<CommunityComment> replies = const [],
   }) {
-    final style = communityLevelStyle('Lv.3');
+    // 后端 assembleComments 下发真实等级（等级=f(总经验)）；缺省留空走「社区成员」兜底
+    final rawLevel = m['authorLevel'];
+    final level = rawLevel == null ? '' : 'Lv.${rawLevel}';
+    final style = communityLevelStyle(level.isEmpty ? 'Lv.1' : level);
     return CommunityComment(
       id:
           m['commentId']?.toString() ??
           'comment_${DateTime.now().millisecondsSinceEpoch}',
       authorName: m['authorName']?.toString() ?? '同学',
       avatarPath: _absoluteUrl(m['avatarUrl']?.toString()),
-      authorLevel: 'Lv.3',
+      authorLevel: level,
       authorOfficial: m['authorOfficial'] == true,
       authorOfficialTitle: m['authorOfficialTitle']?.toString(),
       levelBgColor: style.bgColor,

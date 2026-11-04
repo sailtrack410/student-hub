@@ -140,14 +140,6 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
     return value is num ? value.toInt() : 1;
   }
 
-  String get _levelName {
-    final growth = _user?['growth'];
-    final name = growth is Map<String, dynamic>
-        ? growth['levelName']?.toString()
-        : null;
-    return name ?? '初来乍到';
-  }
-
   String get _authorizationLabel {
     switch (_user?['authorizationStatus']?.toString()) {
       case 'AUTHORIZED':
@@ -669,7 +661,7 @@ class _AccountCenterPageState extends State<AccountCenterPage> {
                         border: Border.all(color: const Color(0xFFBFDBFE)),
                       ),
                       child: Text(
-                        'Lv.$_level $_levelName',
+                        'Lv.$_level',
                         style: const TextStyle(
                           fontFamily: 'Noto Sans SC',
                           fontSize: 12,

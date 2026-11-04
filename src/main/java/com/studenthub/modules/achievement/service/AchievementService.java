@@ -196,6 +196,106 @@ public class AchievementService {
                 + metrics.get("PROFILE_COMPLETE") * 20;
     }
 
+    /**
+     * 批量总经验（2026-11-05 社区列表等级统一）：供帖子/评论批量组装下发真实等级。
+     * 指标口径与 computeMetrics/totalExpOf 完全一致；每个指标一条 IN 查询 + 内存聚合，
+     * 避免逐人 computeMetrics（约 10 SQL/人）在列表场景形成 N+1。
+     */
+    public Map<Long, Integer> totalExpBatch(java.util.Collection<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) return Map.of();
+        List<Long> ids = userIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) return Map.of();
+
+        // 帖子数与获赞和（一条查询）
+        Map<Long, int[]> postStats = new java.util.HashMap<>();
+        for (CommunityPostEntity p : postMapper.selectList(new LambdaQueryWrapper<CommunityPostEntity>()
+                .select(CommunityPostEntity::getAuthorId, CommunityPostEntity::getLikeCount)
+                .in(CommunityPostEntity::getAuthorId, ids)
+                .eq(CommunityPostEntity::getStatus, "ENABLED"))) {
+            int[] stat = postStats.computeIfAbsent(p.getAuthorId(), k -> new int[2]);
+            stat[0]++;
+            stat[1] += p.getLikeCount() == null ? 0 : p.getLikeCount();
+        }
+
+        // 评论数
+        Map<Long, Integer> commentCounts = new java.util.HashMap<>();
+        for (com.studenthub.modules.community.entity.CommunityCommentEntity c : commentMapper.selectList(
+                new LambdaQueryWrapper<com.studenthub.modules.community.entity.CommunityCommentEntity>()
+                        .select(com.studenthub.modules.community.entity.CommunityCommentEntity::getAuthorId)
+                        .in(com.studenthub.modules.community.entity.CommunityCommentEntity::getAuthorId, ids)
+                        .eq(com.studenthub.modules.community.entity.CommunityCommentEntity::getStatus, "ENABLED"))) {
+            commentCounts.merge(c.getAuthorId(), 1, Integer::sum);
+        }
+
+        // 工单发起数与完成数（一条查询）
+        Map<Long, int[]> requestStats = new java.util.HashMap<>();
+        for (ServiceRequestEntity r : requestMapper.selectList(new LambdaQueryWrapper<ServiceRequestEntity>()
+                .select(ServiceRequestEntity::getRequesterId, ServiceRequestEntity::getStatus)
+                .in(ServiceRequestEntity::getRequesterId, ids))) {
+            int[] stat = requestStats.computeIfAbsent(r.getRequesterId(), k -> new int[2]);
+            stat[0]++;
+            if ("COMPLETED".equals(r.getStatus())) stat[1]++;
+        }
+
+        // 评价数
+        Map<Long, Integer> evalCounts = new java.util.HashMap<>();
+        for (ServiceEvaluationEntity e : evaluationMapper.selectList(new LambdaQueryWrapper<ServiceEvaluationEntity>()
+                .select(ServiceEvaluationEntity::getEvaluatorId)
+                .in(ServiceEvaluationEntity::getEvaluatorId, ids))) {
+            evalCounts.merge(e.getEvaluatorId(), 1, Integer::sum);
+        }
+
+        // 后勤完成工单
+        Map<Long, Integer> workerOrders = new java.util.HashMap<>();
+        for (WorkOrderEntity w : workOrderMapper.selectList(new LambdaQueryWrapper<WorkOrderEntity>()
+                .select(WorkOrderEntity::getAssigneeId)
+                .in(WorkOrderEntity::getAssigneeId, ids)
+                .eq(WorkOrderEntity::getStatus, "COMPLETED"))) {
+            workerOrders.merge(w.getAssigneeId(), 1, Integer::sum);
+        }
+
+        // 教务认证
+        java.util.Set<Long> jwAuthed = jwBindingMapper.selectList(new LambdaQueryWrapper<JwBindingEntity>()
+                        .select(JwBindingEntity::getUserId, JwBindingEntity::getAuthStatus)
+                        .in(JwBindingEntity::getUserId, ids)).stream()
+                .filter(b -> "AUTHENTICATED".equals(b.getAuthStatus()))
+                .map(JwBindingEntity::getUserId)
+                .collect(java.util.stream.Collectors.toSet());
+
+        // 课表导入（仅已认证者才可能 >0）
+        java.util.Set<Long> scheduleImported = jwAuthed.isEmpty() ? java.util.Set.of()
+                : scheduleCourseMapper.selectList(new LambdaQueryWrapper<ScheduleCourseEntity>()
+                        .select(ScheduleCourseEntity::getUserId)
+                        .in(ScheduleCourseEntity::getUserId, jwAuthed)).stream()
+                .map(ScheduleCourseEntity::getUserId)
+                .collect(java.util.stream.Collectors.toSet());
+
+        // 资料完整度（头像 + 手机号）
+        java.util.Set<Long> profileComplete = userMapper.selectBatchIds(ids).stream()
+                .filter(u -> u.getAvatarUrl() != null && !u.getAvatarUrl().isBlank()
+                        && u.getPhone() != null && !u.getPhone().isBlank())
+                .map(UserEntity::getId)
+                .collect(java.util.stream.Collectors.toSet());
+
+        Map<Long, Integer> result = new java.util.HashMap<>();
+        for (Long id : ids) {
+            int[] post = postStats.get(id);
+            int[] request = requestStats.get(id);
+            int totalExp = (post == null ? 0 : post[0]) * 5
+                    + commentCounts.getOrDefault(id, 0) * 2
+                    + (post == null ? 0 : post[1])
+                    + (request == null ? 0 : request[0]) * 3
+                    + (request == null ? 0 : request[1]) * 10
+                    + evalCounts.getOrDefault(id, 0) * 5
+                    + workerOrders.getOrDefault(id, 0) * 12
+                    + (jwAuthed.contains(id) ? 20 : 0)
+                    + (scheduleImported.contains(id) ? 5 : 0)
+                    + (profileComplete.contains(id) ? 20 : 0);
+            result.put(id, totalExp);
+        }
+        return result;
+    }
+
     public static int maxLevel() {
         return LEVEL_EXP.length;
     }

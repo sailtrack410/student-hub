@@ -166,11 +166,6 @@ class _ProfilePageState extends State<ProfilePage> {
     return value is num ? value.toInt() : int.tryParse('$value') ?? 1;
   }
 
-  String get _levelName {
-    final value = _achievement?['levelName'] ?? _author?['levelName'];
-    return value == null || '$value'.isEmpty ? '初来乍到' : '$value';
-  }
-
   int get _badgeCount {
     final value = _achievement?['badgeCount'];
     if (value is num) return value.toInt();
@@ -345,7 +340,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                 ),
                               ),
                               Text(
-                                'Lv.$_level  $_levelName',
+                                'Lv.$_level',
                                 style: const TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,

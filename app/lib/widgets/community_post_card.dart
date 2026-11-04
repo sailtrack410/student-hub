@@ -35,7 +35,6 @@ class CommunityPostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final levelStyle = communityLevelStyle(post.authorLevel);
     return GestureDetector(
       onTap: () => onOpen(),
       behavior: HitTestBehavior.opaque,
@@ -96,7 +95,7 @@ class CommunityPostCard extends StatelessWidget {
                             child: Text(
                               post.authorOfficial
                                   ? '官方 · ${post.authorOfficialTitle ?? "官方"}'
-                                  : '${post.authorLevel} ${levelStyle.title}',
+                                  : post.authorLevel,
                               style: TextStyle(
                                 fontFamily: 'Noto Sans SC',
                                 fontSize: 12,

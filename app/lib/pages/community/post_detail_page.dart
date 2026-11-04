@@ -796,7 +796,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                                       child: Text(
                                         _post.authorOfficial
                                             ? '官方 · ${_post.authorOfficialTitle ?? "官方"}'
-                                            : '${_post.authorLevel} ${communityLevelStyle(_post.authorLevel).title}',
+                                            : _post.authorLevel,
                                         style: TextStyle(
                                           fontFamily: 'Noto Sans SC',
                                           fontSize: 12,
