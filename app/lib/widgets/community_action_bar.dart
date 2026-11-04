@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
-/// 社区动态多功能底部互动组件 (转发/评论/收藏/点赞)
-/// 严格依据移动端主流社交互动规范设计，支持高频点击动效、防抖微动画与状态响应
+import '../theme/app_theme.dart';
+
+/// 社区动态多功能底部互动组件（点赞/评论/收藏/转发）
+/// V4 画布 30:147 口径：条高 20，图标 20 + 文字 12 紧排，四组横跨全宽均布；
+/// 非激活色 #94A3B8，点赞激活品红、收藏激活品牌蓝；分享为纯图标（30:241）。
 class CommunityPostActionBar extends StatelessWidget {
   final int shareCount;
   final int commentCount;
@@ -32,13 +35,13 @@ class CommunityPostActionBar extends StatelessWidget {
     this.showBookmark = true,
     this.likePending = false,
     this.bookmarkPending = false,
-    this.iconSize = 18,
+    this.iconSize = 20,
     this.fontSize = 12,
   });
 
   @override
   Widget build(BuildContext context) {
-    const defaultColor = Color(0xFF64748B);
+    final defaultColor = AppColors.textTertiary;
     final reducedMotion = MediaQuery.disableAnimationsOf(context);
     final bookmarkLabel = isBookmarked ? '已收藏' : '收藏';
 
@@ -48,10 +51,11 @@ class CommunityPostActionBar extends StatelessWidget {
       required String semantics,
       required IconData icon,
       required VoidCallback? onTap,
-      Color color = defaultColor,
+      Color? color,
       bool? selected,
       bool pending = false,
     }) {
+      final effectiveColor = color ?? defaultColor;
       return Semantics(
         key: key,
         label: pending ? '$semantics，正在保存' : semantics,
@@ -62,10 +66,7 @@ class CommunityPostActionBar extends StatelessWidget {
           child: InkWell(
             onTap: pending ? null : onTap,
             borderRadius: BorderRadius.circular(8),
-            child: Container(
-              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-              child: Row(
+            child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   AnimatedScale(
@@ -84,7 +85,7 @@ class CommunityPostActionBar extends StatelessWidget {
                         : Icon(
                             pending ? Icons.hourglass_empty : icon,
                             size: iconSize,
-                            color: color,
+                            color: effectiveColor,
                           ),
                   ),
                   if (label != null) ...[
@@ -94,7 +95,7 @@ class CommunityPostActionBar extends StatelessWidget {
                       style: TextStyle(
                         fontFamily: 'Noto Sans SC',
                         fontSize: fontSize < 12 ? 12 : fontSize,
-                        color: color,
+                        color: effectiveColor,
                         fontWeight: selected == true
                             ? FontWeight.bold
                             : FontWeight.normal,
@@ -105,7 +106,6 @@ class CommunityPostActionBar extends StatelessWidget {
               ),
             ),
           ),
-        ),
       );
     }
 
@@ -116,10 +116,15 @@ class CommunityPostActionBar extends StatelessWidget {
         spacing: 8,
         children: [
           action(
-            label: shareCount > 0 ? '$shareCount' : '转发',
-            semantics: '转发，$shareCount 次',
-            icon: Icons.share_outlined,
-            onTap: onShare,
+            label: likeCount > 0 ? '$likeCount' : '点赞',
+            semantics: '${isLiked ? '取消点赞' : '点赞'}，$likeCount 人点赞',
+            icon: isLiked
+                ? Icons.favorite_rounded
+                : Icons.favorite_border_rounded,
+            color: isLiked ? AppColors.likeActive : defaultColor,
+            onTap: onLike,
+            selected: isLiked,
+            pending: likePending,
           ),
           action(
             label: commentCount > 0 ? '$commentCount' : '评论',
@@ -132,23 +137,17 @@ class CommunityPostActionBar extends StatelessWidget {
               key: const ValueKey('community-bookmark'),
               semantics: bookmarkLabel,
               icon: isBookmarked
-                  ? Icons.star_rounded
-                  : Icons.star_border_rounded,
-              color: isBookmarked ? const Color(0xFF92400E) : defaultColor,
+                  ? Icons.bookmark_rounded
+                  : Icons.bookmark_border_rounded,
+              color: isBookmarked ? AppColors.brand : defaultColor,
               onTap: onBookmark,
               selected: isBookmarked,
               pending: bookmarkPending,
             ),
           action(
-            label: likeCount > 0 ? '$likeCount' : '点赞',
-            semantics: '${isLiked ? '取消点赞' : '点赞'}，$likeCount 人点赞',
-            icon: isLiked
-                ? Icons.favorite_rounded
-                : Icons.favorite_border_rounded,
-            color: isLiked ? const Color(0xFFB91C1C) : defaultColor,
-            onTap: onLike,
-            selected: isLiked,
-            pending: likePending,
+            semantics: '转发，$shareCount 次',
+            icon: Icons.share_outlined,
+            onTap: onShare,
           ),
         ],
       ),

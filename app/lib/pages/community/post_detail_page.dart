@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../api/community_api.dart';
 import '../../models/community_models.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/user_avatar.dart';
 import 'author_profile_page.dart';
 import 'community_report_sheet.dart';
@@ -1692,11 +1693,11 @@ class _PostDetailPageState extends State<PostDetailPage> {
                           else
                             Icon(
                               _post.isBookmarked
-                                  ? Icons.star_rounded
-                                  : Icons.star_border_rounded,
+                                  ? Icons.bookmark_rounded
+                                  : Icons.bookmark_border_rounded,
                               size: 22,
                               color: _post.isBookmarked
-                                  ? const Color(0xFFF59E0B)
+                                  ? AppColors.brand
                                   : const Color(0xFF64748B),
                             ),
                         ],

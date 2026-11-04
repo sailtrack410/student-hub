@@ -247,7 +247,8 @@ void main() {
       gateway.onFetchFollowing = (_) async => false;
       await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
       await tester.pumpAndSettle();
-      expect(find.text('+ 关注'), findsOneWidget);
+      // feed 头部行按画布 30:131 已无关注入口，回到首页后以 store 状态验证同步
+      expect(store.isFollowing('author'), isFalse);
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );

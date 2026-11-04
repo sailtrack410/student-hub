@@ -450,7 +450,7 @@ void main() {
     expect(find.byKey(const ValueKey('community-bookmark')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('community-bookmark')));
     await tester.pumpAndSettle();
-    expect(find.byIcon(Icons.star_rounded), findsWidgets);
+    expect(find.byIcon(Icons.bookmark_rounded), findsWidgets);
     await tester.tap(find.byTooltip('帖子更多操作'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('在此设备隐藏此帖'));
@@ -511,20 +511,20 @@ void main() {
     expect(find.byKey(const ValueKey('detail-local-bookmark')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('detail-local-bookmark')));
     await tester.pumpAndSettle();
-    expect(find.byIcon(Icons.star_rounded), findsWidgets);
+    expect(find.byIcon(Icons.bookmark_rounded), findsWidgets);
     await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
     await tester.pumpAndSettle();
-    expect(find.byIcon(Icons.star_rounded), findsWidgets);
+    expect(find.byIcon(Icons.bookmark_rounded), findsWidgets);
 
     await tester.tap(find.text('帖子a'));
     await tester.pumpAndSettle();
-    expect(find.byIcon(Icons.star_rounded), findsWidgets);
+    expect(find.byIcon(Icons.bookmark_rounded), findsWidgets);
     await tester.tap(find.byKey(const ValueKey('detail-local-bookmark')));
     await tester.pumpAndSettle();
     expect(find.text('已取消收藏'), findsOneWidget);
     await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
     await tester.pumpAndSettle();
-    expect(find.byIcon(Icons.star_border_rounded), findsWidgets);
+    expect(find.byIcon(Icons.bookmark_border_rounded), findsWidgets);
     final reopened = CommunityPreferencesStore(accountId: 'viewer');
     await reopened.initialize();
     expect(reopened.isBookmarked('a'), isFalse);
@@ -539,7 +539,7 @@ void main() {
     UserSession.currentUserId = 'account-a';
     await tester.pumpWidget(MaterialApp(home: PostDetailPage(post: post('a'))));
     await tester.pumpAndSettle();
-    expect(find.byIcon(Icons.star_rounded), findsWidgets);
+    expect(find.byIcon(Icons.bookmark_rounded), findsWidgets);
     await tester.pumpWidget(const SizedBox.shrink());
 
     UserSession.currentUserId = 'account-b';
@@ -583,7 +583,7 @@ void main() {
       gate.complete();
       await tester.pumpAndSettle();
       expect(platform.writes, 1);
-      expect(find.byIcon(Icons.star_rounded), findsWidgets);
+      expect(find.byIcon(Icons.bookmark_rounded), findsWidgets);
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );

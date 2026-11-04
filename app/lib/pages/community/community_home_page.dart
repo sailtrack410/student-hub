@@ -46,11 +46,13 @@ class CommunityHomePage extends StatefulWidget {
 }
 
 class _CommunityHomePageState extends State<CommunityHomePage> {
-  List<String> _tabs = const ['推荐', '最新'];
+  /// 排序（推荐/最新）与分区（全部+各分区）二维导航，对应画布 V4 合并导航行。
+  static const List<String> _sortTabs = ['推荐', '最新'];
   List<CommunitySection> _sections = const [];
   bool _loadingSections = true;
 
-  int _selectedTab = 0;
+  int _sortIndex = 0;
+  int _sectionIndex = -1; // -1 = 全部
   String _keyword = '';
   late final CommunityFeedController _feed;
   List<CommunityFeedItem> get _items => _feed.items;
@@ -82,7 +84,6 @@ class _CommunityHomePageState extends State<CommunityHomePage> {
     FeatureFlags.revision.addListener(_onFeatureFlagsChanged);
     if (widget.initialPosts != null) {
       _feed.seed(widget.initialPosts!);
-      _tabs = const ['推荐', '最新', '二手闲置', '学习互助', '失物招领'];
     } else {
       _scrollController.addListener(_onScroll);
       _loadSections();
@@ -127,16 +128,15 @@ class _CommunityHomePageState extends State<CommunityHomePage> {
     if (!mounted) return;
     setState(() {
       _sections = sections;
-      _tabs = ['推荐', '最新', ...sections.map((s) => s.name)];
-      if (_selectedTab >= _tabs.length) _selectedTab = 0;
+      if (_sectionIndex >= sections.length) _sectionIndex = -1;
       _loadingSections = false;
     });
     await _loadPosts(reset: true);
   }
 
   int? get _selectedSectionId {
-    if (_selectedTab < 2) return null;
-    return int.tryParse(_sections[_selectedTab - 2].id);
+    if (_sectionIndex < 0 || _sectionIndex >= _sections.length) return null;
+    return int.tryParse(_sections[_sectionIndex].id);
   }
 
   Future<void> _loadPosts({bool reset = false}) async {
@@ -146,7 +146,7 @@ class _CommunityHomePageState extends State<CommunityHomePage> {
     }
     await _feed.load(
       CommunityFeedQuery(
-        category: _tabs[_selectedTab],
+        category: _sortTabs[_sortIndex],
         sectionId: _selectedSectionId,
         keyword: _keyword,
         adsEnabled: FeatureFlags.communityAdsEnabled,
@@ -221,10 +221,20 @@ class _CommunityHomePageState extends State<CommunityHomePage> {
 
   Future<void> _refresh() => _loadPosts(reset: true);
 
-  void _selectTab(int index) {
-    if (index == _selectedTab && _keyword.isEmpty) return;
+  void _selectSort(int index) {
+    if (index == _sortIndex && _keyword.isEmpty) return;
     setState(() {
-      _selectedTab = index;
+      _sortIndex = index;
+      _keyword = '';
+      _feed.clear();
+    });
+    _loadPosts(reset: true);
+  }
+
+  void _selectSection(int index) {
+    if (index == _sectionIndex && _keyword.isEmpty) return;
+    setState(() {
+      _sectionIndex = index;
       _keyword = '';
       _feed.clear();
     });
@@ -556,13 +566,21 @@ class _CommunityHomePageState extends State<CommunityHomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      floatingActionButton: FloatingActionButton(
+        key: const ValueKey('community-publish-fab'),
+        heroTag: 'community-publish-fab',
+        onPressed: _openPublish,
+        backgroundColor: AppColors.brand,
+        shape: const CircleBorder(),
+        child: const Icon(Icons.add_rounded, size: 28, color: Colors.white),
+      ),
       body: SafeArea(
         top: false,
         bottom: false,
         child: Column(
           children: [
             _buildHeader(),
-            _buildCategoryTabs(),
+            _buildNavRow(),
             Expanded(child: _buildFeed()),
           ],
         ),
@@ -573,122 +591,142 @@ class _CommunityHomePageState extends State<CommunityHomePage> {
   Widget _buildHeader() {
     return Container(
       color: Colors.white,
-      padding: EdgeInsets.fromLTRB(16, _topInset(context), 16, 8),
-      child: Row(
-        children: [
-          const Text(
-            '校园社区',
-            style: TextStyle(
-              fontFamily: 'Noto Sans SC',
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const Spacer(),
-          GestureDetector(
-            onTap: _showSearchDialog,
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration: const BoxDecoration(
-                color: Color(0xFFF1F5F9),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.search_rounded,
-                size: 20,
+      padding: EdgeInsets.fromLTRB(16, _topInset(context), 8, 2),
+      child: SizedBox(
+        height: 40,
+        child: Row(
+          children: [
+            const Text(
+              '社区',
+              style: TextStyle(
+                fontFamily: 'Noto Sans SC',
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
                 color: AppColors.textPrimary,
               ),
             ),
-          ),
-          const SizedBox(width: 10),
-          GestureDetector(
-            onTap: _openPublish,
-            child: Container(
-              height: 32,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x332563EB),
-                    blurRadius: 8,
-                    offset: Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.add_rounded, size: 16, color: Colors.white),
-                  SizedBox(width: 2),
-                  Text(
-                    '发帖',
-                    style: TextStyle(
-                      fontFamily: 'Noto Sans SC',
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
+            const Spacer(),
+            IconButton(
+              onPressed: _showSearchDialog,
+              tooltip: '搜索社区动态',
+              icon: const Icon(
+                Icons.search_rounded,
+                size: 22,
+                color: AppColors.textSecondary,
               ),
             ),
-          ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 合并导航行（36）：左侧排序下划线 tab（推荐/最新），右侧分区胶囊横滑。
+  Widget _buildNavRow() {
+    return Container(
+      height: 36,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: AppColors.feedDivider)),
+      ),
+      padding: const EdgeInsets.only(left: 16),
+      child: Row(
+        children: [
+          for (var index = 0; index < _sortTabs.length; index++) ...[
+            if (index > 0) const SizedBox(width: 20),
+            _buildSortTab(index),
+          ],
+          const SizedBox(width: 16),
+          Expanded(child: _buildSectionChips()),
         ],
       ),
     );
   }
 
-  Widget _buildCategoryTabs() {
-    return Container(
-      height: 42,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: List.generate(_tabs.length, (index) {
-          final selected = _selectedTab == index && _keyword.isEmpty;
-          return GestureDetector(
-            onTap: () => _selectTab(index),
-            behavior: HitTestBehavior.opaque,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  _tabs[index],
-                  style: TextStyle(
-                    fontFamily: 'Noto Sans SC',
-                    fontSize: 14,
-                    fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                    color: selected ? AppColors.brand : const Color(0xFF64748B),
-                  ),
+  Widget _buildSortTab(int index) {
+    final selected = _sortIndex == index && _keyword.isEmpty;
+    return GestureDetector(
+      onTap: () => _selectSort(index),
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        // Stack：下划线贴文字底部定位，大字号下高度自适应不溢出
+        child: Stack(
+          alignment: Alignment.bottomCenter,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 5.5),
+              child: Text(
+                _sortTabs[index],
+                style: TextStyle(
+                  fontFamily: 'Noto Sans SC',
+                  fontSize: 14,
+                  fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                  color: selected
+                      ? AppColors.textPrimary
+                      : const Color(0xFF64748B),
                 ),
-                const SizedBox(height: 4),
-                AnimatedContainer(
-                  duration: MediaQuery.disableAnimationsOf(context)
-                      ? Duration.zero
-                      : const Duration(milliseconds: 150),
-                  curve: Curves.easeOutCubic,
-                  width: selected ? 24 : 0,
-                  height: 3,
-                  decoration: BoxDecoration(
-                    color: selected ? AppColors.brand : Colors.transparent,
-                    borderRadius: BorderRadius.circular(1.5),
-                  ),
-                ),
-              ],
+              ),
             ),
-          );
-        }),
+            AnimatedContainer(
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 150),
+              curve: Curves.easeOutCubic,
+              width: selected ? 24 : 0,
+              height: 2.5,
+              decoration: BoxDecoration(
+                color: selected ? AppColors.brand : Colors.transparent,
+                borderRadius: BorderRadius.circular(1.25),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionChips() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      clipBehavior: Clip.none,
+      child: Row(
+        children: [
+          _buildSectionChip(-1, '全部'),
+          for (var i = 0; i < _sections.length; i++)
+            _buildSectionChip(i, _sections[i].name),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionChip(int index, String label) {
+    final selected = _sectionIndex == index && _keyword.isEmpty;
+    return GestureDetector(
+      onTap: () => _selectSection(index),
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        // 视觉 24 高，上下 padding 把触达扩到 36
+        padding: const EdgeInsets.only(right: 6, top: 6, bottom: 6),
+        child: Container(
+          height: 24,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? AppColors.brandSoft : AppColors.chipBg,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            label,
+            maxLines: 1,
+            style: TextStyle(
+              fontFamily: 'Noto Sans SC',
+              fontSize: 11,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+              color: selected ? AppColors.brand : AppColors.textBody,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -718,7 +756,7 @@ class _CommunityHomePageState extends State<CommunityHomePage> {
         itemCount:
             _items.length + (_feed.loadingMore || _feed.loadMoreFailed ? 1 : 0),
         separatorBuilder: (_, _) =>
-            Container(height: 1, color: const Color(0xFFF1F5F9)),
+            Container(height: 1, color: AppColors.feedDivider),
         itemBuilder: (context, index) {
           if (index >= _items.length) {
             if (_feed.loadMoreFailed) {

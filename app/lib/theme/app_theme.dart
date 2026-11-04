@@ -22,9 +22,15 @@ abstract final class AppColors {
   static const dangerSoft = Color(0xFFFEF2F2);
   static const dangerBorder = Color(0xFFFECACA);
 
+  // 社区信息流令牌（V4 画布 30:1，2026-11-05）
+  static const likeActive = Color(0xFFF43F5E); // 点赞激活品红 rose-500，与危险红 #EF4444 区分
+  static const feedDivider = Color(0xFFE8EDF3); // 信息流通栏分隔线
+  static const chipBg = Color(0xFFF1F5F9); // 分区胶囊默认底
+
   // 文字颜色
   static const textPrimary = Color(0xFF0F172A); // #0F172A 正黑
   static const textSecondary = Color(0xFF64748B); // #64748B 次要灰
+  static const textTertiary = Color(0xFF94A3B8); // #94A3B8 辅助灰（社区画布 30:1：meta/互动条非激活）
   static const textMuted = Color(0xFF64748B); // 白卡上的辅助文字保持可读对比度
   static const textBody = Color(0xFF475569); // #475569 正文
   static const textWhite = Color(0xFFFFFFFF);

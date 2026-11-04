@@ -358,19 +358,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // 1. 验证顶部元素
-      expect(find.text('发帖'), findsOneWidget);
+      // 1. 验证顶部元素（发帖入口已改为右下角 FAB）
+      expect(find.byKey(const ValueKey('community-publish-fab')), findsOneWidget);
 
-      // 2. 验证分类标签
+      // 2. 验证排序标签；分区胶囊为 fetchSections 接口下发，离线测试环境不渲染
       expect(find.text('推荐'), findsOneWidget);
       expect(find.text('最新'), findsOneWidget);
-      expect(find.text('二手闲置'), findsOneWidget);
-      expect(find.text('学习互助'), findsOneWidget);
-      expect(find.text('失物招领'), findsOneWidget);
+      expect(find.text('二手闲置'), findsNothing);
 
-      // 3. 验证帖子卡片与等级称号
+      // 3. 验证帖子卡片与等级徽章（等级已去中文称号，仅纯 Lv.X）
       expect(find.text('追光的少年'), findsOneWidget);
-      expect(find.text('Lv.4 菁英铂金'), findsWidgets);
+      expect(find.text('Lv.4'), findsWidgets);
       expect(find.text('关于自习室占座现象的建议与思考，大家怎么看？'), findsOneWidget);
       expect(find.text('三食堂新开的轻食减脂餐亲测推荐！'), findsOneWidget);
       expect(find.text('自习室清晨'), findsOneWidget);
