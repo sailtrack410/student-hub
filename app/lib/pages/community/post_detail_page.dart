@@ -8,6 +8,7 @@ import '../../models/community_models.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/community_action_bar.dart';
+import '../../widgets/community_post_card.dart' show communityImageFrameBuilder;
 import 'author_profile_page.dart';
 import 'community_report_sheet.dart';
 import 'community_share_sheet.dart';
@@ -772,6 +773,9 @@ class _PostDetailPageState extends State<PostDetailPage> {
                       width: width,
                       height: 104,
                       fit: BoxFit.cover,
+                      // B3：与信息流图集同口径——按格宽解码 + 加载淡入
+                      cacheWidth: (width * MediaQuery.devicePixelRatioOf(context)).round(),
+                      frameBuilder: communityImageFrameBuilder,
                       errorBuilder: (_, _, _) => _detailImageLabel(label),
                     )
                   : _detailImageLabel(label),

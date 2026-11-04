@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
 
 import '../../api/ad_slot_api.dart';
@@ -759,6 +760,9 @@ class _CommunityHomePageState extends State<CommunityHomePage> {
         physics: const AlwaysScrollableScrollPhysics(
           parent: BouncingScrollPhysics(),
         ),
+        // B2：预构建视口外约 2.5 卡（默认 250px），把卡片构建挪出滑动关键帧；
+        // 卡片重绘边界由列表默认 addRepaintBoundaries 提供（回归测试守卫）。
+        scrollCacheExtent: const ScrollCacheExtent.pixels(500),
         padding: const EdgeInsets.only(bottom: 24),
         itemCount:
             _items.length + (_feed.loadingMore || _feed.loadMoreFailed ? 1 : 0),

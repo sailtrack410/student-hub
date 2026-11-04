@@ -83,7 +83,7 @@ class CommunityPostCard extends StatelessWidget {
             _buildSummary(),
             if (_hasMedia) ...[
               const SizedBox(height: 8),
-              SizedBox(height: 92, width: double.infinity, child: _buildImageRow(post)),
+              SizedBox(height: 92, width: double.infinity, child: _buildImageRow(context, post)),
             ],
             const SizedBox(height: 8),
             _buildTopicRow(),
@@ -337,7 +337,7 @@ class CommunityPostCard extends StatelessWidget {
 
   /// 图集：画布 30:142 口径（高 92、间距 8、圆角 8），预览格一律 1:1 正方形，
   /// 左对齐不摊满整行。
-  Widget _buildImageRow(CommunityPost post) {
+  Widget _buildImageRow(BuildContext context, CommunityPost post) {
     final labels = post.imageLabels;
     final urls = post.images;
     final count = urls.isNotEmpty ? urls.length : labels.length;
@@ -365,6 +365,9 @@ class CommunityPostCard extends StatelessWidget {
                   width: 92,
                   height: 92,
                   fit: BoxFit.cover,
+                  // B3：按显示尺寸×像素密度解码，避免整图解码后再缩放的内存/耗时
+                  cacheWidth: (92 * MediaQuery.devicePixelRatioOf(context)).round(),
+                  frameBuilder: communityImageFrameBuilder,
                   errorBuilder: (_, _, _) => _imageLabel(label),
                 )
               : _imageLabel(label),
@@ -385,4 +388,24 @@ class CommunityPostCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// B3 图片加载淡入：首帧未就绪时全透明，解码完成后 200ms easeOutCubic 淡入，
+/// 避免图片突兀闪现；内存缓存命中（wasSynchronouslyLoaded）与禁用动画时直接显示。
+/// 信息流图集与详情页图集共用（回归测试直接断言本函数行为）。
+Widget communityImageFrameBuilder(
+  BuildContext context,
+  Widget child,
+  int? frame,
+  bool wasSynchronouslyLoaded,
+) {
+  if (wasSynchronouslyLoaded) return child;
+  return AnimatedOpacity(
+    opacity: frame == null ? 0 : 1,
+    duration: MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 200),
+    curve: Curves.easeOutCubic,
+    child: child,
+  );
 }

@@ -22,6 +22,8 @@ CommunityPost post(
   int likes = 5,
   bool liked = false,
   String? title,
+  List<String> images = const [],
+  List<String> imageLabels = const [],
 }) => CommunityPost(
   id: id,
   authorId: author,
@@ -33,6 +35,8 @@ CommunityPost post(
   content: '正文',
   likeCount: likes,
   isLiked: liked,
+  images: images,
+  imageLabels: imageLabels,
 );
 
 class FakeGateway implements CommunityInteractionGateway {
