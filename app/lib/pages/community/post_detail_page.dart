@@ -747,25 +747,15 @@ class _PostDetailPageState extends State<PostDetailPage> {
                         children: [
                           GestureDetector(
                             onTap: _openAuthorProfile,
-                            child: Container(
-                              width: 44,
-                              height: 44,
-                              decoration: BoxDecoration(
-                                color: _post.avatarBgColor,
-                                shape: BoxShape.circle,
-                              ),
-                              alignment: Alignment.center,
-                              child: Text(
-                                _post.authorName.isNotEmpty
-                                    ? _post.authorName.substring(0, 1)
-                                    : '学',
-                                style: const TextStyle(
-                                  fontFamily: 'Noto Sans SC',
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF2563EB),
-                                ),
-                              ),
+                            child: UserAvatar(
+                              name: _post.authorName,
+                              avatarPath: _post.authorAvatar,
+                              size: 44,
+                              fontSize: 18,
+                              gradientColors: [
+                                _post.avatarBgColor,
+                                _post.levelTextColor,
+                              ],
                             ),
                           ),
                           const SizedBox(width: 10),

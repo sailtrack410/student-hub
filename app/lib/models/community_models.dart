@@ -240,6 +240,7 @@ class UserBadgeItem {
 class AuthorProfileInfo {
   final String authorId;
   final String authorName;
+  final String? avatarUrl;
   final Color avatarBgColor;
   final String authorLevel; // 'Lv.4'
   final bool authorOfficial;
@@ -257,6 +258,7 @@ class AuthorProfileInfo {
   const AuthorProfileInfo({
     required this.authorId,
     required this.authorName,
+    this.avatarUrl,
     required this.avatarBgColor,
     required this.authorLevel,
     this.authorOfficial = false,

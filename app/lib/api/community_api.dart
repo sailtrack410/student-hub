@@ -466,6 +466,7 @@ class CommunityApi {
           'post_${DateTime.now().millisecondsSinceEpoch}',
       authorId: m['authorId']?.toString() ?? '',
       authorName: m['authorName']?.toString() ?? '同学',
+      authorAvatar: _absoluteUrl(m['avatarUrl']?.toString()),
       authorLevel: level,
       authorOfficial: m['authorOfficial'] == true,
       authorOfficialTitle: m['authorOfficialTitle']?.toString(),
@@ -733,20 +734,26 @@ class CommunityApi {
   }
 
   /// 静态快捷方法：查询作者资料
+  ///
+  /// 后端 GET /api/app/community/authors/{id} 实际下发 displayName/avatarUrl/wornBadgeCode/
+  /// college/major/className（见 CommunityAuthorProfileResponse）；department/uid/统计四项
+  /// 服务端暂未下发，维持兜底值（统计恒 0 的补齐属"社区标签"任务）。
   static Future<AuthorProfileInfo?> fetchAuthorProfile(String authorId) async {
     try {
       final res = await _instance.fetchAuthorProfileRaw(authorId);
-      if (res != null && res['authorName'] != null) {
+      final name = (res?['displayName'] ?? res?['authorName'])?.toString();
+      if (res != null && name != null && name.isNotEmpty) {
         return AuthorProfileInfo(
           authorId: authorId,
-          authorName: res['authorName']?.toString() ?? '同学',
+          authorName: name,
+          avatarUrl: _absoluteUrl(res['avatarUrl']?.toString()),
           avatarBgColor: const Color(0xFFEFF6FF),
           authorLevel: 'Lv.${res['level'] ?? 4}',
           authorOfficial: res['official'] == true,
           authorOfficialTitle: res['officialTitle']?.toString(),
           badgeAsset: res['badgeAsset']?.toString(),
           department: res['department']?.toString() ?? '绵阳城市学院',
-          uid: res['uid']?.toString() ?? '8016428',
+          uid: res['uid']?.toString() ?? authorId,
           likeCount: (res['likeTotal'] as num?)?.toInt() ?? 0,
           followCount: (res['followingCount'] as num?)?.toInt() ?? 0,
           fansCount: (res['followerCount'] as num?)?.toInt() ?? 0,

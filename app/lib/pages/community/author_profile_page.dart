@@ -4,6 +4,7 @@ import '../../api/community_api.dart';
 import '../../models/community_models.dart';
 import '../../models/user_session.dart';
 import '../../services/community_interaction_store.dart';
+import '../../widgets/user_avatar.dart';
 import 'chat_detail_page.dart';
 import 'community_share_sheet.dart';
 import 'post_detail_page.dart';
@@ -236,7 +237,6 @@ class _AuthorProfilePageState extends State<AuthorProfilePage>
                         width: 56,
                         height: 56,
                         decoration: BoxDecoration(
-                          color: widget.avatarBgColor,
                           shape: BoxShape.circle,
                           border: Border.all(
                             color: Colors.white.withOpacity(0.4),
@@ -244,16 +244,11 @@ class _AuthorProfilePageState extends State<AuthorProfilePage>
                           ),
                         ),
                         alignment: Alignment.center,
-                        child: Text(
-                          widget.authorName.isNotEmpty
-                              ? widget.authorName.substring(0, 1)
-                              : '学',
-                          style: const TextStyle(
-                            fontFamily: 'Noto Sans SC',
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF2563EB),
-                          ),
+                        child: UserAvatar(
+                          name: _profile.authorName,
+                          avatarPath: _profile.avatarUrl,
+                          size: 50,
+                          fontSize: 22,
                         ),
                       ),
                       const SizedBox(width: 14),

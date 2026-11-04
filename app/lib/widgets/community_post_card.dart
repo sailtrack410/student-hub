@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/community_models.dart';
 import '../theme/app_theme.dart';
 import 'community_action_bar.dart';
+import 'user_avatar.dart';
 
 /// 卡片只展示数据和发出动作；请求与分页由外部控制器管理。
 class CommunityPostCard extends StatelessWidget {
@@ -49,25 +50,12 @@ class CommunityPostCard extends StatelessWidget {
               children: [
                 GestureDetector(
                   onTap: () => onAuthor(),
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: post.avatarBgColor,
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      post.authorName.isNotEmpty
-                          ? post.authorName.substring(0, 1)
-                          : '学',
-                      style: const TextStyle(
-                        fontFamily: 'Noto Sans SC',
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF2563EB),
-                      ),
-                    ),
+                  child: UserAvatar(
+                    name: post.authorName,
+                    avatarPath: post.authorAvatar,
+                    size: 40,
+                    fontSize: 16,
+                    gradientColors: [post.avatarBgColor, post.levelTextColor],
                   ),
                 ),
                 const SizedBox(width: 10),
