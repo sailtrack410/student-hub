@@ -36,6 +36,7 @@ import java.util.Map;
 public class InboxServiceImpl implements InboxService {
 
     private static final String TYPE_PROCESS_NOTIFICATION = "PROCESS_NOTIFICATION";
+    private static final String TYPE_COMMUNITY_NOTIFICATION = "COMMUNITY_NOTIFICATION";
     private static final String TYPE_DIRECT_MESSAGE = "DIRECT_MESSAGE";
     private static final String TYPE_AI_ASSISTANT = "AI_ASSISTANT";
 
@@ -48,6 +49,7 @@ public class InboxServiceImpl implements InboxService {
     public PageResult<InboxItemResponse> inbox(AuthenticatedUser user, int pageNum, int pageSize) {
         List<InboxItemResponse> all = new ArrayList<>();
         appendNotifications(user, all);
+        appendCommunityNotifications(user, all);
         appendDirectMessages(user, all);
         appendAiConversations(user, all);
         all.sort((a, b) -> b.lastTime().compareTo(a.lastTime()));
@@ -89,6 +91,19 @@ public class InboxServiceImpl implements InboxService {
                     contact.peerId(), null, contact.peerName(), contact.avatarUrl(),
                     contact.lastContent(), contact.lastAt(), unreadByPeer.getOrDefault(contact.peerId(), 0L), false));
         }
+    }
+
+    private void appendCommunityNotifications(AuthenticatedUser user, List<InboxItemResponse> out) {
+        // 互动提醒聚合条：社区互动通知（点赞/评论/关注等）折叠为一条，未读数与角标
+        // interactionUnread 的 communityUnread 部分同口径，点击进入社区通知列表页
+        NotificationResponse latest = notificationService.pageMy(user.userId(),
+                        new MyNotificationQuery(1, 1, null, true)).getRecords().stream().findFirst().orElse(null);
+        if (latest == null) {
+            return;
+        }
+        long unread = notificationService.unreadCount(user.userId(), true);
+        out.add(new InboxItemResponse("COMMUNITY_NOTIFICATION", TYPE_COMMUNITY_NOTIFICATION, null, null,
+                "互动提醒", null, latest.content(), latest.createdAt(), unread, true));
     }
 
     private void appendAiConversations(AuthenticatedUser user, List<InboxItemResponse> out) {

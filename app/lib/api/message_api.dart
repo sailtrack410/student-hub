@@ -62,6 +62,31 @@ class MessageApi {
     return null;
   }
 
+  /// 社区互动通知分页（GET /api/app/notifications?communityOnly=true）
+  static Future<List<CommunityNotificationItem>> fetchCommunityNotifications({
+    int pageNum = 1,
+    int pageSize = 20,
+  }) async {
+    try {
+      final res = await _instance.apiClient.get(
+        '/api/app/notifications',
+        query: {
+          'pageNum': '$pageNum',
+          'pageSize': '$pageSize',
+          'communityOnly': 'true',
+        },
+      );
+      final data = res is Map<String, dynamic> ? res : null;
+      if (data == null || data['records'] is! List) return const [];
+      return (data['records'] as List)
+          .whereType<Map<String, dynamic>>()
+          .map(CommunityNotificationItem.fromJson)
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// 全部通知标记已读（POST /api/app/notifications/read-all）
   static Future<bool> markAllNotificationsRead() async {
     try {

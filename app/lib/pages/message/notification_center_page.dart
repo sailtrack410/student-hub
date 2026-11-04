@@ -12,6 +12,7 @@ import '../assistant/ai_assistant_page.dart';
 import '../community/chat_detail_page.dart';
 import '../service/my_requests_page.dart';
 import 'announcement_list_page.dart';
+import 'community_notification_list_page.dart';
 
 /// APP-消息中心 (画布 5:2433)
 /// 统一收件箱：流程通知折叠 + 私信 + AI 会话；四类快捷入口 + 全部已读。
@@ -176,7 +177,9 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     final keyword = _keyword.trim().toLowerCase();
     return _items.where((item) {
       if (_filter == 'process' && !item.isProcess) return false;
-      if (_filter == 'interaction' && !item.isDirect) return false;
+      if (_filter == 'interaction' && !(item.isDirect || item.isCommunity)) {
+        return false;
+      }
       if (_filter == 'announcement') return false;
       if (_filter == 'ai' && !item.isAi) return false;
       if (keyword.isNotEmpty) {
@@ -242,6 +245,20 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
   }
 
   void _openItem(InboxItem item) {
+    if (item.isCommunity) {
+      Navigator.of(context)
+          .push(
+            MaterialPageRoute(
+              builder: (_) => const CommunityNotificationListPage(),
+            ),
+          )
+          .then((_) {
+            if (!mounted) return;
+            widget.onUnreadChanged?.call();
+            _load(reset: true);
+          });
+      return;
+    }
     if (item.isProcess) {
       MessageApi.markAllNotificationsRead().then((_) {
         if (mounted) widget.onUnreadChanged?.call();
@@ -665,6 +682,22 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
   }
 
   Widget _buildSessionIcon(InboxItem item) {
+    if (item.isCommunity) {
+      return Container(
+        width: 44,
+        height: 44,
+        decoration: const BoxDecoration(
+          color: Color(0xFFECFDF5),
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: const Icon(
+          Icons.favorite_rounded,
+          size: 22,
+          color: Color(0xFF10B981),
+        ),
+      );
+    }
     if (item.isDirect) {
       final initial = item.title.isNotEmpty ? item.title.substring(0, 1) : '同';
       return Container(
