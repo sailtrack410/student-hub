@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -5,6 +7,7 @@ import '../../api/community_api.dart';
 import '../../models/community_models.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/user_avatar.dart';
+import '../../widgets/community_action_bar.dart';
 import 'author_profile_page.dart';
 import 'community_report_sheet.dart';
 import 'community_share_sheet.dart';
@@ -42,6 +45,10 @@ class _PostDetailPageState extends State<PostDetailPage> {
   bool _unavailable = false;
   bool _loadingBookmark = true;
   late final CommunityInteractionStore _interactions;
+  // D2 双击正文点赞：待触发位置与当前心形 pop 的锚点（相对内容区原点）。
+  Offset? _pendingDoubleTapPos;
+  Offset? _contentLikePopAt;
+  Timer? _contentLikePopTimer;
 
   @override
   void initState() {
@@ -113,6 +120,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
   @override
   void dispose() {
+    _contentLikePopTimer?.cancel();
     _interactions.removeListener(_onInteractionsChanged);
     if (widget.interactionStore == null) {
       CommunityInteractionScope.release(_interactions);
@@ -146,6 +154,131 @@ class _PostDetailPageState extends State<PostDetailPage> {
     if (_interactions.likePending(_post.id)) return;
     final confirmed = await _interactions.toggleLike(_post);
     if (!confirmed) _showInteractionMessage('点赞结果未确认，已恢复显示，请刷新后重试');
+  }
+
+  /// D2 双击正文/图片区点赞：只在未赞时触发（双击永不取消赞），
+  /// 点击位置弹一次性心形 pop，底部互动条经 store 重建同步 burst + 计数滚动。
+  /// 图片区与正文均无单击手势，双击识别不拖慢任何既有交互。
+  void _handleContentDoubleTap() {
+    if (_interactions.likePending(_post.id) || _post.isLiked) return;
+    _handleToggleLike();
+    if (!mounted) return;
+    if (MediaQuery.disableAnimationsOf(context)) return;
+    _contentLikePopTimer?.cancel();
+    setState(() => _contentLikePopAt = _pendingDoubleTapPos);
+    _contentLikePopTimer = Timer(const Duration(milliseconds: 400), () {
+      if (mounted) setState(() => _contentLikePopAt = null);
+    });
+  }
+
+  /// 双击点赞的心形 pop：0.6→约 1.4 easeOutBack 弹出、尾段淡出，400ms 自清。
+  Widget _buildContentLikePop() {
+    final pos = _contentLikePopAt!;
+    return Positioned(
+      left: (pos.dx - 32).clamp(0.0, double.infinity),
+      top: (pos.dy - 32).clamp(0.0, double.infinity),
+      child: IgnorePointer(
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: 1),
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOutCubic,
+          builder: (context, t, _) {
+            final opacity = t < 0.65
+                ? 1.0
+                : (1 - (t - 0.65) / 0.35).clamp(0.0, 1.0);
+            return Opacity(
+              opacity: opacity,
+              child: Transform.scale(
+                scale:
+                    0.6 + 0.8 * Curves.easeOutBack.transform(t.clamp(0.0, 1.0)),
+                child: const Icon(
+                  Icons.favorite_rounded,
+                  size: 64,
+                  color: AppColors.likeActive,
+                  shadows: [Shadow(color: Color(0x66F43F5E), blurRadius: 16)],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  /// 标题/正文/多图内容区：整体包成双击点赞区（D2），点击位置叠加心形 pop。
+  Widget _buildContentZone() {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        GestureDetector(
+          onDoubleTapDown: (details) =>
+              _pendingDoubleTapPos = details.localPosition,
+          onDoubleTap: _handleContentDoubleTap,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 帖子标题
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  _post.title,
+                  style: const TextStyle(
+                    fontFamily: 'Noto Sans SC',
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F172A),
+                    height: 1.35,
+                  ),
+                ),
+              ),
+              if (_post.status == 'REVIEWING' || _post.status == 'PENDING')
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: ContentUnderReviewCard(
+                    reviewReason: _post.hiddenReason == 'BANNED_WORD'
+                        ? '内容命中敏感词，人工安全审核中，目前仅自己可见'
+                        : '内容正在人工安全审核中，目前仅自己可见',
+                  ),
+                ),
+              const SizedBox(height: 10),
+              // 正文：文章按图文混排块渲染，动态展示纯文本
+              if (_post.postType == 'ARTICLE' &&
+                  _post.contentBlocks.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _buildArticleBlocks(),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    _post.content,
+                    style: const TextStyle(
+                      fontFamily: 'Noto Sans SC',
+                      fontSize: 14,
+                      color: Color(0xFF64748B),
+                      height: 1.6,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 14),
+              // 多图三列网格（文章图片已由内容块承载，避免重复）
+              if ((_post.postType != 'ARTICLE' ||
+                      _post.contentBlocks.isEmpty) &&
+                  (_post.images.isNotEmpty ||
+                      _post.imageLabels.isNotEmpty)) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _buildDetailImages(),
+                ),
+                const SizedBox(height: 10),
+              ],
+            ],
+          ),
+        ),
+        if (_contentLikePopAt != null) _buildContentLikePop(),
+      ],
+    );
   }
 
   Future<void> _handleToggleBookmark() async {
@@ -884,65 +1017,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
                       ),
                     ),
 
-                    // 2. 帖子标题
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        _post.title,
-                        style: const TextStyle(
-                          fontFamily: 'Noto Sans SC',
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF0F172A),
-                          height: 1.35,
-                        ),
-                      ),
-                    ),
-                    if (_post.status == 'REVIEWING' ||
-                        _post.status == 'PENDING')
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: ContentUnderReviewCard(
-                          reviewReason: _post.hiddenReason == 'BANNED_WORD'
-                              ? '内容命中敏感词，人工安全审核中，目前仅自己可见'
-                              : '内容正在人工安全审核中，目前仅自己可见',
-                        ),
-                      ),
-                    const SizedBox(height: 10),
-
-                    // 3. 正文：文章按图文混排块渲染，动态展示纯文本
-                    if (_post.postType == 'ARTICLE' &&
-                        _post.contentBlocks.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: _buildArticleBlocks(),
-                      )
-                    else
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          _post.content,
-                          style: const TextStyle(
-                            fontFamily: 'Noto Sans SC',
-                            fontSize: 14,
-                            color: Color(0xFF64748B),
-                            height: 1.6,
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 14),
-
-                    // 4. 多图三列网格（文章图片已由内容块承载，避免重复）
-                    if ((_post.postType != 'ARTICLE' ||
-                            _post.contentBlocks.isEmpty) &&
-                        (_post.images.isNotEmpty ||
-                            _post.imageLabels.isNotEmpty)) ...[
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: _buildDetailImages(),
-                      ),
-                      const SizedBox(height: 10),
-                    ],
+                    // 2-4. 标题/正文/多图：整体为双击点赞内容区（含心形 pop）
+                    _buildContentZone(),
 
                     // 5. 话题标签与阅读量 (5:407 节点)
                     Padding(
@@ -1574,156 +1650,80 @@ class _PostDetailPageState extends State<PostDetailPage> {
               spacing: 6,
               runSpacing: 6,
               children: [
-                // 评论数 (点击聚焦输入框)
-                GestureDetector(
-                  onTap: () => _commentFocusNode.requestFocus(),
-                  behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    constraints: const BoxConstraints(
-                      minWidth: 48,
-                      minHeight: 48,
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 4,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.chat_bubble_outline_rounded,
-                          size: 20,
-                          color: Color(0xFF64748B),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${_post.commentCount}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF64748B),
-                          ),
-                        ),
-                      ],
-                    ),
+                // 评论（点击聚焦输入框）
+                // 注意不可用 Container+alignment：Wrap 宽松约束下会撑满整行宽
+                // （每个入口独占一行）。用 padding 垂直居中并保证 48 触达。
+                Container(
+                  constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 14),
+                  child: CommunityActionEntry(
+                    label: '${_post.commentCount}',
+                    semantics: '评论，${_post.commentCount} 条',
+                    icon: Icons.chat_bubble_outline_rounded,
+                    color: const Color(0xFF64748B),
+                    onTap: () => _commentFocusNode.requestFocus(),
                   ),
                 ),
 
-                // 点赞
-                Semantics(
-                  label: _post.isLiked ? '取消点赞' : '点赞',
-                  button: true,
-                  selected: _post.isLiked,
-                  enabled: !_interactions.likePending(_post.id),
-                  child: GestureDetector(
-                    key: const ValueKey('detail-like'),
-                    onTap: _interactions.likePending(_post.id)
-                        ? null
-                        : _handleToggleLike,
-                    behavior: HitTestBehavior.opaque,
-                    child: Container(
-                      constraints: const BoxConstraints(
-                        minWidth: 48,
-                        minHeight: 48,
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 4,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _post.isLiked
-                                ? Icons.favorite_rounded
-                                : Icons.favorite_border_rounded,
-                            size: 20,
-                            color: _post.isLiked
-                                ? const Color(0xFFEF4444)
-                                : const Color(0xFF64748B),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${_post.likeCount}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: _post.isLiked
-                                  ? const Color(0xFFEF4444)
-                                  : const Color(0xFF64748B),
-                              fontWeight: _post.isLiked
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                // 点赞：与信息流同一动效语言（burst/交叉淡化/计数滚动/pending 脉冲）
+                Container(
+                  key: const ValueKey('detail-like'),
+                  constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 14),
+                  child: CommunityActionEntry(
+                    label: '${_post.likeCount}',
+                    semantics: _post.isLiked ? '取消点赞' : '点赞',
+                    icon: _post.isLiked
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
+                    color: _post.isLiked
+                        ? const Color(0xFFEF4444)
+                        : const Color(0xFF64748B),
+                    onTap: _handleToggleLike,
+                    selected: _post.isLiked,
+                    pending: _interactions.likePending(_post.id),
                   ),
                 ),
 
                 // 收藏入口，与首页共用当前账号的持久化状态。
                 Tooltip(
                   message: '收藏',
-                  child: GestureDetector(
-                    key: const ValueKey('detail-local-bookmark'),
-                    onTap:
-                        _loadingBookmark ||
-                            _interactions.bookmarkPending(_post.id)
-                        ? null
-                        : _handleToggleBookmark,
-                    behavior: HitTestBehavior.opaque,
-                    child: Container(
-                      constraints: const BoxConstraints(
-                        minWidth: 48,
-                        minHeight: 48,
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 4,
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (_loadingBookmark || _interactions.bookmarkPending(_post.id))
-                            const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 1.5),
-                            )
-                          else
-                            Icon(
-                              _post.isBookmarked
-                                  ? Icons.bookmark_rounded
-                                  : Icons.bookmark_border_rounded,
-                              size: 22,
-                              color: _post.isBookmarked
-                                  ? AppColors.brand
-                                  : const Color(0xFF64748B),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-                // 分享
-                GestureDetector(
-                  onTap: _openShare,
-                  behavior: HitTestBehavior.opaque,
                   child: Container(
+                    key: const ValueKey('detail-local-bookmark'),
                     constraints: const BoxConstraints(
                       minWidth: 48,
                       minHeight: 48,
                     ),
                     padding: const EdgeInsets.symmetric(
                       horizontal: 4,
-                      vertical: 4,
+                      vertical: 13,
                     ),
-                    child: Icon(
-                      Icons.share_outlined,
-                      size: 20,
-                      color: Color(0xFF64748B),
+                    child: CommunityActionEntry(
+                      semantics: _post.isBookmarked ? '已收藏' : '收藏',
+                      icon: _post.isBookmarked
+                          ? Icons.bookmark_rounded
+                          : Icons.bookmark_border_rounded,
+                      color: _post.isBookmarked
+                          ? AppColors.brand
+                          : const Color(0xFF64748B),
+                      onTap: _handleToggleBookmark,
+                      selected: _post.isBookmarked,
+                      pending: _loadingBookmark ||
+                          _interactions.bookmarkPending(_post.id),
+                      iconSize: 22,
                     ),
+                  ),
+                ),
+
+                // 分享
+                Container(
+                  constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 14),
+                  child: CommunityActionEntry(
+                    semantics: '转发，${_post.shareCount} 次',
+                    icon: Icons.share_outlined,
+                    color: const Color(0xFF64748B),
+                    onTap: _openShare,
                   ),
                 ),
               ],

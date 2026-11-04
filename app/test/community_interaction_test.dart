@@ -578,6 +578,8 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('detail-local-bookmark')));
       await tester.pump();
       expect(platform.writes, 1);
+      // pending spinner 已改为 300ms 延迟淡入（A1 口径），推进后断言
+      await tester.pump(const Duration(milliseconds: 300));
       expect(find.byType(CircularProgressIndicator), findsWidgets);
       expect(find.text('已收藏到本机，仅保存在此设备'), findsNothing);
       gate.complete();
