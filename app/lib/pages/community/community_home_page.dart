@@ -60,6 +60,7 @@ class _CommunityHomePageState extends State<CommunityHomePage> {
   bool get _error => _feed.error;
   int get _loadToken => _feed.generation;
   late final CommunityInteractionStore _interactions;
+  int _hiddenRevision = -1; // -1 保证首帧通知必做一次隐藏过滤
 
   /// 广告曝光去重（按后端返回的 clickId）与卡片定位 Key，用于判断是否滚入视口
   final Set<String> _reportedImpressions = {};
@@ -109,7 +110,13 @@ class _CommunityHomePageState extends State<CommunityHomePage> {
   }
 
   void _onInteractionsChanged() {
-    if (mounted) setState(_feed.applyInteractions);
+    if (!mounted) return;
+    // B1：点赞/收藏/关注不再整页 setState——卡片经 _InteractionCardScope
+    // 自行订阅 store 更新。只有隐藏集合变化（列表结构变）才整表重过滤。
+    final rev = _interactions.hiddenRevision;
+    if (rev == _hiddenRevision) return;
+    _hiddenRevision = rev;
+    setState(_feed.applyInteractions);
   }
 
   /// 开关到达/变化后重载信息流：关闭广告时改用纯自然内容接口。
@@ -952,13 +959,10 @@ class _CommunityHomePageState extends State<CommunityHomePage> {
     );
   }
 
-  Widget _buildPostCard(CommunityPost post) => CommunityPostCard(
+  Widget _buildPostCard(CommunityPost post) => _InteractionCardScope(
     key: ValueKey('community-post-${post.id}'),
     post: post,
-    accountId: _interactions.accountId,
-    likePending: _interactions.likePending(post.id),
-    followPending: _interactions.followPending(post.authorId),
-    bookmarkPending: _interactions.bookmarkPending(post.id),
+    interactions: _interactions,
     onOpen: () => _openPostDetail(post),
     onAuthor: () => _openAuthorProfile(post),
     onFollow: () => _handleToggleFollow(post.id),
@@ -967,4 +971,97 @@ class _CommunityHomePageState extends State<CommunityHomePage> {
     onBookmark: () => _handleToggleBookmark(post.id),
     onLike: () => _handleToggleLike(post.id),
   );
+}
+
+/// 卡片级互动订阅：store 每次通知都先算本卡互动快照，等值则直接复用缓存的
+/// CommunityPostCard，只有本卡数据（点赞/收藏/关注态与计数）变化才真正重建。
+/// 隐藏导致的列表增删不走这里，由首页 hiddenRevision 守卫整表处理。
+class _InteractionCardScope extends StatefulWidget {
+  const _InteractionCardScope({
+    super.key,
+    required this.post,
+    required this.interactions,
+    required this.onOpen,
+    required this.onAuthor,
+    required this.onFollow,
+    required this.onMore,
+    required this.onShare,
+    required this.onBookmark,
+    required this.onLike,
+  });
+
+  final CommunityPost post;
+  final CommunityInteractionStore interactions;
+  final VoidCallback onOpen,
+      onAuthor,
+      onFollow,
+      onMore,
+      onShare,
+      onBookmark,
+      onLike;
+
+  @override
+  State<_InteractionCardScope> createState() => _InteractionCardScopeState();
+}
+
+class _InteractionCardScopeState extends State<_InteractionCardScope> {
+  (int, bool, bool, bool, bool, bool, bool)? _lastSnapshot;
+  Widget? _cachedCard;
+
+  @override
+  void didUpdateWidget(_InteractionCardScope oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 列表数据刷新（新 post 实例）或回调重绑时丢弃缓存，保证接线不陈旧。
+    final rewired =
+        widget.post != oldWidget.post ||
+        widget.onOpen != oldWidget.onOpen ||
+        widget.onAuthor != oldWidget.onAuthor ||
+        widget.onFollow != oldWidget.onFollow ||
+        widget.onMore != oldWidget.onMore ||
+        widget.onShare != oldWidget.onShare ||
+        widget.onBookmark != oldWidget.onBookmark ||
+        widget.onLike != oldWidget.onLike;
+    if (rewired) {
+      _lastSnapshot = null;
+      _cachedCard = null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: widget.interactions,
+      builder: (context, _) {
+        final interactions = widget.interactions;
+        final post = interactions.apply(widget.post);
+        final snapshot = (
+          post.likeCount,
+          post.isLiked,
+          post.isBookmarked,
+          post.isFollowed,
+          interactions.likePending(post.id),
+          interactions.bookmarkPending(post.id),
+          interactions.followPending(post.authorId),
+        );
+        if (snapshot == _lastSnapshot && _cachedCard != null) {
+          return _cachedCard!;
+        }
+        _lastSnapshot = snapshot;
+        return _cachedCard = CommunityPostCard(
+          post: post,
+          accountId: interactions.accountId,
+          likePending: snapshot.$5,
+          followPending: snapshot.$7,
+          bookmarkPending: snapshot.$6,
+          onOpen: widget.onOpen,
+          onAuthor: widget.onAuthor,
+          onFollow: widget.onFollow,
+          onMore: widget.onMore,
+          onShare: widget.onShare,
+          onBookmark: widget.onBookmark,
+          onLike: widget.onLike,
+        );
+      },
+    );
+  }
 }

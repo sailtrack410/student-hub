@@ -50,8 +50,18 @@ class CommunityPostCard extends StatelessWidget {
   bool _useFixedHeight(BuildContext context) =>
       MediaQuery.textScalerOf(context).scale(14) <= 14 * 1.15;
 
+  /// B1 验收钩子：debug 下的构建计数（assert 内自增，release 零成本）。
+  /// 互动重建粒度测试据此断言「点赞只重建 1 张卡」。
+  static int debugBuildCount = 0;
+  static final Map<String, int> debugBuildsByPostId = <String, int>{};
+
   @override
   Widget build(BuildContext context) {
+    assert(() {
+      debugBuildCount++;
+      debugBuildsByPostId[post.id] = (debugBuildsByPostId[post.id] ?? 0) + 1;
+      return true;
+    }());
     final fixedHeight = _useFixedHeight(context)
         ? (_hasMedia ? _heightWithMedia : _heightTextOnly)
         : null;

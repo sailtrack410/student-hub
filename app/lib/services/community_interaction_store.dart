@@ -91,6 +91,7 @@ class CommunityInteractionStore extends ChangeNotifier {
   final _followReadTimes = <String, DateTime>{};
   Future<void> _followRefreshes = Future<void>.value();
   int _revision = 0;
+  int _hiddenRevision = 0;
   bool _disposed = false;
 
   CommunityInteractionStore({
@@ -102,6 +103,11 @@ class CommunityInteractionStore extends ChangeNotifier {
            preferences ?? CommunityPreferencesStore(accountId: accountId);
 
   int get revision => _revision;
+
+  /// 隐藏集合的版本号：仅 hidden 增删时递增。
+  /// 信息流页据此决定是否整表重过滤；点赞/收藏/关注不再触发整页 setState，
+  /// 由卡片级订阅（见 community_post_card 的互动快照守卫）自行更新。
+  int get hiddenRevision => _hiddenRevision;
   bool likePending(String id) => _pendingLikes.contains(id);
   bool followPending(String id) => _pendingFollows.contains(id);
   bool bookmarkPending(String id) => _pendingBookmarks.contains(id);
@@ -310,6 +316,7 @@ class CommunityInteractionStore extends ChangeNotifier {
       return false;
     }
     await _preferences.setHidden(postId, confirmed);
+    _hiddenRevision++;
     _pendingHidden.remove(postId);
     _changed();
     return true;
@@ -351,6 +358,7 @@ class CommunityInteractionStore extends ChangeNotifier {
         if (confirmed != true) await _preferences.setHidden(postId, false);
       } catch (_) {}
     }
+    _hiddenRevision++;
     _changed();
     return true;
   }
