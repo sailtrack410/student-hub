@@ -11,6 +11,7 @@ import '../../models/community_models.dart';
 import '../../models/user_session.dart';
 import '../../services/community_interaction_store.dart';
 import '../../services/community_feed_controller.dart';
+import '../../services/community_feed_cache.dart';
 import '../../widgets/community_post_card.dart';
 import '../../widgets/app_status_panel.dart';
 import '../../theme/app_theme.dart';
@@ -25,6 +26,13 @@ import 'post_publish_page.dart';
 /// APP-社区主页 (对应画布 5:157 节点，375 × 812)
 /// 顶部标题/搜索/发帖、分区横滑、信息流卡片、多图与互动；数据走社区真实接口。
 class CommunityHomePage extends StatefulWidget {
+  /// C2 分页预取：距列表底部不足 900px（约 3 卡）就提前拉下一页，
+  /// 用户基本无感翻页；卡片构建已由 scrollCacheExtent 预热，命中后直接出帧。
+  static const double feedPreloadExtent = 900;
+
+  static bool shouldPreloadNextPage(double pixels, double maxExtent) =>
+      pixels >= maxExtent - feedPreloadExtent;
+
   final ValueChanged<int>? onTabChanged;
   final int currentTabIndex;
 
@@ -89,6 +97,7 @@ class _CommunityHomePageState extends State<CommunityHomePage> {
     } else {
       _scrollController.addListener(_onScroll);
       _loadSections();
+      _restoreFeedSnapshot();
     }
   }
 
@@ -221,13 +230,32 @@ class _CommunityHomePageState extends State<CommunityHomePage> {
   void _onScroll() {
     if (!_scrollController.hasClients) return;
     final position = _scrollController.position;
-    if (position.pixels >= position.maxScrollExtent - 240) {
+    if (CommunityHomePage.shouldPreloadNextPage(
+      position.pixels,
+      position.maxScrollExtent,
+    )) {
       _loadPosts();
     }
     _scheduleImpressionCheck();
   }
 
   Future<void> _refresh() => _loadPosts(reset: true);
+
+  /// C3 缓存先显：冷启动先用上次快照秒开旧数据，网络刷新回来后整体替换；
+  /// 刷新失败时控制器只在空列表才进错误态，快照数据自然保留兜底。
+  /// 网络先返回（列表已有内容）时快照作废。
+  Future<void> _restoreFeedSnapshot() async {
+    final records = await CommunityFeedCache.loadRawRecords();
+    if (!mounted || records == null) return;
+    if (_items.isNotEmpty) return;
+    final page = CommunityApi.parseFeedPage({'records': records});
+    final posts = page.items
+        .map((item) => item.post)
+        .whereType<CommunityPost>()
+        .toList();
+    if (posts.isEmpty || !mounted) return;
+    _feed.seed(posts);
+  }
 
   void _selectSort(int index) {
     if (index == _sortIndex && _keyword.isEmpty) return;

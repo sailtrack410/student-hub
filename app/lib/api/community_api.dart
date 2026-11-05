@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/community_models.dart';
+import '../services/community_feed_cache.dart';
 import 'location_api.dart';
 import 'api_client.dart';
 
@@ -115,6 +117,10 @@ class CommunityApi {
       sessionId: sessionId,
     );
     if (raw == null) return null;
+    if (pageNum == 1) {
+      // C3 缓存先显：第一页成功即落盘原始条目，供下次冷启动秒开
+      unawaited(CommunityFeedCache.saveRawRecords(raw['records'] as List?));
+    }
     return parseFeedPage(raw);
   }
 
