@@ -126,7 +126,7 @@ public class CommunityServiceImpl implements CommunityService {
             wrapper.orderByDesc(CommunityPostEntity::getCreatedAt);
         }
         Page<CommunityPostEntity> page = postMapper.selectPage(new Page<>(safePage, safeSize), wrapper);
-        List<CommunityPostResponse> posts = assemblePosts(page.getRecords(), user.userId());
+        List<CommunityPostResponse> posts = assemblePosts(page.getRecords(), user.userId(), false);
         return PageResult.of(page.getCurrent(), page.getSize(), page.getTotal(), posts);
     }
 
@@ -299,17 +299,18 @@ public class CommunityServiceImpl implements CommunityService {
         CommunityPostLikeEntity existing = postLikeMapper.selectOne(new LambdaQueryWrapper<CommunityPostLikeEntity>()
                 .eq(CommunityPostLikeEntity::getPostId, postId).eq(CommunityPostLikeEntity::getUserId, user.userId()));
         if (existing == null) {
-            CommunityPostLikeEntity like = new CommunityPostLikeEntity(); like.setPostId(postId); like.setUserId(user.userId()); postLikeMapper.insert(like);
-            post.setLikeCount((post.getLikeCount() == null ? 0 : post.getLikeCount()) + 1);
+            CommunityPostLikeEntity like = new CommunityPostLikeEntity(); like.setPostId(postId); like.setUserId(user.userId());
+            postLikeMapper.insert(like);
+            postMapper.adjustLikeCount(postId, +1);
             if (!post.getAuthorId().equals(user.userId())) {
                 notificationService.send(new NotificationSendCommand(post.getAuthorId(), "COMMUNITY_LIKE", "帖子收到点赞",
                         user.displayName() + " 点赞了你的帖子", "COMMUNITY_POST", post.getId()));
             }
         } else {
             postLikeMapper.deleteById(existing.getId());
-            post.setLikeCount(Math.max(0, (post.getLikeCount() == null ? 0 : post.getLikeCount()) - 1));
+            postMapper.adjustLikeCount(postId, -1);
         }
-        postMapper.updateById(post);
+        post.setLikeCount(post.getLikeCount() == null ? Math.max(0, 1) : Math.max(0, post.getLikeCount() + (existing == null ? 1 : -1)));
         return toPostResponse(post, user.userId());
     }
 
@@ -321,19 +322,19 @@ public class CommunityServiceImpl implements CommunityService {
         CommunityCommentLikeEntity existing = commentLikeMapper.selectOne(new LambdaQueryWrapper<CommunityCommentLikeEntity>()
                 .eq(CommunityCommentLikeEntity::getCommentId, commentId).eq(CommunityCommentLikeEntity::getUserId, user.userId()));
         if (existing == null) {
-            CommunityCommentLikeEntity like = new CommunityCommentLikeEntity(); like.setCommentId(commentId); like.setUserId(user.userId()); commentLikeMapper.insert(like);
-            comment.setLikeCount((comment.getLikeCount() == null ? 0 : comment.getLikeCount()) + 1);
-            comment.setWeight((comment.getWeight() == null ? 0 : comment.getWeight()) + 1);
+            CommunityCommentLikeEntity like = new CommunityCommentLikeEntity(); like.setCommentId(commentId); like.setUserId(user.userId());
+            commentLikeMapper.insert(like);
+            commentMapper.adjustLikeCount(commentId, +1);
             if (!comment.getAuthorId().equals(user.userId())) {
                 notificationService.send(new NotificationSendCommand(comment.getAuthorId(), "COMMUNITY_LIKE", "评论收到点赞",
                         user.displayName() + " 点赞了你的评论", "COMMUNITY_POST", comment.getPostId()));
             }
         } else {
             commentLikeMapper.deleteById(existing.getId());
-            comment.setLikeCount(Math.max(0, (comment.getLikeCount() == null ? 0 : comment.getLikeCount()) - 1));
-            comment.setWeight(Math.max(0, (comment.getWeight() == null ? 0 : comment.getWeight()) - 1));
+            commentMapper.adjustLikeCount(commentId, -1);
         }
-        commentMapper.updateById(comment);
+        comment.setLikeCount(comment.getLikeCount() == null ? Math.max(0, 1) : Math.max(0, comment.getLikeCount() + (existing == null ? 1 : -1)));
+        comment.setWeight(comment.getWeight() == null ? Math.max(0, 1) : Math.max(0, comment.getWeight() + (existing == null ? 1 : -1)));
         CommunityPostEntity post = postMapper.selectById(comment.getPostId());
         return toCommentResponse(comment, user.userId(), post == null ? null : post.getAuthorId());
     }
@@ -583,6 +584,15 @@ public class CommunityServiceImpl implements CommunityService {
      * authorBadgeCode 为佩戴列搭车零成本。
      */
     private List<CommunityPostResponse> assemblePosts(List<CommunityPostEntity> posts, Long viewerId) {
+        return assemblePosts(posts, viewerId, true);
+    }
+
+    /**
+     * D3 列表瘦身：列表路径传 withContentBlocks=false，跳过文章图文块解析与
+     * 缩略图签名（列表卡片只用 images 一套地址，contentBlocks 仅详情页消费）；
+     * 详情路径保持全量（toPostResponse 单帖走 withContentBlocks=true）。
+     */
+    private List<CommunityPostResponse> assemblePosts(List<CommunityPostEntity> posts, Long viewerId, boolean withContentBlocks) {
         if (posts.isEmpty()) {
             return List.of();
         }
@@ -610,8 +620,16 @@ public class CommunityServiceImpl implements CommunityService {
                         .stream().map(CommunityUserBookmarkEntity::getPostId).collect(Collectors.toSet());
         // 作者真实等级批量算（等级=f(总经验)，与作者主页/成就页同口径；2026-11-05 等级统一）
         Map<Long, Integer> authorExp = achievementService.totalExpBatch(authorIds);
+        // D3：签名计算按需——列表裁剪缩略图，详情两套都签（每帖仍各签一次）
+        java.util.List<List<String>> imagesPerPost = posts.stream()
+                .map(post -> signImages(JsonIds.parse(post.getImageFileIds())))
+                .toList();
+        java.util.List<List<String>> thumbsPerPost = withContentBlocks
+                ? posts.stream().map(post -> signThumbnailImages(JsonIds.parse(post.getImageFileIds()))).toList()
+                : posts.stream().map(post -> List.<String>of()).toList();
 
         return posts.stream().map(post -> {
+            int idx = posts.indexOf(post);
             UserEntity author = authors.get(post.getAuthorId());
             CommunitySectionEntity section = sections.get(post.getSectionId());
             Integer authorExpValue = authorExp.get(post.getAuthorId());
@@ -626,9 +644,9 @@ public class CommunityServiceImpl implements CommunityService {
                     post.getPostType() == null ? "DYNAMIC" : post.getPostType(),
                     post.getStatus(), post.getHiddenReason(),
                     post.getTitle(), post.getContent(),
-                    signImages(JsonIds.parse(post.getImageFileIds())),
-                    signThumbnailImages(JsonIds.parse(post.getImageFileIds())),
-                    parseBlockResponses(post.getContentBlocks(), post.getId()),
+                    imagesPerPost.get(idx),
+                    thumbsPerPost.get(idx),
+                    withContentBlocks ? parseBlockResponses(post.getContentBlocks(), post.getId()) : List.<CommunityContentBlockResponse>of(),
                     parseTopics(post.getTopics()),
                     post.getCommentCount() == null ? 0 : post.getCommentCount(),
                     post.getLikeCount() == null ? 0 : post.getLikeCount(),

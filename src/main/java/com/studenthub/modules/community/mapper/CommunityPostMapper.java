@@ -19,4 +19,9 @@ public interface CommunityPostMapper extends BaseMapper<CommunityPostEntity> {
             + "deleted = 0, updated_at = CURRENT_TIMESTAMP, updated_by = #{operatorId}, version = version + 1 "
             + "WHERE id = #{id}")
     int restoreFromAppeal(@Param("id") Long id, @Param("operatorId") Long operatorId);
+
+    /** D1 原子计数：并发点赞同帖时避免「读-改-整行写」互相覆盖丢计数（下限钳 0） */
+    @Update("UPDATE community_post SET like_count = GREATEST(like_count + #{delta}, 0), "
+            + "updated_at = CURRENT_TIMESTAMP WHERE id = #{id}")
+    int adjustLikeCount(@Param("id") Long id, @Param("delta") int delta);
 }
