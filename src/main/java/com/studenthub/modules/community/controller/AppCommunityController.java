@@ -57,6 +57,12 @@ public class AppCommunityController {
         return Result.success(communityService.detail(currentUserProvider.requireCurrentUser(), postId));
     }
 
+    @GetMapping("/posts/share/{slug}")
+    @Operation(summary = "分享短链码解析帖子", operationId = "getCommunityPostByShareSlug")
+    public Result<CommunityPostResponse> byShareSlug(@PathVariable String slug) {
+        return Result.success(communityService.byShareSlug(currentUserProvider.requireCurrentUser(), slug));
+    }
+
     @PostMapping("/posts")
     @Operation(summary = "发布社区帖子", operationId = "createCommunityPost")
     public Result<CommunityPostResponse> publish(@RequestBody @Valid CreateCommunityPostRequest request) {

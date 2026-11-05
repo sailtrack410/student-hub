@@ -92,8 +92,38 @@ class CommunityLikeCountIntegrationTest {
     }
 
     @Test
-    void commentLikeCountStaysConsistent() throws Exception {
+    void shareSlugResolvesAndPersists() throws Exception {
         String token = login(AUTHOR);
+        JsonNode published = ok(postJson(token, "/api/app/community/posts", Map.of(
+                "sectionId", 6001,
+                "content", "分享短链验收帖正文")));
+
+        // 发帖即生成 slug（8 位、混淆安全字符集）
+        String slug = published.path("shareSlug").asText(null);
+        assertNotNull(slug, "发帖响应应携带 shareSlug");
+        assertEquals(8, slug.length(), "slug 应为 8 位");
+        assertTrue(slug.matches("[23456789abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ]{8}"),
+                "slug 应不含易混淆字符: " + slug);
+
+        // slug 解析回同一帖
+        JsonNode resolved = ok(getJson(token, "/api/app/community/posts/share/" + slug, Map.of()));
+        assertEquals(published.path("postId").asLong(), resolved.path("postId").asLong(),
+                "slug 应解析回同一帖子");
+
+        // 纯数字 id 兼容路径
+        JsonNode byId = ok(getJson(token, "/api/app/community/posts/share/"
+                + published.path("postId").asText(), Map.of()));
+        assertEquals(published.path("postId").asLong(), byId.path("postId").asLong());
+
+        // 非法 slug → 404
+        MockHttpServletRequestBuilder bad = get("/api/app/community/posts/share/zzzzzzzz")
+                .header("Authorization", "Bearer " + token);
+        assertEquals(404, mockMvc.perform(bad).andReturn().getResponse().getStatus(),
+                "未知 slug 应 404");
+    }
+
+    @Test
+    void commentLikeCountStaysConsistent() throws Exception {        String token = login(AUTHOR);
         long postId = ok(postJson(token, "/api/app/community/posts", Map.of(
                 "sectionId", 6001,
                 "content", "评论点赞验收帖正文"))).path("postId").asLong();

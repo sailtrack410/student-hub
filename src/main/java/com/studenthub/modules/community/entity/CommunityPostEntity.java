@@ -42,4 +42,6 @@ public class CommunityPostEntity extends BaseEntity {
     private java.time.LocalDateTime pinnedAt;
     /** 置顶操作人（V75） */
     private Long pinnedBy;
+    /** 对外分享短链码（V100，8 位混淆安全字符集；懒生成，可为空） */
+    private String shareSlug;
 }

@@ -19,5 +19,6 @@ public record CommunityPostResponse(Long postId, Long sectionId, String sectionN
                                     int commentCount, int likeCount, boolean liked, boolean bookmarked,
                                     LocalDateTime createdAt,
                                     String locationName, String locationAddress,
-                                    java.math.BigDecimal latitude, java.math.BigDecimal longitude, String poiId) {
+                                    java.math.BigDecimal latitude, java.math.BigDecimal longitude, String poiId,
+                                    String shareSlug) {
 }

@@ -19,6 +19,7 @@ import com.studenthub.modules.community.mapper.CommunitySectionMapper;
 import com.studenthub.modules.community.mapper.CommunityTopicMapper;
 import com.studenthub.modules.community.mapper.CommunityPostLikeMapper;
 import com.studenthub.modules.community.mapper.CommunityCommentLikeMapper;
+import com.studenthub.modules.community.service.share.PostShareSlugGenerator;
 import com.studenthub.modules.community.entity.CommunityTopicEntity;
 import com.studenthub.modules.community.entity.CommunityPostLikeEntity;
 import com.studenthub.modules.community.entity.CommunityCommentLikeEntity;
@@ -233,6 +234,7 @@ public class CommunityServiceImpl implements CommunityService {
         if (!ENABLED.equals(status)) {
             entity.setHiddenAt(java.time.LocalDateTime.now());
         }
+        entity.setShareSlug(PostShareSlugGenerator.next());
         postMapper.insert(entity);
         recordTopicUsage(user.campusId(), topics);
         if (!ENABLED.equals(status)) {
@@ -560,6 +562,31 @@ public class CommunityServiceImpl implements CommunityService {
         return post;
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public CommunityPostResponse byShareSlug(AuthenticatedUser user, String slugOrId) {
+        CommunityPostEntity post;
+        if (slugOrId != null && slugOrId.chars().allMatch(Character::isDigit)) {
+            // 兼容旧分享文本里的纯数字 id
+            post = requirePost(user, Long.parseLong(slugOrId));
+        } else {
+            post = postMapper.selectOne(new LambdaQueryWrapper<CommunityPostEntity>()
+                    .eq(CommunityPostEntity::getShareSlug, slugOrId)
+                    .last("LIMIT 1"));
+            if (post == null) {
+                throw new BusinessException(ErrorCode.NOT_FOUND, "帖子不存在或已下线");
+            }
+            if (!user.campusId().equals(post.getCampusId())) {
+                throw new BusinessException(ErrorCode.NOT_FOUND, "帖子不存在或已下线");
+            }
+            boolean ownerView = user.userId().equals(post.getAuthorId()) && "HIDDEN".equals(post.getStatus());
+            if (!ENABLED.equals(post.getStatus()) && !ownerView) {
+                throw new BusinessException(ErrorCode.NOT_FOUND, "帖子不存在或已下线");
+            }
+        }
+        return toPostResponse(post, user.userId());
+    }
+
     /** 单条路径 = 批量组装退化为 1 条（详情/发布/点赞等复用），查询形态与批量一致 */
     private CommunityPostResponse toPostResponse(CommunityPostEntity post, Long viewerId) {
         return assemblePosts(List.of(post), viewerId).get(0);
@@ -653,7 +680,8 @@ public class CommunityServiceImpl implements CommunityService {
                     likedPostIds.contains(post.getId()), bookmarkedPostIds.contains(post.getId()),
                     post.getCreatedAt(),
                     post.getLocationName(), post.getLocationAddress(),
-                    post.getLatitude(), post.getLongitude(), post.getPoiId());
+                    post.getLatitude(), post.getLongitude(), post.getPoiId(),
+                    post.getShareSlug());
         }).toList();
     }
 
