@@ -1,6 +1,9 @@
 package com.studenthub.modules.community;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
 import com.studenthub.common.ErrorCode;
 import com.studenthub.exception.BusinessException;
 import com.studenthub.modules.community.controller.dto.AdminCommunityContentActionRequest;
@@ -27,6 +30,8 @@ import com.studenthub.modules.identity.security.RoleScope;
 import com.studenthub.modules.notification.service.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -81,9 +86,14 @@ class CommunityModerationServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        var assistant = new MapperBuilderAssistant(new MybatisConfiguration(), "moderation-test");
+        TableInfoHelper.initTableInfo(assistant, CommunityPostEntity.class);
+        TableInfoHelper.initTableInfo(assistant, CommunityCommentEntity.class);
         moderationService = new CommunityModerationServiceImpl(appealMapper, reportMapper, sanctionMapper, postMapper,
                 commentMapper, directMessageMapper, userMapper, notificationService, currentUserProvider,
                 campusContextService, templateMapper, fileStorageService, new ObjectMapper());
+        lenient().when(postMapper.selectByIdForUpdate(any())).thenAnswer(inv -> postMapper.selectById(inv.getArgument(0)));
+        lenient().when(commentMapper.selectByIdForUpdate(any())).thenAnswer(inv -> commentMapper.selectById(inv.getArgument(0)));
         lenient().when(campusContextService.currentCampusId()).thenReturn(1L);
         reporter = new AuthenticatedUser(1002L, 1L, 10L, "reporter", "开发学生", "STUDENT", "BASIC",
                 List.of(new RoleScope("REQUESTER", 10L, null)), List.of(), null, null);
@@ -261,9 +271,9 @@ class CommunityModerationServiceImplTest {
         moderationService.hideContent("COMMENT", 7001L, new AdminCommunityContentActionRequest("广告"));
 
         assertEquals("HIDDEN", comment.getStatus());
-        assertEquals(4, post.getCommentCount());
-        verify(commentMapper).updateById(comment);
-        verify(postMapper).updateById(post);
+        verify(postMapper).adjustCommentCount(9001L, -1);
+        verify(commentMapper, never()).updateById(comment);
+        verify(postMapper, never()).updateById(post);
     }
 
     @Test
@@ -284,7 +294,27 @@ class CommunityModerationServiceImplTest {
         moderationService.restoreContent("COMMENT", 7001L, null);
 
         assertEquals("ENABLED", comment.getStatus());
-        assertEquals(5, post.getCommentCount());
+        verify(postMapper).adjustCommentCount(9001L, 1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ENABLED", "HIDDEN", "DELETED"})
+    void reportThresholdOnlyDecrementsVisibleComment(String status) {
+        CommunityCommentEntity comment = new CommunityCommentEntity();
+        comment.setId(7001L);
+        comment.setPostId(9001L);
+        comment.setAuthorId(2002L);
+        comment.setContent("举报计数回归");
+        comment.setStatus(status);
+        when(commentMapper.selectById(7001L)).thenReturn(comment);
+        when(postMapper.selectById(9001L)).thenReturn(enabledPost(2002L));
+        when(reportMapper.selectCount(any())).thenReturn(0L, 0L, 10L);
+
+        moderationService.submitReport(reporter,
+                new CreateCommunityReportRequest("COMMENT", 7001L, "AD", null));
+
+        verify(postMapper, times("ENABLED".equals(status) ? 1 : 0)).adjustCommentCount(9001L, -1);
+        verify(commentMapper, never()).updateById(any(CommunityCommentEntity.class));
     }
 
     @Test

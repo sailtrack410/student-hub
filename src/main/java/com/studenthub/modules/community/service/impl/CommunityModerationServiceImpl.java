@@ -1,6 +1,7 @@
 package com.studenthub.modules.community.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studenthub.common.ErrorCode;
@@ -46,6 +47,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 
 import java.time.Duration;
 import java.time.LocalDate;
@@ -110,7 +112,7 @@ public class CommunityModerationServiceImpl implements CommunityModerationServic
     private final ObjectMapper objectMapper;
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(rollbackFor = Exception.class, isolation = Isolation.READ_COMMITTED)
     public void submitReport(AuthenticatedUser user, CreateCommunityReportRequest request) {
         String targetType = normalize(request.targetType());
         String reasonCode = normalize(request.reasonCode());
@@ -119,6 +121,16 @@ public class CommunityModerationServiceImpl implements CommunityModerationServic
         }
         if (!REASON_CODES.contains(reasonCode)) {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER, "举报原因不合法");
+        }
+        // 与点赞、删除统一先锁帖子，再锁评论；举报汇总读取锁等待后的最新提交。
+        if (TARGET_POST.equals(targetType)) {
+            postMapper.selectByIdForUpdate(request.targetId());
+        } else if (TARGET_COMMENT.equals(targetType)) {
+            CommunityCommentEntity target = commentMapper.selectById(request.targetId());
+            if (target != null) {
+                postMapper.selectByIdForUpdate(target.getPostId());
+                commentMapper.selectByIdForUpdate(target.getId());
+            }
         }
         ReportSnapshot snapshot = resolveSnapshot(user, targetType, request.targetId());
         if (snapshot.authorId() != null && snapshot.authorId().equals(user.userId())) {
@@ -170,30 +182,27 @@ public class CommunityModerationServiceImpl implements CommunityModerationServic
             if (comment == null) {
                 return;
             }
-            CommunityCommentEntity update = new CommunityCommentEntity();
-            update.setId(comment.getId());
-            update.setReportCount((int) reports);
-            update.setWeight(Math.max(0, (comment.getWeight() == null ? 0 : comment.getWeight()) - 3));
-            update.setVersion(comment.getVersion());
+            var update = new LambdaUpdateWrapper<CommunityCommentEntity>()
+                    .eq(CommunityCommentEntity::getId, targetId)
+                    .set(CommunityCommentEntity::getReportCount, (int) reports)
+                    .setSql("weight = GREATEST(COALESCE(weight, 0) - 3, 0), version = version + 1");
             if (reports >= COMMENT_REPORT_DELETE_THRESHOLD && !DELETED.equals(comment.getStatus())) {
-                update.setStatus(DELETED);
-                update.setHiddenReason("REPORT_LIMIT");
+                update.set(CommunityCommentEntity::getStatus, DELETED)
+                        .set(CommunityCommentEntity::getHiddenReason, "REPORT_LIMIT");
+                if (ENABLED.equals(comment.getStatus())) {
+                    postMapper.adjustCommentCount(comment.getPostId(), -1);
+                }
                 notificationService.send(new NotificationSendCommand(comment.getAuthorId(), NOTIFICATION_TYPE,
                         "评论已被删除",
                         "你的评论因多名用户举报已被删除，如有异议可在社区申诉中提交复核。",
                         "COMMUNITY_POST", comment.getPostId()));
             }
-            commentMapper.updateById(update);
+            commentMapper.update(null, update);
         } else if (TARGET_POST.equals(targetType)) {
-            CommunityPostEntity post = postMapper.selectById(targetId);
-            if (post == null) {
-                return;
-            }
-            CommunityPostEntity update = new CommunityPostEntity();
-            update.setId(post.getId());
-            update.setReportCount((int) reports);
-            update.setVersion(post.getVersion());
-            postMapper.updateById(update);
+            postMapper.update(null, new LambdaUpdateWrapper<CommunityPostEntity>()
+                    .eq(CommunityPostEntity::getId, targetId)
+                    .set(CommunityPostEntity::getReportCount, (int) reports)
+                    .setSql("version = version + 1"));
         }
     }
 
@@ -470,15 +479,16 @@ public class CommunityModerationServiceImpl implements CommunityModerationServic
     private void applyStatusChange(String targetType, Long targetId, String newStatus, String reason, boolean notifyAuthor) {
         String type = normalize(targetType);
         if (TARGET_POST.equals(type)) {
-            CommunityPostEntity post = postMapper.selectById(targetId);
+            CommunityPostEntity post = postMapper.selectByIdForUpdate(targetId);
             if (post == null) {
                 throw new BusinessException(ErrorCode.NOT_FOUND, "帖子不存在");
             }
             if (newStatus.equals(post.getStatus())) {
                 return;
             }
+            postMapper.update(null, new LambdaUpdateWrapper<CommunityPostEntity>()
+                    .eq(CommunityPostEntity::getId, targetId).set(CommunityPostEntity::getStatus, newStatus).setSql("version = version + 1"));
             post.setStatus(newStatus);
-            postMapper.updateById(post);
             if (notifyAuthor) {
                 notify(post.getAuthorId(), "帖子内容处理通知",
                         "你的帖子「" + post.getTitle() + "」因" + reason + "已被" + statusLabel(newStatus), post.getId());
@@ -490,20 +500,18 @@ public class CommunityModerationServiceImpl implements CommunityModerationServic
             if (comment == null) {
                 throw new BusinessException(ErrorCode.NOT_FOUND, "评论不存在");
             }
+            CommunityPostEntity parent = postMapper.selectByIdForUpdate(comment.getPostId());
+            comment = commentMapper.selectByIdForUpdate(targetId);
             if (newStatus.equals(comment.getStatus())) {
                 return;
             }
             boolean wasVisible = ENABLED.equals(comment.getStatus());
             boolean willBeVisible = ENABLED.equals(newStatus);
+            commentMapper.update(null, new LambdaUpdateWrapper<CommunityCommentEntity>()
+                    .eq(CommunityCommentEntity::getId, targetId).set(CommunityCommentEntity::getStatus, newStatus).setSql("version = version + 1"));
             comment.setStatus(newStatus);
-            commentMapper.updateById(comment);
-            if (wasVisible != willBeVisible) {
-                CommunityPostEntity post = postMapper.selectById(comment.getPostId());
-                if (post != null) {
-                    int current = post.getCommentCount() == null ? 0 : post.getCommentCount();
-                    post.setCommentCount(willBeVisible ? current + 1 : Math.max(0, current - 1));
-                    postMapper.updateById(post);
-                }
+            if (wasVisible != willBeVisible && parent != null) {
+                postMapper.adjustCommentCount(comment.getPostId(), willBeVisible ? 1 : -1);
             }
             if (notifyAuthor) {
                 notify(comment.getAuthorId(), "评论内容处理通知",

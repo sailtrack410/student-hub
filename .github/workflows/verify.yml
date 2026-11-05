@@ -1,0 +1,65 @@
+name: Verify
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-only-password
+          MYSQL_DATABASE: studenthub_p1
+          MYSQL_USER: studenthub_ci
+          MYSQL_PASSWORD: ci-only-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pci-only-password"
+          --health-interval=10s --health-timeout=5s --health-retries=12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - run: ./mvnw --batch-mode test
+      - name: Check counters on MySQL
+        env:
+          SPRING_DATASOURCE_URL: jdbc:mysql://127.0.0.1:3306/studenthub_p1?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai
+          SPRING_DATASOURCE_USERNAME: studenthub_ci
+          SPRING_DATASOURCE_PASSWORD: ci-only-password
+          SPRING_DATASOURCE_DRIVER_CLASS_NAME: com.mysql.cj.jdbc.Driver
+        run: ./mvnw --batch-mode -Dtest=CommunityCounterConcurrencyIntegrationTest,CommunityLikeCountIntegrationTest test
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tools/admin/package-lock.json
+      - run: npm ci && npm run check
+        working-directory: tools/admin
+  app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.6'
+          cache: true
+      - run: flutter pub get
+        working-directory: app
+      - run: flutter test --reporter expanded
+        working-directory: app
+      - run: status=0; dart analyze --format machine > analyze.log || status=$?; python3 ../tools/check_dart_analysis.py analyze.log --exit-code "$status"
+        working-directory: app
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: app-analysis
+          path: app/analyze.log

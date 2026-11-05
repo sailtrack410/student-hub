@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.studenthub.app",
+      "sha256_cert_fingerprints": [
+        "CE:16:D1:0D:02:BE:E4:A4:71:2B:4B:D6:67:2E:AB:39:78:CA:33:55:D4:29:2D:E8:E1:10:AB:A5:4B:03:77:E8"
+      ]
+    }
+  }
+]

@@ -87,8 +87,7 @@ class _HomePageState extends State<HomePage>
   @override
   void initState() {
     super.initState();
-    UserSession.currentUserId = widget.session.userId;
-    UserSession.currentUserName = widget.session.displayName;
+    widget.session.activate();
     // D-Share：进入主界面（登录/会话恢复完成）即启用帖子深链路由（幂等）
     CommunityDeepLinkService.ensureInitialized();
     _currentTabIndex = widget.initialTabIndex < 0

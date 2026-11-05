@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../api/ad_slot_api.dart';
 import '../../api/community_api.dart';
+import '../../api/api_client.dart';
 import '../../api/feature_flags.dart';
 import '../../models/community_models.dart';
 import '../../models/user_session.dart';
@@ -41,6 +42,8 @@ class CommunityHomePage extends StatefulWidget {
 
   /// 可注入交互网关，测试与预览无需依赖真实网络。
   final CommunityInteractionStore? interactionStore;
+  final CommunityFeedGateway? feedGateway;
+  final Future<List<CommunitySection>> Function()? sectionsLoader;
 
   const CommunityHomePage({
     super.key,
@@ -48,6 +51,8 @@ class CommunityHomePage extends StatefulWidget {
     this.currentTabIndex = 1,
     this.initialPosts,
     this.interactionStore,
+    this.feedGateway,
+    this.sectionsLoader,
   });
 
   @override
@@ -84,7 +89,10 @@ class _CommunityHomePageState extends State<CommunityHomePage> {
     _interactions =
         widget.interactionStore ??
         CommunityInteractionScope.acquire(UserSession.currentUserId ?? 'guest');
-    _feed = CommunityFeedController(interactions: _interactions);
+    _feed = CommunityFeedController(
+      interactions: _interactions,
+      gateway: widget.feedGateway,
+    );
     _feed.addListener(_onFeedChanged);
     _interactions.addListener(_onInteractionsChanged);
     unawaited(_interactions.initialize());
@@ -141,7 +149,8 @@ class _CommunityHomePageState extends State<CommunityHomePage> {
   }
 
   Future<void> _loadSections() async {
-    final sections = await CommunityApi.fetchSections();
+    final sections =
+        await (widget.sectionsLoader ?? CommunityApi.fetchSections)();
     if (!mounted) return;
     setState(() {
       _sections = sections;
@@ -245,16 +254,37 @@ class _CommunityHomePageState extends State<CommunityHomePage> {
   /// 刷新失败时控制器只在空列表才进错误态，快照数据自然保留兜底。
   /// 网络先返回（列表已有内容）时快照作废。
   Future<void> _restoreFeedSnapshot() async {
-    final records = await CommunityFeedCache.loadRawRecords();
-    if (!mounted || records == null) return;
-    if (_items.isNotEmpty) return;
+    final scope = CommunityFeedCache.currentScope(
+      baseUrl: ApiClient.defaultBaseUrl,
+      sectionId: _selectedSectionId,
+      sort: _sortIndex == 0 ? 'HOT' : 'LATEST',
+      keyword: _keyword,
+    );
+    if (scope == null) return;
+    final records = await CommunityFeedCache.loadRawRecords(scope);
+    if (!mounted ||
+        records == null ||
+        _feed.hasFreshData ||
+        scope.accountId != UserSession.currentUserId ||
+        scope.campusId != UserSession.currentCampusId) {
+      return;
+    }
+    final currentScope = CommunityFeedCache.currentScope(
+      baseUrl: ApiClient.defaultBaseUrl,
+      sectionId: _selectedSectionId,
+      sort: _sortIndex == 0 ? 'HOT' : 'LATEST',
+      keyword: _keyword,
+    );
+    if (_items.isNotEmpty || currentScope?.storageKey != scope.storageKey) {
+      return;
+    }
     final page = CommunityApi.parseFeedPage({'records': records});
     final posts = page.items
         .map((item) => item.post)
         .whereType<CommunityPost>()
         .toList();
     if (posts.isEmpty || !mounted) return;
-    _feed.seed(posts);
+    setState(() => _feed.seed(posts));
   }
 
   void _selectSort(int index) {
@@ -488,9 +518,7 @@ class _CommunityHomePageState extends State<CommunityHomePage> {
     final saved = await _interactions.toggleBookmark(post);
     _showInteractionMessage(
       saved
-          ? (_interactions.apply(post).isBookmarked
-                ? '已收藏'
-                : '已取消收藏')
+          ? (_interactions.apply(post).isBookmarked ? '已收藏' : '已取消收藏')
           : '收藏操作失败，请重试',
     );
   }

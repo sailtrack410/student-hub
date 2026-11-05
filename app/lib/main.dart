@@ -42,6 +42,7 @@ void configureUnauthorizedNavigation(AuthService authService) {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  CommunityDeepLinkService.ensureInitialized();
 
   // 沉浸式透明状态栏配置
   SystemChrome.setSystemUIOverlayStyle(
@@ -66,11 +67,6 @@ void main() async {
 
   // 登录/会话建立后读取功能开关：失败保留默认值，不阻塞启动。
   unawaited(FeatureFlags.load(apiClient));
-
-  // D-Share：登录会话恢复后启用帖子深链路由（未登录时收到链接静默忽略）
-  if (restored.session != null) {
-    CommunityDeepLinkService.ensureInitialized();
-  }
 
   runApp(
     SmartCampusApp(

@@ -252,7 +252,7 @@ public class CommunityServiceImpl implements CommunityService {
     @Transactional(rollbackFor = Exception.class)
     public CommunityCommentResponse comment(AuthenticatedUser user, Long postId, CreateCommunityCommentRequest request) {
         communityModerationService.requireNotMuted(user.userId());
-        CommunityPostEntity post = requirePost(user, postId);
+        CommunityPostEntity post = requirePostForUpdate(user, postId);
         if (request.parentCommentId() != null) {
             CommunityCommentEntity parent = commentMapper.selectById(request.parentCommentId());
             if (parent == null || !post.getId().equals(parent.getPostId()) || !ENABLED.equals(parent.getStatus())) {
@@ -285,11 +285,7 @@ public class CommunityServiceImpl implements CommunityService {
                 notificationService.send(new NotificationSendCommand(post.getAuthorId(), "COMMUNITY_COMMENT", "新的社区评论",
                         user.displayName() + " 评论了你的帖子", "COMMUNITY_POST", post.getId()));
             }
-            CommunityPostEntity update = new CommunityPostEntity();
-            update.setId(post.getId());
-            update.setCommentCount((post.getCommentCount() == null ? 0 : post.getCommentCount()) + 1);
-            update.setVersion(post.getVersion());
-            postMapper.updateById(update);
+            postMapper.adjustCommentCount(post.getId(), 1);
         }
         return toCommentResponse(entity, user.userId(), post.getAuthorId());
     }
@@ -297,9 +293,9 @@ public class CommunityServiceImpl implements CommunityService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public CommunityPostResponse togglePostLike(AuthenticatedUser user, Long postId) {
-        CommunityPostEntity post = requirePost(user, postId);
+        CommunityPostEntity post = requirePostForUpdate(user, postId);
         CommunityPostLikeEntity existing = postLikeMapper.selectOne(new LambdaQueryWrapper<CommunityPostLikeEntity>()
-                .eq(CommunityPostLikeEntity::getPostId, postId).eq(CommunityPostLikeEntity::getUserId, user.userId()));
+                .eq(CommunityPostLikeEntity::getPostId, postId).eq(CommunityPostLikeEntity::getUserId, user.userId()).last("FOR UPDATE"));
         if (existing == null) {
             CommunityPostLikeEntity like = new CommunityPostLikeEntity(); like.setPostId(postId); like.setUserId(user.userId());
             postLikeMapper.insert(like);
@@ -312,17 +308,17 @@ public class CommunityServiceImpl implements CommunityService {
             postLikeMapper.deleteById(existing.getId());
             postMapper.adjustLikeCount(postId, -1);
         }
-        post.setLikeCount(post.getLikeCount() == null ? Math.max(0, 1) : Math.max(0, post.getLikeCount() + (existing == null ? 1 : -1)));
-        return toPostResponse(post, user.userId());
+        return toPostResponse(postMapper.selectByIdForUpdate(postId), user.userId());
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public CommunityCommentResponse toggleCommentLike(AuthenticatedUser user, Long commentId) {
         CommunityCommentEntity comment = requireComment(commentId);
-        requirePost(user, comment.getPostId());
+        requirePostForUpdate(user, comment.getPostId());
+        comment = requireCommentForUpdate(commentId);
         CommunityCommentLikeEntity existing = commentLikeMapper.selectOne(new LambdaQueryWrapper<CommunityCommentLikeEntity>()
-                .eq(CommunityCommentLikeEntity::getCommentId, commentId).eq(CommunityCommentLikeEntity::getUserId, user.userId()));
+                .eq(CommunityCommentLikeEntity::getCommentId, commentId).eq(CommunityCommentLikeEntity::getUserId, user.userId()).last("FOR UPDATE"));
         if (existing == null) {
             CommunityCommentLikeEntity like = new CommunityCommentLikeEntity(); like.setCommentId(commentId); like.setUserId(user.userId());
             commentLikeMapper.insert(like);
@@ -335,8 +331,7 @@ public class CommunityServiceImpl implements CommunityService {
             commentLikeMapper.deleteById(existing.getId());
             commentMapper.adjustLikeCount(commentId, -1);
         }
-        comment.setLikeCount(comment.getLikeCount() == null ? Math.max(0, 1) : Math.max(0, comment.getLikeCount() + (existing == null ? 1 : -1)));
-        comment.setWeight(comment.getWeight() == null ? Math.max(0, 1) : Math.max(0, comment.getWeight() + (existing == null ? 1 : -1)));
+        comment = requireCommentForUpdate(commentId);
         CommunityPostEntity post = postMapper.selectById(comment.getPostId());
         return toCommentResponse(comment, user.userId(), post == null ? null : post.getAuthorId());
     }
@@ -345,44 +340,48 @@ public class CommunityServiceImpl implements CommunityService {
     @Transactional(rollbackFor = Exception.class)
     public CommunityCommentResponse pinComment(AuthenticatedUser user, Long commentId) {
         CommunityCommentEntity comment = requireComment(commentId);
-        CommunityPostEntity post = requirePost(user, comment.getPostId());
+        CommunityPostEntity post = requirePostForUpdate(user, comment.getPostId());
+        comment = requireCommentForUpdate(commentId);
         if (!post.getAuthorId().equals(user.userId())) throw new BusinessException(ErrorCode.FORBIDDEN, "只有作者可以置顶评论");
         commentMapper.update(null, new LambdaUpdateWrapper<CommunityCommentEntity>()
-                .eq(CommunityCommentEntity::getPostId, post.getId()).set(CommunityCommentEntity::getPinned, 0));
-        comment.setPinned(comment.getPinned() != null && comment.getPinned() == 1 ? 0 : 1);
-        commentMapper.updateById(comment);
+                .eq(CommunityCommentEntity::getPostId, post.getId()).set(CommunityCommentEntity::getPinned, 0).setSql("version = version + 1"));
+        int pinned = comment.getPinned() != null && comment.getPinned() == 1 ? 0 : 1;
+        commentMapper.update(null, new LambdaUpdateWrapper<CommunityCommentEntity>()
+                .eq(CommunityCommentEntity::getId, commentId).set(CommunityCommentEntity::getPinned, pinned).setSql("version = version + 1"));
+        comment.setPinned(pinned);
         return toCommentResponse(comment, user.userId(), post.getAuthorId());
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deletePost(AuthenticatedUser user, Long postId) {
-        CommunityPostEntity post = requirePost(user, postId);
+        CommunityPostEntity post = requirePostForUpdate(user, postId);
         if (!user.userId().equals(post.getAuthorId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "只能删除自己发布的帖子");
         }
         // 帖子与全部评论同步逻辑删除；发帖/评论经验按"经验可回收"由 AchievementService 业务重算自动扣减
-        post.setStatus("DELETED");
-        postMapper.updateById(post);
+        postMapper.update(null, new LambdaUpdateWrapper<CommunityPostEntity>()
+                .eq(CommunityPostEntity::getId, postId).set(CommunityPostEntity::getStatus, "DELETED")
+                .set(CommunityPostEntity::getCommentCount, 0).setSql("version = version + 1"));
         commentMapper.update(null, new LambdaUpdateWrapper<CommunityCommentEntity>()
                 .eq(CommunityCommentEntity::getPostId, post.getId())
                 .ne(CommunityCommentEntity::getStatus, "DELETED")
-                .set(CommunityCommentEntity::getStatus, "DELETED"));
+                .set(CommunityCommentEntity::getStatus, "DELETED").setSql("version = version + 1"));
         log.info("社区帖子已由作者删除, postId={}, authorId={}", postId, user.userId());
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteComment(AuthenticatedUser user, Long commentId) {
-        CommunityCommentEntity comment = requireComment(commentId);
+        CommunityCommentEntity initial = requireComment(commentId);
+        requirePostForUpdate(user, initial.getPostId());
+        CommunityCommentEntity comment = requireCommentForUpdate(commentId);
         if (!user.userId().equals(comment.getAuthorId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "只能删除自己的评论");
         }
-        comment.setStatus("DELETED");
-        commentMapper.updateById(comment);
-        CommunityPostEntity post = requirePost(user, comment.getPostId());
-        post.setCommentCount(Math.max(0, (post.getCommentCount() == null ? 0 : post.getCommentCount()) - 1));
-        postMapper.updateById(post);
+        commentMapper.update(null, new LambdaUpdateWrapper<CommunityCommentEntity>()
+                .eq(CommunityCommentEntity::getId, commentId).set(CommunityCommentEntity::getStatus, "DELETED").setSql("version = version + 1"));
+        if (ENABLED.equals(comment.getStatus())) postMapper.adjustCommentCount(comment.getPostId(), -1);
     }
 
     @Override
@@ -550,7 +549,14 @@ public class CommunityServiceImpl implements CommunityService {
     }
 
     private CommunityPostEntity requirePost(AuthenticatedUser user, Long postId) {
-        CommunityPostEntity post = postMapper.selectById(postId);
+        return validatePost(user, postMapper.selectById(postId));
+    }
+
+    private CommunityPostEntity requirePostForUpdate(AuthenticatedUser user, Long postId) {
+        return validatePost(user, postMapper.selectByIdForUpdate(postId));
+    }
+
+    private CommunityPostEntity validatePost(AuthenticatedUser user, CommunityPostEntity post) {
         if (post == null || !user.campusId().equals(post.getCampusId())) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "帖子不存在或已下线");
         }
@@ -721,6 +727,14 @@ public class CommunityServiceImpl implements CommunityService {
                     false, comment.getCreatedAt()));
         }
         return result;
+    }
+
+    private CommunityCommentEntity requireCommentForUpdate(Long id) {
+        CommunityCommentEntity comment = commentMapper.selectByIdForUpdate(id);
+        if (comment == null || !ENABLED.equals(comment.getStatus())) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "评论不存在或已下线");
+        }
+        return comment;
     }
 
     private CommunityCommentEntity requireComment(Long id) {

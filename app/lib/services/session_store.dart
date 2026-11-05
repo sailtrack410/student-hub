@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/user_session.dart';
+import 'community_feed_cache.dart';
 
 /// 绑定登录请求开始时的凭证版本与全局尝试序号。
 class AuthenticationAttempt {
@@ -27,6 +28,7 @@ abstract final class SessionStore {
   static Future<void> Function()? onSessionCleared;
 
   static String? get token => _token;
+  static int get revision => _revision;
 
   /// 密码、注册和 QQ 授权共享顺序；新请求会立即替代旧登录尝试。
   static AuthenticationAttempt beginAuthentication() =>
@@ -79,7 +81,7 @@ abstract final class SessionStore {
     Future<void>? cleanup;
     if (changed) {
       UserSession.clearCurrentUser();
-      cleanup = onSessionCleared?.call();
+      cleanup = _clearAccountState();
     }
     await _write(revision, (prefs) async {
       if (changed) await prefs.remove(profileKey);
@@ -94,13 +96,18 @@ abstract final class SessionStore {
     _token = null;
     final revision = ++_revision;
     UserSession.clearCurrentUser();
-    final cleanup = onSessionCleared?.call();
+    final cleanup = _clearAccountState();
     await _write(revision, (prefs) async {
       await prefs.remove(tokenKey);
       await prefs.remove(profileKey);
     });
     await cleanup;
     return true;
+  }
+
+  static Future<void> _clearAccountState() async {
+    await CommunityFeedCache.clear();
+    await onSessionCleared?.call();
   }
 
   static Future<void> saveSession(UserSession session, String baseUrl) async {

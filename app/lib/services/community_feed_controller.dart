@@ -6,6 +6,7 @@ import '../api/ad_slot_api.dart';
 import '../api/community_api.dart';
 import '../models/community_models.dart';
 import 'community_interaction_store.dart';
+import 'session_store.dart';
 
 class CommunityFeedQuery {
   const CommunityFeedQuery({
@@ -85,6 +86,7 @@ class CommunityFeedController extends ChangeNotifier {
   int generation = 0, _pageNum = 1, _naturalLoaded = 0;
   bool _disposed = false;
   bool _refreshing = false;
+  bool hasFreshData = false;
 
   void seed(List<CommunityPost> posts) {
     items = posts
@@ -96,6 +98,7 @@ class CommunityFeedController extends ChangeNotifier {
 
   void clear() {
     generation++;
+    hasFreshData = false;
     _refreshing = false;
     items = [];
     loading = true;
@@ -131,13 +134,18 @@ class CommunityFeedController extends ChangeNotifier {
     }
     loadMoreFailed = false;
     final requestGeneration = generation;
+    final sessionRevision = SessionStore.revision;
     final interactionRevision = interactions.revision;
     notifyListeners();
     CommunityFeedBatch? batch;
     try {
       batch = await _gateway.fetch(query, _pageNum);
     } catch (_) {}
-    if (_disposed || requestGeneration != generation) return;
+    if (_disposed ||
+        requestGeneration != generation ||
+        sessionRevision != SessionStore.revision) {
+      return;
+    }
     _refreshing = false;
     loading = false;
     loadingMore = false;
@@ -148,6 +156,7 @@ class CommunityFeedController extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    hasFreshData = true;
     error = false;
     final received = AdSlotApi.filterFeedItems(
       batch.items,

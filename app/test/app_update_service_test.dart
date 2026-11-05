@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smartcampus_app/api/api_client.dart';
 import 'package:smartcampus_app/app_version.dart';
@@ -174,8 +176,12 @@ void main() {
   });
 
   test('版本常量与当前构建配置一致', () {
-    expect(appVersionCode, 6);
-    expect(appVersionName, '1.1.6');
+    final version = RegExp(
+      r'^version:\s*(\S+)\+(\d+)\s*$',
+      multiLine: true,
+    ).firstMatch(File('pubspec.yaml').readAsStringSync())!;
+    expect(appVersionCode, int.parse(version.group(2)!));
+    expect(appVersionName, version.group(1));
     expect(appChannel, 'OFFICIAL');
   });
 }

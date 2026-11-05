@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/community_models.dart';
 import '../services/community_feed_cache.dart';
+import '../services/session_store.dart';
 import 'location_api.dart';
 import 'api_client.dart';
 
@@ -64,6 +65,13 @@ class CommunityApi {
       await fetchSections();
       sectionId = sectionIdForName(category);
     }
+    final revision = SessionStore.revision;
+    final scope = CommunityFeedCache.currentScope(
+      baseUrl: _instance.apiClient.baseUrl,
+      sectionId: sectionId,
+      sort: sort,
+      keyword: keyword ?? '',
+    );
     final raw = await _instance.fetchPostsRaw(
       sectionId: sectionId?.toString(),
       keyword: keyword,
@@ -72,6 +80,16 @@ class CommunityApi {
       sort: sort,
     );
     if (raw == null || raw['records'] is! List) return null;
+    if (pageNum == 1 && scope != null && revision == SessionStore.revision) {
+      unawaited(
+        CommunityFeedCache.saveRawRecords(
+          scope,
+          (raw['records'] as List)
+              .map((post) => {'itemType': 'POST', 'post': post})
+              .toList(),
+        ),
+      );
+    }
     final posts = (raw['records'] as List)
         .whereType<Map<String, dynamic>>()
         .map(mapPost)
@@ -108,6 +126,12 @@ class CommunityApi {
       await fetchSections();
       sectionId = sectionIdForName(category);
     }
+    final revision = SessionStore.revision;
+    final scope = CommunityFeedCache.currentScope(
+      baseUrl: _instance.apiClient.baseUrl,
+      sectionId: sectionId,
+      sort: sort,
+    );
     final sessionId = await adSessionId();
     final raw = await _instance.fetchFeedPageRaw(
       sectionId: sectionId?.toString(),
@@ -117,9 +141,13 @@ class CommunityApi {
       sessionId: sessionId,
     );
     if (raw == null) return null;
-    if (pageNum == 1) {
-      // C3 缓存先显：第一页成功即落盘原始条目，供下次冷启动秒开
-      unawaited(CommunityFeedCache.saveRawRecords(raw['records'] as List?));
+    if (pageNum == 1 &&
+        scope != null &&
+        revision == SessionStore.revision &&
+        raw['records'] is List) {
+      unawaited(
+        CommunityFeedCache.saveRawRecords(scope, raw['records'] as List),
+      );
     }
     return parseFeedPage(raw);
   }
@@ -902,8 +930,9 @@ class CommunityApi {
   /// 详情接口的 success 包裹属同族兼容——两种形态都认。
   static Future<CommunityPost?> fetchPostByShareSlug(String slugOrId) async {
     try {
-      final res = await _instance.apiClient
-          .get('/api/app/community/posts/share/$slugOrId');
+      final res = await _instance.apiClient.get(
+        '/api/app/community/posts/share/$slugOrId',
+      );
       if (res is! Map<String, dynamic>) return null;
       final Map<String, dynamic> body =
           (res['success'] == true && res['data'] is Map<String, dynamic>)
@@ -1016,7 +1045,10 @@ class CommunityApi {
   Future<bool> toggleCommentLikeRaw(String commentId) async {
     try {
       final data = _responseMap(
-        await apiClient.post('/api/app/community/comments/$commentId/like', body: {}),
+        await apiClient.post(
+          '/api/app/community/comments/$commentId/like',
+          body: {},
+        ),
       );
       return data != null && data['liked'] is bool && data['likeCount'] is num;
     } catch (_) {

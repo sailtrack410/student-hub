@@ -82,6 +82,7 @@ public class CommunityOfficialOpsServiceImpl implements CommunityOfficialOpsServ
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AdminOfficialReplyResponse replyAsOfficial(Long postId, AdminOfficialReplyRequest request) {
+        postMapper.selectByIdForUpdate(postId);
         CommunityPostEntity post = requirePost(postId);
         if (!ENABLED.equals(post.getStatus())) {
             throw new BusinessException(ErrorCode.REQUEST_STATE_INVALID, "帖子已下架，不能官方回复");
@@ -110,9 +111,7 @@ public class CommunityOfficialOpsServiceImpl implements CommunityOfficialOpsServ
         comment.setWeight(0);
         commentMapper.insert(comment);
         // 维护帖子评论数（与小程序发评论同口径）
-        postMapper.update(null, new LambdaUpdateWrapper<CommunityPostEntity>()
-                .eq(CommunityPostEntity::getId, post.getId())
-                .setSql("comment_count = COALESCE(comment_count, 0) + 1"));
+        postMapper.adjustCommentCount(post.getId(), 1);
         if (!official.getId().equals(post.getAuthorId())) {
             notificationService.send(new NotificationSendCommand(post.getAuthorId(), NOTIFICATION_TYPE,
                     "官方回复了你的帖子",

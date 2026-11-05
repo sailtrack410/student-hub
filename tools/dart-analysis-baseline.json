@@ -1,0 +1,212 @@
+[
+  {
+    "severity": "WARNING",
+    "code": "UNUSED_IMPORT",
+    "file": "lib/api/service_catalog_api.dart",
+    "message": "Unused import: '../models/user_session.dart'."
+  },
+  {
+    "severity": "WARNING",
+    "code": "UNUSED_IMPORT",
+    "file": "lib/pages/community/author_profile_page.dart",
+    "message": "Unused import: 'community_share_sheet.dart'."
+  },
+  {
+    "severity": "WARNING",
+    "code": "UNUSED_ELEMENT",
+    "file": "lib/pages/community/author_profile_page.dart",
+    "message": "The declaration '_buildIdleGoodsList' isn't referenced."
+  },
+  {
+    "severity": "WARNING",
+    "code": "UNUSED_ELEMENT",
+    "file": "lib/pages/home/widgets/home_course_card.dart",
+    "message": "The declaration '_detail' isn't referenced."
+  },
+  {
+    "severity": "WARNING",
+    "code": "UNUSED_LOCAL_VARIABLE",
+    "file": "lib/pages/profile/badge_wall_page.dart",
+    "message": "The value of the local variable 'currentProgress' isn't used."
+  },
+  {
+    "severity": "WARNING",
+    "code": "UNUSED_LOCAL_VARIABLE",
+    "file": "lib/pages/profile/badge_wall_page.dart",
+    "message": "The value of the local variable 'targetProgress' isn't used."
+  },
+  {
+    "severity": "WARNING",
+    "code": "UNUSED_IMPORT",
+    "file": "test/home_schedule_completion_test.dart",
+    "message": "Unused import: 'package:smartcampus_app/pages/home/widgets/home_community_preview.dart'."
+  },
+  {
+    "severity": "WARNING",
+    "code": "UNUSED_IMPORT",
+    "file": "test/home_schedule_completion_test.dart",
+    "message": "Unused import: 'package:smartcampus_app/widgets/app_bottom_navigation.dart'."
+  },
+  {
+    "severity": "INFO",
+    "code": "UNNECESSARY_BRACE_IN_STRING_INTERPS",
+    "file": "lib/api/community_api.dart",
+    "message": "Unnecessary braces in a string interpolation."
+  },
+  {
+    "severity": "INFO",
+    "code": "UNINTENDED_HTML_IN_DOC_COMMENT",
+    "file": "lib/api/community_api.dart",
+    "message": "Angle brackets will be interpreted as HTML."
+  },
+  {
+    "severity": "INFO",
+    "code": "USE_NULL_AWARE_ELEMENTS",
+    "file": "lib/api/community_api.dart",
+    "message": "Use the null-aware marker '?' rather than a null check via an 'if'."
+  },
+  {
+    "severity": "INFO",
+    "code": "USE_NULL_AWARE_ELEMENTS",
+    "file": "lib/api/community_api.dart",
+    "message": "Use the null-aware marker '?' rather than a null check via an 'if'."
+  },
+  {
+    "severity": "INFO",
+    "code": "USE_NULL_AWARE_ELEMENTS",
+    "file": "lib/api/community_api.dart",
+    "message": "Use the null-aware marker '?' rather than a null check via an 'if'."
+  },
+  {
+    "severity": "INFO",
+    "code": "DEPRECATED_MEMBER_USE",
+    "file": "lib/api/sse_http_web.dart",
+    "message": "'dart:html' is deprecated and shouldn't be used. Use package:web and dart:js_interop instead."
+  },
+  {
+    "severity": "INFO",
+    "code": "AVOID_WEB_LIBRARIES_IN_FLUTTER",
+    "file": "lib/api/sse_http_web.dart",
+    "message": "Don't use web-only libraries outside Flutter web plugins."
+  },
+  {
+    "severity": "INFO",
+    "code": "UNNECESSARY_IMPORT",
+    "file": "lib/pages/assistant/voice_input_sheet.dart",
+    "message": "The import of 'dart:typed_data' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/foundation.dart'."
+  },
+  {
+    "severity": "INFO",
+    "code": "DEPRECATED_MEMBER_USE",
+    "file": "lib/pages/community/author_profile_page.dart",
+    "message": "'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss."
+  },
+  {
+    "severity": "INFO",
+    "code": "DEPRECATED_MEMBER_USE",
+    "file": "lib/pages/community/author_profile_page.dart",
+    "message": "'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss."
+  },
+  {
+    "severity": "INFO",
+    "code": "DEPRECATED_MEMBER_USE",
+    "file": "lib/pages/community/author_profile_page.dart",
+    "message": "'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss."
+  },
+  {
+    "severity": "INFO",
+    "code": "DEPRECATED_MEMBER_USE",
+    "file": "lib/pages/community/author_profile_page.dart",
+    "message": "'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss."
+  },
+  {
+    "severity": "INFO",
+    "code": "DEPRECATED_MEMBER_USE",
+    "file": "lib/pages/community/author_profile_page.dart",
+    "message": "'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss."
+  },
+  {
+    "severity": "INFO",
+    "code": "DEPRECATED_MEMBER_USE",
+    "file": "lib/pages/community/author_profile_page.dart",
+    "message": "'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss."
+  },
+  {
+    "severity": "INFO",
+    "code": "CURLY_BRACES_IN_FLOW_CONTROL_STRUCTURES",
+    "file": "lib/pages/community/chat_detail_page.dart",
+    "message": "Statements in an if should be enclosed in a block."
+  },
+  {
+    "severity": "INFO",
+    "code": "CURLY_BRACES_IN_FLOW_CONTROL_STRUCTURES",
+    "file": "lib/pages/community/chat_detail_page.dart",
+    "message": "Statements in an if should be enclosed in a block."
+  },
+  {
+    "severity": "INFO",
+    "code": "UNNECESSARY_UNDERSCORES",
+    "file": "lib/pages/community/location_picker_page.dart",
+    "message": "Unnecessary use of multiple underscores."
+  },
+  {
+    "severity": "INFO",
+    "code": "CURLY_BRACES_IN_FLOW_CONTROL_STRUCTURES",
+    "file": "lib/pages/profile/account_center_page.dart",
+    "message": "Statements in an if should be enclosed in a block."
+  },
+  {
+    "severity": "INFO",
+    "code": "UNNECESSARY_IMPORT",
+    "file": "lib/pages/profile/electricity_query_page.dart",
+    "message": "The import of 'package:zxing2/zxing2.dart' is unnecessary because all of the used elements are also provided by the import of 'package:zxing2/qrcode.dart'."
+  },
+  {
+    "severity": "INFO",
+    "code": "CURLY_BRACES_IN_FLOW_CONTROL_STRUCTURES",
+    "file": "lib/pages/profile/email_binding_page.dart",
+    "message": "Statements in an if should be enclosed in a block."
+  },
+  {
+    "severity": "INFO",
+    "code": "USE_BUILD_CONTEXT_SYNCHRONOUSLY",
+    "file": "lib/services/app_update_service.dart",
+    "message": "Don't use 'BuildContext's across async gaps."
+  },
+  {
+    "severity": "INFO",
+    "code": "CURLY_BRACES_IN_FLOW_CONTROL_STRUCTURES",
+    "file": "lib/services/community_socket.dart",
+    "message": "Statements in an if should be enclosed in a block."
+  },
+  {
+    "severity": "INFO",
+    "code": "CURLY_BRACES_IN_FLOW_CONTROL_STRUCTURES",
+    "file": "lib/services/community_socket.dart",
+    "message": "Statements in an if should be enclosed in a block."
+  },
+  {
+    "severity": "INFO",
+    "code": "DEPRECATED_MEMBER_USE",
+    "file": "lib/services/system_notification_web.dart",
+    "message": "'dart:html' is deprecated and shouldn't be used. Use package:web and dart:js_interop instead."
+  },
+  {
+    "severity": "INFO",
+    "code": "AVOID_WEB_LIBRARIES_IN_FLUTTER",
+    "file": "lib/services/system_notification_web.dart",
+    "message": "Don't use web-only libraries outside Flutter web plugins."
+  },
+  {
+    "severity": "INFO",
+    "code": "UNNECESSARY_UNDERSCORES",
+    "file": "lib/widgets/ai_sources_panel.dart",
+    "message": "Unnecessary use of multiple underscores."
+  },
+  {
+    "severity": "INFO",
+    "code": "CURLY_BRACES_IN_FLOW_CONTROL_STRUCTURES",
+    "file": "lib/widgets/markdown_text.dart",
+    "message": "Statements in an if should be enclosed in a block."
+  }
+]

@@ -3,9 +3,11 @@ class UserSession {
   /// 当前登录用户 ID（用于判断帖子作者本人等场景）
   static String? currentUserId;
   static String? currentUserName;
+  static String? currentCampusId;
 
   final String token;
   final String userId;
+  final String? campusId;
   final String username;
   final String displayName;
   final String? avatarPath;
@@ -16,6 +18,7 @@ class UserSession {
   const UserSession({
     required this.token,
     required this.userId,
+    this.campusId,
     required this.username,
     required this.displayName,
     this.avatarPath,
@@ -34,6 +37,7 @@ class UserSession {
     return UserSession(
       token: parsedToken,
       userId: userMap['userId']?.toString() ?? '',
+      campusId: userMap['campusId']?.toString(),
       username: userMap['username']?.toString() ?? '',
       displayName: userMap['displayName']?.toString() ?? '',
       avatarPath: userMap['avatarPath']?.toString(),
@@ -48,15 +52,18 @@ class UserSession {
   void activate() {
     currentUserId = userId;
     currentUserName = displayName;
+    currentCampusId = campusId;
   }
 
   static void clearCurrentUser() {
     currentUserId = null;
     currentUserName = null;
+    currentCampusId = null;
   }
 
   Map<String, dynamic> toProfileJson() => {
     'userId': userId,
+    'campusId': campusId,
     'username': username,
     'displayName': displayName,
     'avatarPath': avatarPath,
@@ -69,6 +76,7 @@ class UserSession {
     return {
       'token': token,
       'userId': userId,
+      'campusId': campusId,
       'username': username,
       'displayName': displayName,
       'avatarPath': avatarPath,

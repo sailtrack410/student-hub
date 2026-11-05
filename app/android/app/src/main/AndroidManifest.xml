@@ -30,6 +30,7 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <meta-data android:name="flutter_deeplinking_enabled" android:value="false" />
             <!-- D-Share：App Links（sailtrack.cn 已装 App 直跳）+ 自定义 scheme 兜底 -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW"/>

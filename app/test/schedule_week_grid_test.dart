@@ -114,7 +114,7 @@ void main() {
       const weekdayNames = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
       expect(
         find.textContaining(
-          '${weekdayNames[today.weekday - 1]} ${today.month}/${today.day}',
+          '${weekdayNames[today.weekday - 1]} ${DateTime(2026, 10, 26).add(Duration(days: today.weekday - 1)).month}/${DateTime(2026, 10, 26).add(Duration(days: today.weekday - 1)).day}',
         ),
         findsOneWidget,
       );

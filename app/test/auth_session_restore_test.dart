@@ -139,7 +139,13 @@ void main() {
           .fromCache,
       isTrue,
     );
-    response.complete(http.Response('', 401));
+    response.complete(
+      http.Response(
+        jsonEncode({'code': 'AUTH_401'}),
+        401,
+        headers: {'content-type': 'application/json'},
+      ),
+    );
     await invalidated.future;
 
     expect(client.token, isNull);
@@ -189,7 +195,13 @@ void main() {
   });
 
   test('明确 401 清 token、缓存与身份，并且并发 401 只通知一次', () async {
-    final client = await _client((_) async => http.Response('', 401));
+    final client = await _client(
+      (_) async => http.Response(
+        jsonEncode({'code': 'AUTH_401'}),
+        401,
+        headers: {'content-type': 'application/json'},
+      ),
+    );
     final auth = AuthService(client);
     await _seed(client);
     var calls = 0;
@@ -261,7 +273,13 @@ void main() {
     newSession.activate();
     var calls = 0;
     ApiClient.onUnauthorized = () => calls++;
-    response.complete(http.Response('', 401));
+    response.complete(
+      http.Response(
+        jsonEncode({'code': 'AUTH_401'}),
+        401,
+        headers: {'content-type': 'application/json'},
+      ),
+    );
     await expectLater(oldRequest, throwsA(isA<ApiException>()));
 
     expect(oldClient.token, 'token-b');
@@ -338,7 +356,13 @@ void main() {
   });
 
   test('SSE 与上传的明确 401 都使用统一凭证清理', () async {
-    final client = await _client((_) async => http.Response('', 401));
+    final client = await _client(
+      (_) async => http.Response(
+        jsonEncode({'code': 'AUTH_401'}),
+        401,
+        headers: {'content-type': 'application/json'},
+      ),
+    );
     AuthService(client);
     await _seed(client);
     await expectLater(
@@ -433,7 +457,13 @@ void main() {
     late ApiClient client;
     late AuthService auth;
     await tester.runAsync(() async {
-      client = await _client((_) async => http.Response('', 401));
+      client = await _client(
+        (_) async => http.Response(
+          jsonEncode({'code': 'AUTH_401'}),
+          401,
+          headers: {'content-type': 'application/json'},
+        ),
+      );
       auth = AuthService(client);
       await _seed(client);
       configureUnauthorizedNavigation(auth);

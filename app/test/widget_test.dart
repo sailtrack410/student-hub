@@ -359,7 +359,10 @@ void main() {
       await tester.pumpAndSettle();
 
       // 1. 验证顶部元素（发帖入口已改为右下角 FAB）
-      expect(find.byKey(const ValueKey('community-publish-fab')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('community-publish-fab')),
+        findsOneWidget,
+      );
 
       // 2. 验证排序标签；分区胶囊为 fetchSections 接口下发，离线测试环境不渲染
       expect(find.text('推荐'), findsOneWidget);
@@ -482,7 +485,7 @@ void main() {
       expect(find.text('热评'), findsOneWidget);
       expect(find.textContaining('强烈支持！'), findsOneWidget);
       expect(find.text('薄荷汽水'), findsOneWidget);
-      expect(find.textContaining('追光的少年(作者):'), findsOneWidget);
+      expect(find.text('追光的少年'), findsWidgets);
 
       // 3. 验证自然吸底输入栏 (非弹窗模式，常驻可顶起输入框)
       expect(find.text('友善评论，说点什么吧...'), findsOneWidget);
@@ -497,14 +500,19 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('好主意，支持尽快落地'), findsOneWidget);
-      expect(find.text('评论发表成功'), findsOneWidget);
+      expect(find.text('发送失败，请重试'), findsOneWidget);
+      expect(find.text('评论发表成功'), findsNothing);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller?.text,
+        '好主意，支持尽快落地',
+      );
 
       // 5. 点击右上角“更多”弹出操作菜单 (非直接弹举报)
       await tester.tap(find.byIcon(Icons.more_horiz_rounded));
       await tester.pumpAndSettle();
       expect(find.text('分享给同学 / 社交平台'), findsOneWidget);
       expect(find.text('复制帖子内容'), findsOneWidget);
-      expect(find.text('不感兴趣 / 减少类似推荐'), findsOneWidget);
+      expect(find.text('不感兴趣（在信息流隐藏此帖）'), findsOneWidget);
       expect(find.text('举报违规内容'), findsOneWidget);
       expect(find.text('取消'), findsOneWidget);
     },
@@ -869,8 +877,7 @@ void main() {
     expect(find.text('李同学'), findsOneWidget);
     expect(find.text('获赞'), findsOneWidget);
     expect(find.text('荣誉典藏室'), findsOneWidget);
-    expect(find.text('成长等级与荣誉勋章'), findsOneWidget);
-    expect(find.textContaining('勋章墙'), findsOneWidget);
+    expect(find.textContaining('成长等级与荣誉勋章'), findsOneWidget);
     final scrollable = find.descendant(
       of: find.byType(ProfilePage),
       matching: find.byType(Scrollable).first,

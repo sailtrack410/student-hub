@@ -20,8 +20,15 @@ public interface CommunityPostMapper extends BaseMapper<CommunityPostEntity> {
             + "WHERE id = #{id}")
     int restoreFromAppeal(@Param("id") Long id, @Param("operatorId") Long operatorId);
 
+    @Select("SELECT * FROM community_post WHERE id = #{id} AND deleted = 0 FOR UPDATE")
+    CommunityPostEntity selectByIdForUpdate(@Param("id") Long id);
+
+    @Update("UPDATE community_post SET comment_count = GREATEST(COALESCE(comment_count, 0) + #{delta}, 0), "
+            + "version = version + 1, updated_at = CURRENT_TIMESTAMP WHERE id = #{id} AND deleted = 0")
+    int adjustCommentCount(@Param("id") Long id, @Param("delta") int delta);
+
     /** D1 原子计数：并发点赞同帖时避免「读-改-整行写」互相覆盖丢计数（下限钳 0） */
-    @Update("UPDATE community_post SET like_count = GREATEST(like_count + #{delta}, 0), "
-            + "updated_at = CURRENT_TIMESTAMP WHERE id = #{id}")
+    @Update("UPDATE community_post SET like_count = GREATEST(COALESCE(like_count, 0) + #{delta}, 0), "
+            + "version = version + 1, updated_at = CURRENT_TIMESTAMP WHERE id = #{id} AND deleted = 0")
     int adjustLikeCount(@Param("id") Long id, @Param("delta") int delta);
 }

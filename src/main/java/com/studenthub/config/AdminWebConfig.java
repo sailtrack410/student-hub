@@ -19,6 +19,7 @@ public class AdminWebConfig implements WebMvcConfigurer {
 
     @Override
     public void addViewControllers(ViewControllerRegistry registry) {
+        registry.addViewController("/c/{slug:[A-Za-z0-9]+}").setViewName("forward:/share/index.html");
         registry.addViewController("/admin").setViewName("forward:/admin/index.html");
         registry.addViewController("/admin/").setViewName("forward:/admin/index.html");
         registry.addViewController("/screen").setViewName("forward:/screen/index.html");

@@ -1,38 +1,123 @@
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// C3 信息流快照缓存（缓存先显）：
-/// 首页第一页拉取成功后把原始 records 落盘，下次冷启动先解析旧快照秒开，
-/// 随后网络刷新整体替换；刷新失败时页面只在空列表才进错误态，快照自然兜底。
-/// 只存原始 JSON 条目，回放走与在线完全相同的解析管线，字段不失真；
-/// 快照损坏一律按无缓存处理，绝不挡住新数据。
+import '../models/user_session.dart';
+
+/// 一份快照只属于同一服务、账号、校区和查询。
+class CommunityFeedCacheScope {
+  const CommunityFeedCacheScope({
+    required this.baseUrl,
+    required this.accountId,
+    this.campusId,
+    this.sectionId,
+    this.sort = 'HOT',
+    this.keyword = '',
+  });
+
+  final String baseUrl;
+  final String accountId;
+  final String? campusId;
+  final int? sectionId;
+  final String sort;
+  final String keyword;
+
+  String get storageKey {
+    final identity = jsonEncode([
+      baseUrl.replaceFirst(RegExp(r'/+$'), ''),
+      accountId,
+      campusId,
+      sectionId,
+      sort.toUpperCase(),
+      keyword.trim(),
+    ]);
+    return '${CommunityFeedCache.prefix}${sha256.convert(utf8.encode(identity))}';
+  }
+}
+
 class CommunityFeedCache {
   CommunityFeedCache._();
 
-  static const _key = 'community.feed.snapshot.records.v1';
+  static const prefix = 'community.feed.snapshot.v2.';
+  static const maxAge = Duration(hours: 1);
+  static int _epoch = 0;
 
-  /// 保存第一页原始条目（来自接口原始返回的 records 数组，天然可 JSON 化）
-  static Future<void> saveRawRecords(List<dynamic>? records) async {
-    if (records == null || records.isEmpty) return;
+  static CommunityFeedCacheScope? currentScope({
+    required String baseUrl,
+    int? sectionId,
+    String sort = 'HOT',
+    String keyword = '',
+  }) {
+    final accountId = UserSession.currentUserId;
+    if (accountId == null || accountId.isEmpty) return null;
+    return CommunityFeedCacheScope(
+      baseUrl: baseUrl,
+      accountId: accountId,
+      campusId: UserSession.currentCampusId,
+      sectionId: sectionId,
+      sort: sort,
+      keyword: keyword,
+    );
+  }
+
+  static Future<void> saveRawRecords(
+    CommunityFeedCacheScope scope,
+    List<dynamic> records,
+  ) async {
+    final epoch = _epoch;
+    final encoded = jsonEncode({
+      'savedAt': DateTime.now().toUtc().toIso8601String(),
+      'records': records,
+    });
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_key, jsonEncode(records));
+      if (epoch != _epoch) return;
+      await prefs.setString(scope.storageKey, encoded);
     } catch (_) {
-      // 落盘失败只影响下次秒开，不打断正常信息流
+      // 缓存故障不影响在线内容。
     }
   }
 
-  /// 读取上次快照的原始条目；无缓存或数据损坏返回 null
-  static Future<List<dynamic>?> loadRawRecords() async {
+  static Future<List<dynamic>?> loadRawRecords(
+    CommunityFeedCacheScope scope, {
+    DateTime? now,
+  }) async {
+    final epoch = _epoch;
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_key);
-      if (raw == null || raw.isEmpty) return null;
-      final decoded = jsonDecode(raw);
-      return decoded is List && decoded.isNotEmpty ? decoded : null;
+      if (epoch != _epoch) return null;
+      final raw = prefs.getString(scope.storageKey);
+      if (raw == null) return null;
+      final data = jsonDecode(raw);
+      if (data is! Map<String, dynamic>) return null;
+      final savedAt = DateTime.tryParse('${data['savedAt']}');
+      final age = (now ?? DateTime.now()).toUtc().difference(
+        savedAt ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      );
+      if (savedAt == null || age.isNegative || age > maxAge) return null;
+      return data['records'] is List ? data['records'] as List : null;
     } catch (_) {
       return null;
+    }
+  }
+
+  /// 同步作废旧写入；登录身份在清理完成后才会重新激活。
+  static Future<void> clear() async {
+    _epoch++;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs
+          .getKeys()
+          .where(
+            (key) =>
+                key.startsWith(prefix) ||
+                key == 'community.feed.snapshot.records.v1',
+          )
+          .toList();
+      await Future.wait(keys.map(prefs.remove));
+    } catch (_) {
+      // 缓存故障不阻止退出登录。
     }
   }
 }

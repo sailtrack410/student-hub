@@ -775,12 +775,15 @@ public class CommunityAdminServiceImpl implements CommunityAdminService {
             if (comment == null) {
                 throw new BusinessException(ErrorCode.NOT_FOUND, "申诉对应的评论不存在");
             }
-            CommunityCommentEntity update = new CommunityCommentEntity();
-            update.setId(comment.getId());
-            update.setStatus(ENABLED);
-            update.setHiddenReason(null);
-            update.setVersion(comment.getVersion());
-            commentMapper.updateById(update);
+            postMapper.selectByIdForUpdate(comment.getPostId());
+            comment = commentMapper.selectByIdForUpdate(comment.getId());
+            if (!ENABLED.equals(comment.getStatus())) {
+                commentMapper.update(null, new LambdaUpdateWrapper<CommunityCommentEntity>()
+                        .eq(CommunityCommentEntity::getId, comment.getId())
+                        .set(CommunityCommentEntity::getStatus, ENABLED)
+                        .set(CommunityCommentEntity::getHiddenReason, null).setSql("version = version + 1"));
+                postMapper.adjustCommentCount(comment.getPostId(), 1);
+            }
         } else if (TARGET_SANCTION.equals(appeal.getTargetType())) {
             CommunityUserSanctionEntity sanction = sanctionMapper.selectById(appeal.getTargetId());
             if (sanction == null) {
