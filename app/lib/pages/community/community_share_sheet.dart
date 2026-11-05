@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../api/community_api.dart';
 import '../../models/community_models.dart';
 import 'community_report_sheet.dart';
 
@@ -22,10 +23,11 @@ class CommunityShareSheet extends StatelessWidget {
   }
 
   Future<void> _copyPost(BuildContext context, {String? platform}) async {
+    // D-Share：分享文本带可跳 App 的短链（App Links 域名直跳，scheme 兜底）
     final text = [
       if (post.title.trim().isNotEmpty) post.title.trim(),
       if (post.content.trim().isNotEmpty) post.content.trim(),
-      '帖子 ID：${post.id}',
+      CommunityApi.shareLinkOf(post),
     ].join('\n');
     await Clipboard.setData(ClipboardData(text: text));
     if (!context.mounted) return;

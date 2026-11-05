@@ -8,6 +8,7 @@ import '../../api/community_api.dart';
 import '../../api/feature_flags.dart';
 import '../../models/community_models.dart';
 import '../../models/home_dashboard_model.dart';
+import '../../services/community_deep_link_service.dart';
 import '../../models/service_catalog_models.dart';
 import '../../models/user_session.dart';
 import '../../services/app_update_service.dart';
@@ -88,6 +89,8 @@ class _HomePageState extends State<HomePage>
     super.initState();
     UserSession.currentUserId = widget.session.userId;
     UserSession.currentUserName = widget.session.displayName;
+    // D-Share：进入主界面（登录/会话恢复完成）即启用帖子深链路由（幂等）
+    CommunityDeepLinkService.ensureInitialized();
     _currentTabIndex = widget.initialTabIndex < 0
         ? 0
         : (widget.initialTabIndex > 4 ? 4 : widget.initialTabIndex);

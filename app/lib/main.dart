@@ -13,6 +13,7 @@ import 'pages/home/home_page.dart';
 import 'pages/login/login_page.dart';
 import 'pages/login/session_recovery_page.dart';
 import 'pages/common/maintenance_page.dart';
+import 'services/community_deep_link_service.dart';
 import 'theme/app_theme.dart';
 
 /// 全局导航键：401 时从任意页面统一回登录页。
@@ -65,6 +66,11 @@ void main() async {
 
   // 登录/会话建立后读取功能开关：失败保留默认值，不阻塞启动。
   unawaited(FeatureFlags.load(apiClient));
+
+  // D-Share：登录会话恢复后启用帖子深链路由（未登录时收到链接静默忽略）
+  if (restored.session != null) {
+    CommunityDeepLinkService.ensureInitialized();
+  }
 
   runApp(
     SmartCampusApp(

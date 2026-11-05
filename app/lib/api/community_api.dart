@@ -501,6 +501,7 @@ class CommunityApi {
       isLiked: m['liked'] == true,
       isFollowed: m['following'] == true || m['isFollowing'] == true,
       isBookmarked: m['bookmarked'] == true,
+      shareSlug: m['shareSlug']?.toString(),
     );
   }
 
@@ -895,6 +896,32 @@ class CommunityApi {
     }
     return null;
   }
+
+  /// D-Share：分享短链码（或兼容数字 id）解析帖子 (GET /posts/share/{slug})
+  /// apiClient.get 已解包 Result 壳：返回即 data 本体（含 postId 等字段），
+  /// 详情接口的 success 包裹属同族兼容——两种形态都认。
+  static Future<CommunityPost?> fetchPostByShareSlug(String slugOrId) async {
+    try {
+      final res = await _instance.apiClient
+          .get('/api/app/community/posts/share/$slugOrId');
+      if (res is! Map<String, dynamic>) return null;
+      final Map<String, dynamic> body =
+          (res['success'] == true && res['data'] is Map<String, dynamic>)
+          ? res['data'] as Map<String, dynamic>
+          : res;
+      if (!body.containsKey('postId')) return null;
+      return mapPost(body);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 分享短链：外层域名 URL（App Links 跳 App）+ 兜底 scheme
+  static const shareWebBase = 'https://sailtrack.cn/c/';
+  static const shareScheme = 'studenthub';
+
+  static String shareLinkOf(CommunityPost post) =>
+      '$shareWebBase${post.shareSlug ?? post.id}';
 
   /// 发布帖子 (POST /api/app/community/posts)
   Future<Map<String, dynamic>?> createPostRaw({

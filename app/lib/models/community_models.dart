@@ -37,6 +37,8 @@ class CommunityPost {
   final String status;
   final String? hiddenReason;
   final List<CommunityContentBlock> contentBlocks;
+  /// 对外分享短链码（8 位，服务端 V100 生成）；null 为未生成
+  final String? shareSlug;
 
   const CommunityPost({
     required this.id,
@@ -71,6 +73,7 @@ class CommunityPost {
     this.status = 'ENABLED',
     this.hiddenReason,
     this.contentBlocks = const [],
+    this.shareSlug,
   });
 
   CommunityPost copyWith({
@@ -116,6 +119,7 @@ class CommunityPost {
       status: status ?? this.status,
       hiddenReason: hiddenReason ?? this.hiddenReason,
       contentBlocks: contentBlocks,
+      shareSlug: shareSlug,
     );
   }
 }

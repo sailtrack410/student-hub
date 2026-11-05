@@ -31,6 +31,7 @@ dependencies:
   webview_flutter: ^4.14.1
   path_provider: ^2.1.6
   tencent_qq: ^1.0.0
+  app_links: ^6.3.3
 
 dev_dependencies:
   flutter_test:
