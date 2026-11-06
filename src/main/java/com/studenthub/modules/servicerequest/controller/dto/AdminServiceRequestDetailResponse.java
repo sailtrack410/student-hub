@@ -33,5 +33,6 @@ public record AdminServiceRequestDetailResponse(
         @Schema(description = "关联工单", nullable = true) WorkOrderSummaryResponse workOrder,
         @Schema(description = "服务评价", nullable = true) AdminRequestEvaluationResponse evaluation,
         @Schema(description = "状态时间线") List<RequestLogResponse> timeline,
-        @Schema(description = "当前可执行的审批动作：APPROVE / REJECT") List<String> availableActions) {
+        @Schema(description = "当前可执行动作：APPROVE / REJECT / COMPLETE / LEAVE_CANCEL；维修为空") List<String> availableActions, String flowType, String itemCode, String businessStatus, String statusLabel,
+        String approvalComment) {
 }

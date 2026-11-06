@@ -18,6 +18,8 @@ public class ServiceItemEntity extends BaseEntity {
     private Long campusId;
     private Long categoryId;
     private String itemCode;
+    /** REPAIR / LEAVE_APPROVAL / MANUAL / GUIDE; new items default to MANUAL. */
+    private String flowType;
     private String itemName;
     private String summary;
     private String description;

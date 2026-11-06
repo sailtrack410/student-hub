@@ -44,8 +44,17 @@ public class AdminServiceRequestController {
         return Result.success(adminServiceRequestService.detail(requestId));
     }
 
+    @PostMapping("/{requestId}/complete")
+    @Operation(summary = "人工受理事项办结", description = "仅 MANUAL 处理中事项可执行，不支持维修或请假。", operationId = "completeManualServiceRequest")
+    public Result<Void> complete(@PathVariable Long requestId,
+            @RequestBody(required = false) @Valid com.studenthub.modules.servicerequest.controller.dto.AdminLeaveActionRequest request) {
+        adminServiceRequestService.complete(currentUserProvider.requireCurrentUser(), requestId,
+                request == null ? null : request.comment());
+        return Result.success();
+    }
+
     @PostMapping("/{requestId}/review")
-    @Operation(summary = "审批服务申请", description = "action=APPROVE 通过（转处理中）；action=REJECT 驳回（comment 为驳回原因）。",
+    @Operation(summary = "审批服务申请", description = "MANUAL：APPROVE 人工受理 / REJECT 驳回；LEAVE_APPROVAL 复用请假审批；REPAIR 必须走维修派工接口。",
             operationId = "reviewAdminServiceRequest")
     public Result<Void> review(@PathVariable Long requestId, @RequestBody @Valid AdminReviewRequest request) {
         adminServiceRequestService.review(currentUserProvider.requireCurrentUser(), requestId, request);

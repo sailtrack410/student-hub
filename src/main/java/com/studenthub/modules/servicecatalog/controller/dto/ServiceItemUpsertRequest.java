@@ -25,5 +25,7 @@ public record ServiceItemUpsertRequest(
         @Schema(description = "办事指南正文（S02）", nullable = true) String guideContent,
         @Schema(description = "材料清单 JSON 数组 [{name,required,note}]", nullable = true) JsonNode materialList,
         @Schema(description = "常见问题 JSON 数组 [{question,answer}]", nullable = true) JsonNode faq,
-        @Schema(description = "排序值", nullable = true) Integer sortOrder) {
+        @Schema(description = "排序值", nullable = true) Integer sortOrder,
+        @Schema(description = "流程：REPAIR 报修派工 / LEAVE_APPROVAL 请假审批 / MANUAL 人工受理 / GUIDE 仅指南；新建默认 MANUAL", nullable = true)
+        @Pattern(regexp = "REPAIR|LEAVE_APPROVAL|MANUAL|GUIDE", message = "无效的服务流程类型") String flowType) {
 }

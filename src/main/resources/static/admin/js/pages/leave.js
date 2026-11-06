@@ -1,26 +1,30 @@
 /* 独立请假审批（H01）：真实接口 /api/admin/leave-requests。
-   数据来自 service_request 中 item_code = AFFAIR-LEAVE 的申请；支持筛选、详情、通过/驳回/销假。
+   数据来自 service_request 中 flow_type = LEAVE_APPROVAL 的申请；支持筛选、详情、通过/驳回/销假。
    销假语义：已通过（PROCESSING）→ 办结（COMPLETED），并记录 leave_cancel_at；不伪造新的申请状态。 */
 (function () {
     'use strict';
     window.AdminPages = window.AdminPages || {};
 
     var LEAVE_STATUS_TEXT = {
-        PENDING: '待审批', APPROVED: '已通过', REJECTED: '已驳回', CANCELLED: '已销假'
+        PENDING: '待审批', PENDING_APPROVAL: '待审批', APPROVED: '已通过', REJECTED: '已驳回',
+        CANCELLED: '已销假', CLOSED: '已销假', WITHDRAWN: '已撤回', COMPLETED: '已办结'
     };
     var LEAVE_STATUS_TONE = {
-        PENDING: 'a', APPROVED: 'g', REJECTED: 'r', CANCELLED: 'n2'
+        PENDING: 'a', PENDING_APPROVAL: 'a', APPROVED: 'g', REJECTED: 'r',
+        CANCELLED: 'n2', CLOSED: 'n2', WITHDRAWN: 'n2', COMPLETED: 'n2'
     };
     var REQUEST_STATUS_TEXT = {
         SUBMITTED: '待审批', PROCESSING: '已通过', COMPLETED: '已办结',
-        REJECTED: '已驳回', CANCELLED: '已撤销'
+        REJECTED: '已驳回', CANCELLED: '已撤回'
     };
     var TABS = [
         { value: '', label: '全部' },
         { value: 'PENDING', label: '待审批' },
         { value: 'APPROVED', label: '已通过' },
         { value: 'REJECTED', label: '已驳回' },
-        { value: 'CANCELLED', label: '已销假' }
+        { value: 'CANCELLED', label: '已销假' },
+        { value: 'WITHDRAWN', label: '已撤回' },
+        { value: 'COMPLETED', label: '历史已办结' }
     ];
     var LEAVE_TYPES = ['病假', '事假', '其他'];
     var ACTION_TEXT = { APPROVE: '通过', REJECT: '驳回', CANCEL: '销假' };
@@ -46,7 +50,7 @@
             '  </div>',
 
             '  <div class="os-grid" style="grid-template-columns:repeat(4,1fr)">',
-            '    <div class="os-kpi"><div class="k-label"><span class="dot" style="background:var(--tk-warn)"></span>待审批</div><div class="k-val">{{ stats.pending }}</div><div class="k-foot"><span>需辅导员/管理员处理</span></div></div>',
+            '    <div class="os-kpi"><div class="k-label"><span class="dot" style="background:var(--tk-warn)"></span>待审批</div><div class="k-val">{{ stats.pending }}</div><div class="k-foot"><span>由有权限的受理人员处理</span></div></div>',
             '    <div class="os-kpi"><div class="k-label"><span class="dot" style="background:var(--tk-ok)"></span>已通过</div><div class="k-val">{{ stats.approved }}</div><div class="k-foot"><span>请假生效中</span></div></div>',
             '    <div class="os-kpi"><div class="k-label"><span class="dot" style="background:var(--tk-bad)"></span>已驳回</div><div class="k-val">{{ stats.rejected }}</div><div class="k-foot"><span>含驳回原因</span></div></div>',
             '    <div class="os-kpi"><div class="k-label"><span class="dot" style="background:var(--tk-muted)"></span>已销假</div><div class="k-val">{{ stats.cancelled }}</div><div class="k-foot"><span>已办结并记录销假时间</span></div></div>',
@@ -81,12 +85,13 @@
             '            <td><span class="bdg n2">{{ row.leaveType || "—" }}</span></td>',
             '            <td style="font-size:11px;color:var(--tk-text3)">{{ timeRange(row) }}</td>',
             '            <td class="os-mono">{{ row.leaveDays == null ? "—" : row.leaveDays }}</td>',
-            '            <td><span class="bdg" :class="leaveTone(row.leaveStatus)">{{ leaveStatusText(row.leaveStatus) }}</span></td>',
+            '            <td><span class="bdg" :class="leaveTone(row)">{{ leaveStatusText(row) }}</span></td>',
             '            <td style="font-size:10.5px;color:var(--tk-text3)">{{ fmt(row.submittedAt) }}<div v-if="row.completedAt" style="font-size:10px;color:var(--tk-ok);margin-top:2px">办结 {{ fmt(row.completedAt) }}</div></td>',
             '            <td class="r" @click.stop>',
             '              <span class="op" @click="openDetail(row)">详情</span>',
-            '              <template v-if="canManage && row.leaveStatus === \'PENDING\'"> · <span class="op" @click="openAction(\'APPROVE\', row)">通过</span> · <span class="op" style="color:var(--tk-bad)" @click="openAction(\'REJECT\', row)">驳回</span></template>',
-            '              <template v-if="canManage && row.leaveStatus === \'APPROVED\'"> · <span class="op" style="color:var(--tk-warn)" @click="openAction(\'CANCEL\', row)">销假</span></template>',
+            '              <template v-if="hasAction(\'APPROVE\', row)"> · <span class="op" @click="openAction(\'APPROVE\', row)">通过</span></template>',
+            '              <template v-if="hasAction(\'REJECT\', row)"> · <span class="op" style="color:var(--tk-bad)" @click="openAction(\'REJECT\', row)">驳回</span></template>',
+            '              <template v-if="hasAction(\'CANCEL\', row)"> · <span class="op" style="color:var(--tk-warn)" @click="openAction(\'CANCEL\', row)">销假</span></template>',
             '            </td>',
             '          </tr>',
             '        </tbody>',
@@ -113,7 +118,7 @@
             '    <div class="cmd-panel" style="width:760px;max-height:86vh;display:flex;flex-direction:column">',
             '      <div class="cmd-input" style="flex:none">',
             '        <b style="font-size:14px;color:var(--tk-text)">请假详情 {{ detail.requestNo }}</b>',
-            '        <span class="bdg" :class="leaveTone(detail.leaveStatus)" style="margin-left:9px">{{ leaveStatusText(detail.leaveStatus) }}</span>',
+            '        <span class="bdg" :class="leaveTone(detail)" style="margin-left:9px">{{ leaveStatusText(detail) }}</span>',
             '        <span style="flex:1"></span><span style="cursor:pointer;color:var(--tk-muted)" @click="detail = null">✕</span>',
             '      </div>',
             '      <div style="overflow:auto;padding:16px 20px;display:flex;flex-direction:column;gap:14px">',
@@ -123,9 +128,10 @@
             '          <div class="os-field"><label>请假类型</label><div style="font-size:12px;color:var(--tk-text)">{{ detail.leaveType || "—" }}</div></div>',
             '          <div class="os-field"><label>请假时间</label><div style="font-size:12px;color:var(--tk-text)">{{ timeRange(detail) }}</div></div>',
             '          <div class="os-field"><label>请假天数</label><div style="font-size:12px;color:var(--tk-text)">{{ detail.leaveDays == null ? "—" : detail.leaveDays + " 天" }}</div></div>',
-            '          <div class="os-field"><label>申请单状态</label><div style="font-size:12px;color:var(--tk-text)">{{ requestStatusText(detail.status) }}</div></div>',
+            '          <div class="os-field"><label>申请单状态</label><div style="font-size:12px;color:var(--tk-text)">{{ detail.statusLabel || requestStatusText(detail.status) }}</div></div>',
             '        </div>',
             '        <div class="os-field"><label>请假事由</label><div class="os-note" style="margin:0">{{ detail.leaveReason || "—" }}</div></div>',
+            '        <div v-if="detail.approvalComment" class="os-field"><label>审批意见</label><div class="os-note" style="margin:0">{{ detail.approvalComment }}</div></div>',
             '        <div v-if="detail.materials && detail.materials.length" class="os-field"><label>请假材料</label><div style="display:flex;gap:8px;flex-wrap:wrap"><a v-for="m in materialUrls(detail.materials)" :key="m" :href="m" target="_blank" rel="noopener"><img :src="m" style="width:74px;height:74px;object-fit:cover;border-radius:6px;border:1px solid var(--tk-stroke)" /></a></div></div>',
             '        <div v-if="detail.rejectReason" class="os-field"><label>驳回原因</label><div class="os-note bad" style="margin:0">{{ detail.rejectReason }}</div></div>',
             '        <div v-if="detail.leaveCancelAt" class="os-field"><label>销假时间</label><div style="font-size:12px;color:var(--tk-text)">{{ fmt(detail.leaveCancelAt) }}</div></div>',
@@ -135,7 +141,7 @@
             '            <div v-if="!detail.timeline || !detail.timeline.length" style="font-size:11px;color:var(--tk-muted)">暂无处理记录</div>',
             '          </div>',
             '        </div>',
-            '        <div v-if="detail.availableActions && detail.availableActions.length" style="display:flex;justify-content:flex-end;gap:9px;border-top:1px solid var(--tk-row);padding-top:12px">',
+            '        <div v-if="hasAction(\'APPROVE\') || hasAction(\'REJECT\') || hasAction(\'CANCEL\')" style="display:flex;justify-content:flex-end;gap:9px;border-top:1px solid var(--tk-row);padding-top:12px">',
             '          <button v-if="hasAction(\'REJECT\')" class="os-btn" style="color:var(--tk-bad)" @click="openAction(\'REJECT\', detail)">驳回</button>',
             '          <button v-if="hasAction(\'APPROVE\')" class="os-btn primary" @click="openAction(\'APPROVE\', detail)">通过</button>',
             '          <button v-if="hasAction(\'CANCEL\')" class="os-btn primary" @click="openAction(\'CANCEL\', detail)">销假</button>',
@@ -263,19 +269,41 @@
                 pageNum.value = 1;
                 loadList();
             }
-            function leaveStatusText(v) { return LEAVE_STATUS_TEXT[v] || v || '—'; }
-            function leaveTone(v) { return LEAVE_STATUS_TONE[v] || 'n2'; }
+            function leaveStatusKey(row) {
+                if (!row || typeof row === 'string') return row;
+                if (row.businessStatus) return row.businessStatus === 'CANCELLED' ? 'WITHDRAWN' : row.businessStatus;
+                if (row.leaveCancelAt) return 'CLOSED';
+                if (row.status === 'CANCELLED') return 'WITHDRAWN';
+                if (row.status === 'COMPLETED') return 'COMPLETED';
+                return row.leaveStatus;
+            }
+            function leaveStatusText(row) {
+                if (row && typeof row === 'object' && row.statusLabel) return row.statusLabel;
+                var key = leaveStatusKey(row);
+                return LEAVE_STATUS_TEXT[key] || key || '—';
+            }
+            function leaveTone(row) { return LEAVE_STATUS_TONE[leaveStatusKey(row)] || 'n2'; }
             function requestStatusText(v) { return REQUEST_STATUS_TEXT[v] || v || '—'; }
             function actionText(action) {
-                return { SUBMIT: '提交', DISPATCH: '通过', START: '开始处理', COMPLETE: '办结/销假', CONFIRM: '确认', REJECT: '驳回', CANCEL: '撤销', EVALUATE: '评价', URGE: '催单', ARRIVAL_PHOTO: '到场', COMPLETION_PHOTO: '完工' }[action] || action || '—';
+                return { SUBMIT: '提交', APPROVE: '审批通过', LEAVE_CANCEL: '销假', DISPATCH: '历史派单', START: '开始处理', COMPLETE: '历史办结', CONFIRM: '确认', REJECT: '驳回', CANCEL: '撤销', EVALUATE: '评价', URGE: '催单', ARRIVAL_PHOTO: '到场', COMPLETION_PHOTO: '完工' }[action] || action || '—';
             }
             function materialUrls(materials) {
                 var urls = [];
                 (materials || []).forEach(function (m) { (m.urls || []).forEach(function (u) { urls.push(u); }); });
                 return urls;
             }
-            function hasAction(action) {
-                return !!(detail.value && (detail.value.availableActions || []).indexOf(action) >= 0);
+            function hasAction(action, row) {
+                row = row || detail.value;
+                if (!canManage.value || !row) return false;
+                var actions;
+                if (Object.prototype.hasOwnProperty.call(row, 'availableActions')) {
+                    actions = Array.isArray(row.availableActions) ? row.availableActions : [];
+                } else {
+                    var key = leaveStatusKey(row);
+                    actions = key === 'PENDING' || key === 'PENDING_APPROVAL' ? ['APPROVE', 'REJECT']
+                        : key === 'APPROVED' ? ['CANCEL'] : [];
+                }
+                return actions.indexOf(action) >= 0 || (action === 'CANCEL' && actions.indexOf('LEAVE_CANCEL') >= 0);
             }
 
             function openDetail(row) {
@@ -284,6 +312,7 @@
                     .catch(function (err) { El.ElMessage.error((err && err.message) || '详情加载失败'); });
             }
             function openAction(kind, row) {
+                if (!hasAction(kind, row)) return;
                 actionModal.kind = kind;
                 actionModal.row = Object.assign({}, row, {
                     requesterName: row.requesterName || (row.requester && row.requester.displayName) || null
@@ -294,6 +323,7 @@
             function submitAction() {
                 if (!canManage.value) { El.ElMessage.warning('当前账号没有请假审批权限'); return; }
                 var kind = actionModal.kind;
+                if (!hasAction(kind, actionModal.row)) { El.ElMessage.warning('当前申请不可执行此操作'); return; }
                 if (kind === 'REJECT' && !actionModal.comment) {
                     El.ElMessage.warning('驳回需填写原因');
                     return;
@@ -304,7 +334,7 @@
                 submitting.value = true;
                 api.post(url, body)
                     .then(function () {
-                        El.ElMessage.success('已' + actionText(kind));
+                        El.ElMessage.success('已' + ACTION_TEXT[kind]);
                         actionModal.visible = false;
                         detail.value = null;
                         loadAll();
@@ -314,6 +344,8 @@
             }
 
             loadAll();
+            var requestId = new URLSearchParams((window.location.hash.split('?')[1] || '')).get('requestId');
+            if (requestId) openDetail({ requestId: requestId });
             return {
                 stats: stats, rows: rows, total: total, pageNum: pageNum, pageSize: pageSize,
                 totalPages: totalPages, pageNumbers: pageNumbers, loading: loading, error: error,

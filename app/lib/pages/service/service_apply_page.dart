@@ -13,11 +13,13 @@ import 'my_requests_page.dart';
 class ServiceApplyPage extends StatefulWidget {
   final String itemId;
   final String itemName;
+  final Future<Map<String, dynamic>?> Function(String itemId)? detailLoader;
 
   const ServiceApplyPage({
     super.key,
     required this.itemId,
     this.itemName = '服务申请',
+    this.detailLoader,
   });
 
   @override
@@ -36,6 +38,8 @@ class _ServiceApplyPageState extends State<ServiceApplyPage> {
   bool _loading = true;
   bool _error = false;
   bool _submitting = false;
+
+  bool get _isGuide => _detail?['flowType'] == 'GUIDE';
 
   String get _title => _detail?['itemName']?.toString().isNotEmpty == true
       ? _detail!['itemName'].toString()
@@ -69,7 +73,9 @@ class _ServiceApplyPageState extends State<ServiceApplyPage> {
       _error = false;
     });
     final api = ServiceCatalogApi(ApiClient());
-    final detail = await api.fetchServiceDetail(widget.itemId);
+    final detail = await (widget.detailLoader ?? api.fetchServiceDetail)(
+      widget.itemId,
+    );
     if (!mounted) return;
     setState(() {
       _detail = detail;
@@ -234,6 +240,7 @@ class _ServiceApplyPageState extends State<ServiceApplyPage> {
   }
 
   Future<void> _submit() async {
+    if (_isGuide) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _imageErrors.clear());
     for (final field in _schema) {
@@ -463,12 +470,12 @@ class _ServiceApplyPageState extends State<ServiceApplyPage> {
                       children: [
                         _buildHeaderCard(),
                         const SizedBox(height: 14),
-                        _buildFormCard(),
+                        if (_isGuide) _buildGuideCard() else _buildFormCard(),
                       ],
                     ),
                   ),
                 ),
-                _buildBottomBar(),
+                if (!_isGuide) _buildBottomBar(),
               ],
             ),
     );
@@ -542,7 +549,7 @@ class _ServiceApplyPageState extends State<ServiceApplyPage> {
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    '${sla}h响应',
+                    '${sla}h办结',
                     style: const TextStyle(
                       fontSize: 12,
                       color: AppColors.accent,
@@ -563,6 +570,53 @@ class _ServiceApplyPageState extends State<ServiceApplyPage> {
                 color: Color(0xFF64748B),
               ),
             ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGuideCard() {
+    final guide = _detail?['guideContent']?.toString() ?? '';
+    final materials = (_detail?['materialList'] as List? ?? const [])
+        .whereType<Map>();
+    final faq = (_detail?['faq'] as List? ?? const []).whereType<Map>();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '办事指南',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(guide.isNotEmpty ? guide : '本事项提供办事指引，请按说明联系受理部门。'),
+          if (materials.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Text('所需材料', style: TextStyle(fontWeight: FontWeight.w600)),
+            for (final material in materials)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  '${material['name'] ?? ''}${material['required'] == true ? '（必需）' : ''}'
+                  '${material['note'] == null ? '' : ' · ${material['note']}'}',
+                ),
+              ),
+          ],
+          for (final item in faq) ...[
+            const SizedBox(height: 12),
+            Text(
+              item['question']?.toString() ?? '',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            Text(item['answer']?.toString() ?? ''),
           ],
         ],
       ),

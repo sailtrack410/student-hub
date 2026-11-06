@@ -13,9 +13,14 @@ class HomeActionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final current = request;
     final title = current?.itemName ?? '完成教务认证';
+    final orderNo = current?.orderNo?.trim();
     final subtitle = current == null
         ? '绑定后可查询完整课表与成绩'
-        : '${current.statusText} · ${current.orderNo ?? '等待生成工单'}';
+        : orderNo?.isNotEmpty == true
+        ? '${current.statusText} · $orderNo'
+        : current.flowType == 'REPAIR'
+        ? '${current.statusText} · 等待生成工单'
+        : current.statusText;
     final color = current == null ? AppColors.brand : const Color(0xFFB45309);
     final background = current == null
         ? AppColors.brandSoft

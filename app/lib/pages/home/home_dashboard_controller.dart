@@ -40,6 +40,7 @@ class ApiHomeDashboardGateway implements HomeDashboardGateway {
             ServiceItemData(
               itemId: '${raw['itemId']}',
               itemCode: '${raw['itemCode'] ?? ''}',
+              flowType: raw['flowType']?.toString(),
               categoryCode: '${category['categoryCode'] ?? ''}',
               name: '${raw['itemName']}',
               summary: '${raw['summary'] ?? ''}',

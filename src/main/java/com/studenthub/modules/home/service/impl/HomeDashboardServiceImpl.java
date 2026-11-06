@@ -124,12 +124,17 @@ public class HomeDashboardServiceImpl implements HomeDashboardService {
             return null;
         }
         ServiceRequestEntity request = rows.get(0);
-        WorkOrderEntity order = workOrderMapper.findByRequestId(request.getId());
+        WorkOrderEntity order = com.studenthub.modules.servicerequest.service.RequestBusinessView.repair(request)
+                ? workOrderMapper.findByRequestId(request.getId()) : null;
+        if (order != null && Boolean.TRUE.equals(order.getFlowArchived())) order = null;
         return new HomeDashboardResponse.InProgressRequest(request.getId(),
                 order == null ? null : order.getOrderNo(),
                 request.getItemName() == null ? request.getTitle() : request.getItemName(),
                 request.getStatus(),
-                request.getSubmittedAt() == null ? null : request.getSubmittedAt().toString());
+                request.getSubmittedAt() == null ? null : request.getSubmittedAt().toString(),
+                com.studenthub.modules.servicerequest.service.RequestBusinessView.flowType(request),
+                com.studenthub.modules.servicerequest.service.RequestBusinessView.status(request, order == null ? null : order.getStatus()),
+                com.studenthub.modules.servicerequest.service.RequestBusinessView.label(request, order == null ? null : order.getStatus()));
     }
 
     private long unreadCount(AuthenticatedUser user) {

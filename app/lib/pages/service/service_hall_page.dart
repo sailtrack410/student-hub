@@ -152,6 +152,7 @@ class _ServiceHallPageState extends State<ServiceHallPage> {
               (m) => ServiceItemData(
                 itemId: m['itemId']?.toString() ?? '',
                 itemCode: m['itemCode']?.toString() ?? '',
+                flowType: m['flowType']?.toString(),
                 categoryCode: raw['categoryCode']?.toString() ?? '',
                 name: m['itemName']?.toString() ?? '',
                 summary: m['summary']?.toString() ?? '',
@@ -230,21 +231,11 @@ class _ServiceHallPageState extends State<ServiceHallPage> {
   }
 
   String _badgeText(ServiceItemData item) {
-    if (item.isRepair) return '${item.slaHours ?? 24}h响应';
-    switch (item.itemCode) {
-      case 'AFFAIR-LEAVE':
-        return '线上审批';
-      case 'AFFAIR-VENUE':
-        return '即时报备';
-      case 'CERT-ENROLL':
-        return '秒级生成';
-      case 'GUIDE-CONSULT':
-        return '在线咨询';
-      case 'SCHEDULE-VIEW':
-        return '查看';
-      default:
-        return item.slaHours != null ? '${item.slaHours}h响应' : '在线办理';
-    }
+    if (item.isSchedule) return '查看';
+    if (item.isRepair) return '${item.slaHours ?? 24}h办结';
+    if (item.isLeave) return '线上审批';
+    if (item.isGuide) return '办事指南';
+    return '人工受理';
   }
 
   Color _badgeColor(ServiceItemData item) {
@@ -594,9 +585,7 @@ class _ServiceHallPageState extends State<ServiceHallPage> {
 
   Widget _buildActiveRequestBanner(ServiceRequestSummary item) {
     final isPendingConfirm = item.isPendingConfirmation;
-    final statusLabel = isPendingConfirm
-        ? '待验收'
-        : (item.status == 'SUBMITTED' ? '已提交' : '处理中');
+    final statusLabel = item.displayStatusLabel;
     final accentColor = isPendingConfirm
         ? const Color(0xFF16A34A)
         : const Color(0xFFD97706);

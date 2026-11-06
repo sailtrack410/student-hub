@@ -27,7 +27,7 @@ public interface AnalyticsMapper {
                                             @Param("end") LocalDateTime end);
 
     @Select("SELECT CAST(created_at AS DATE) AS day, COUNT(*) AS total FROM work_order "
-            + "WHERE deleted = 0 AND campus_id = #{campusId} AND created_at >= #{start} AND created_at < #{end} "
+            + "WHERE flow_archived = FALSE AND request_id IN (SELECT id FROM service_request WHERE flow_type = 'REPAIR' AND deleted = 0) AND deleted = 0 AND campus_id = #{campusId} AND created_at >= #{start} AND created_at < #{end} "
             + "GROUP BY CAST(created_at AS DATE) ORDER BY day")
     List<Map<String, Object>> workOrdersByDay(@Param("campusId") Long campusId,
                                               @Param("start") LocalDateTime start,
@@ -101,7 +101,7 @@ public interface AnalyticsMapper {
                                                   @Param("end") LocalDateTime end);
 
     @Select("SELECT status AS name, COUNT(*) AS total FROM work_order "
-            + "WHERE deleted = 0 AND campus_id = #{campusId} AND created_at >= #{start} AND created_at < #{end} "
+            + "WHERE flow_archived = FALSE AND request_id IN (SELECT id FROM service_request WHERE flow_type = 'REPAIR' AND deleted = 0) AND deleted = 0 AND campus_id = #{campusId} AND created_at >= #{start} AND created_at < #{end} "
             + "GROUP BY status ORDER BY total DESC")
     List<Map<String, Object>> workOrderStatusSlices(@Param("campusId") Long campusId,
                                                     @Param("start") LocalDateTime start,

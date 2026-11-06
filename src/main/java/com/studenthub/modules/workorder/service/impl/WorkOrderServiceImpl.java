@@ -22,6 +22,7 @@ import com.studenthub.modules.notification.service.NotificationService;
 import com.studenthub.modules.notification.service.dto.NotificationSendCommand;
 import com.studenthub.modules.servicerequest.controller.dto.RequestLogResponse;
 import com.studenthub.modules.servicerequest.entity.ServiceRequestEntity;
+import com.studenthub.modules.servicerequest.service.RequestBusinessView;
 import com.studenthub.modules.servicerequest.entity.ServiceRequestLogEntity;
 import com.studenthub.modules.servicerequest.mapper.ServiceRequestLogMapper;
 import com.studenthub.modules.servicerequest.mapper.ServiceRequestMapper;
@@ -90,12 +91,15 @@ public class WorkOrderServiceImpl implements WorkOrderService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public WorkOrderEntity createPendingForRequest(ServiceRequestEntity request) {
+        if (!RequestBusinessView.repair(request))
+            throw new BusinessException(ErrorCode.REQUEST_STATE_INVALID, "此申请不适用维修派工");
         WorkOrderEntity order = new WorkOrderEntity();
         order.setOrderNo(OrderNoGenerator.next(ORDER_NO_PREFIX, null));
         order.setRequestId(request.getId());
         order.setCampusId(request.getCampusId());
         order.setItemId(request.getItemId());
         order.setTitle(request.getTitle());
+        order.setFlowArchived(false);
         order.setAssignedOrganizationId(request.getHandlerOrganizationId());
         order.setStatus(WorkOrderTransitions.Status.PENDING_DISPATCH.name());
         ServiceItemEntity serviceItem = serviceItemMapper.selectById(request.getItemId());
@@ -104,9 +108,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         order.setPriority(resolvePriority(request, serviceItem));
         order.setSlaHours(slaHours);
         order.setDueAt(LocalDateTime.now().plusHours(slaHours));
-        order.setPhotoWorkflowRequired(serviceItem != null
-                && (Boolean.TRUE.equals(serviceItem.getPhotoWorkflowRequired())
-                || (serviceItem.getItemCode() != null && serviceItem.getItemCode().startsWith("REPAIR-"))));
+        order.setPhotoWorkflowRequired(serviceItem != null && Boolean.TRUE.equals(serviceItem.getPhotoWorkflowRequired()));
         workOrderMapper.insert(order);
 
         WorkOrderEntity orderNoUpdate = new WorkOrderEntity();
@@ -121,6 +123,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
     @Transactional(rollbackFor = Exception.class)
     public void assign(AuthenticatedUser operator, Long orderId, AssignWorkOrderRequest request) {
         WorkOrderEntity order = requireOrder(orderId);
+        requireDispatcherVisible(operator, order);
         WorkOrderTransitions.Status from = WorkOrderTransitions.parse(order.getStatus());
         WorkOrderTransitions.Status to = WorkOrderTransitions.target(WorkOrderTransitions.Action.ASSIGN, from);
 
@@ -133,7 +136,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         update.setStatus(to.name());
         update.setAssignedAt(LocalDateTime.now());
         update.setVersion(order.getVersion());
-        workOrderMapper.updateById(update);
+        if (workOrderMapper.updateById(update) == 0)
+            throw new BusinessException(ErrorCode.ORDER_STATE_INVALID, "工单状态已变更，请刷新");
 
         TransitionResult transition = toResult(requestTransitionService.apply(order.getRequestId(),
                 RequestTransitions.Action.DISPATCH, null, null));
@@ -175,7 +179,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         update.setAssigneeName(assignee.getDisplayName());
         update.setAssignedAt(LocalDateTime.now());
         update.setVersion(order.getVersion());
-        workOrderMapper.updateById(update);
+        if (workOrderMapper.updateById(update) == 0)
+            throw new BusinessException(ErrorCode.ORDER_STATE_INVALID, "工单状态已变更，请刷新");
 
         ServiceRequestEntity serviceRequest = serviceRequestMapper.selectById(order.getRequestId());
         RequestTransitions.Status requestStatus = serviceRequest == null
@@ -241,6 +246,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
     @Transactional(rollbackFor = Exception.class)
     public void reject(AuthenticatedUser operator, Long orderId, String reason) {
         WorkOrderEntity order = requireOrder(orderId);
+        requireDispatcherVisible(operator, order);
         WorkOrderTransitions.Status from = WorkOrderTransitions.parse(order.getStatus());
         WorkOrderTransitions.Status to = WorkOrderTransitions.target(WorkOrderTransitions.Action.REJECT, from);
 
@@ -249,7 +255,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         update.setStatus(to.name());
         update.setCompleteRemark(reason);
         update.setVersion(order.getVersion());
-        workOrderMapper.updateById(update);
+        if (workOrderMapper.updateById(update) == 0)
+            throw new BusinessException(ErrorCode.ORDER_STATE_INVALID, "工单状态已变更，请刷新");
 
         TransitionResult transition = toResult(requestTransitionService.apply(order.getRequestId(),
                 RequestTransitions.Action.REJECT, reason, null));
@@ -278,7 +285,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         update.setStatus(to.name());
         update.setStartedAt(LocalDateTime.now());
         update.setVersion(order.getVersion());
-        workOrderMapper.updateById(update);
+        if (workOrderMapper.updateById(update) == 0)
+            throw new BusinessException(ErrorCode.ORDER_STATE_INVALID, "工单状态已变更，请刷新");
 
         requestLogRecorder.record(order.getRequestId(), order.getId(), RequestTransitions.Action.START,
                 RequestTransitions.Status.PROCESSING, RequestTransitions.Status.PROCESSING,
@@ -309,7 +317,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         update.setCompleteRemark(remark);
         update.setCompletedAt(LocalDateTime.now());
         update.setVersion(order.getVersion());
-        workOrderMapper.updateById(update);
+        if (workOrderMapper.updateById(update) == 0)
+            throw new BusinessException(ErrorCode.ORDER_STATE_INVALID, "工单状态已变更，请刷新");
 
         TransitionResult transition = toResult(requestTransitionService.apply(order.getRequestId(),
                 RequestTransitions.Action.COMPLETE, null, LocalDateTime.now()));
@@ -341,7 +350,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         update.setStatus(to.name());
         update.setConfirmationRejectReason(null);
         update.setVersion(order.getVersion());
-        workOrderMapper.updateById(update);
+        if (workOrderMapper.updateById(update) == 0)
+            throw new BusinessException(ErrorCode.ORDER_STATE_INVALID, "工单状态已变更，请刷新");
         recordPhotoLog(order, from, to, worker, RequestTransitions.Action.ARRIVAL_PHOTO, "现场拍照打卡");
     }
 
@@ -365,7 +375,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         update.setCompletionSubmittedAt(LocalDateTime.now());
         update.setStatus(to.name());
         update.setVersion(order.getVersion());
-        workOrderMapper.updateById(update);
+        if (workOrderMapper.updateById(update) == 0)
+            throw new BusinessException(ErrorCode.ORDER_STATE_INVALID, "工单状态已变更，请刷新");
         recordPhotoLog(order, from, to, worker, RequestTransitions.Action.COMPLETION_PHOTO, request.remark().trim());
         ServiceRequestEntity serviceRequest = serviceRequestMapper.selectById(order.getRequestId());
         if (serviceRequest != null) {
@@ -387,7 +398,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         update.setStatus(to.name());
         update.setConfirmedAt(LocalDateTime.now());
         update.setVersion(order.getVersion());
-        workOrderMapper.updateById(update);
+        if (workOrderMapper.updateById(update) == 0)
+            throw new BusinessException(ErrorCode.ORDER_STATE_INVALID, "工单状态已变更，请刷新");
         ServiceRequestEntity serviceRequest = serviceRequestMapper.selectById(order.getRequestId());
         if (serviceRequest != null) {
             requestTransitionService.apply(serviceRequest.getId(), RequestTransitions.Action.COMPLETE,
@@ -416,7 +428,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         update.setCompletionSubmittedAt(null);
         update.setConfirmationRejectReason(reason.trim());
         update.setVersion(order.getVersion());
-        workOrderMapper.updateById(update);
+        if (workOrderMapper.updateById(update) == 0)
+            throw new BusinessException(ErrorCode.ORDER_STATE_INVALID, "工单状态已变更，请刷新");
         requestLogRecorder.record(order.getRequestId(), order.getId(), RequestTransitions.Action.REOPEN,
                 RequestTransitions.Status.PROCESSING, RequestTransitions.Status.PROCESSING,
                 requester.userId(), requester.displayName(), "报修人退回：" + reason.trim());
@@ -431,7 +444,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
     @Transactional(rollbackFor = Exception.class)
     public void cancelForRequest(ServiceRequestEntity request, AuthenticatedUser operator, String reason) {
         WorkOrderEntity order = workOrderMapper.findByRequestId(request.getId());
-        if (order == null) {
+        if (order == null || Boolean.TRUE.equals(order.getFlowArchived()) || !RequestBusinessView.repair(request)) {
             return;
         }
         WorkOrderTransitions.Status from = WorkOrderTransitions.parse(order.getStatus());
@@ -443,7 +456,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         update.setCompleteRemark("申请人撤销：" + reason);
         update.setCompletedAt(LocalDateTime.now());
         update.setVersion(order.getVersion());
-        workOrderMapper.updateById(update);
+        if (workOrderMapper.updateById(update) == 0)
+            throw new BusinessException(ErrorCode.ORDER_STATE_INVALID, "工单状态已变更，请刷新");
 
         requestLogRecorder.record(request.getId(), order.getId(), RequestTransitions.Action.CANCEL,
                 RequestTransitions.Status.PROCESSING, RequestTransitions.Status.CANCELLED,
@@ -465,6 +479,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         }
         LocalDateTime now = LocalDateTime.now();
         LambdaQueryWrapper<WorkOrderEntity> wrapper = new LambdaQueryWrapper<WorkOrderEntity>()
+                .eq(WorkOrderEntity::getFlowArchived, false)
+                .inSql(WorkOrderEntity::getRequestId, WorkOrderMapper.REPAIR_REQUEST_IDS)
                 .eq(WorkOrderEntity::getCampusId, campusContextService.currentCampusId())
                 .eq(status != null, WorkOrderEntity::getStatus, status == null ? null : status.name())
                 .in(visibleOrgIds != null, WorkOrderEntity::getAssignedOrganizationId, visibleOrgIds);
@@ -490,6 +506,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         WorkOrderTransitions.Status status = parseOptionalStatus(query.status());
         boolean processingGroup = status == WorkOrderTransitions.Status.PROCESSING;
         LambdaQueryWrapper<WorkOrderEntity> wrapper = new LambdaQueryWrapper<WorkOrderEntity>()
+                .eq(WorkOrderEntity::getFlowArchived, false)
+                .inSql(WorkOrderEntity::getRequestId, WorkOrderMapper.REPAIR_REQUEST_IDS)
                 .eq(WorkOrderEntity::getAssigneeId, worker.userId())
                 .eq(status != null && !processingGroup, WorkOrderEntity::getStatus, status == null ? null : status.name())
                 .in(processingGroup, WorkOrderEntity::getStatus,
@@ -536,6 +554,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
                 .toList());
         List<Long> activeWorkerIds = workers.stream().map(WorkerCandidateRow::getUserId).toList();
         List<WorkOrderEntity> activeOrders = workOrderMapper.selectList(new LambdaQueryWrapper<WorkOrderEntity>()
+                .eq(WorkOrderEntity::getFlowArchived, false)
+                .inSql(WorkOrderEntity::getRequestId, WorkOrderMapper.REPAIR_REQUEST_IDS)
                 .eq(WorkOrderEntity::getCampusId, campusId)
                 .in(WorkOrderEntity::getAssigneeId, activeWorkerIds)
                 .in(WorkOrderEntity::getStatus, WorkOrderTransitions.inProgressSet()));
@@ -577,6 +597,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
             return emptyStats();
         }
         List<WorkOrderEntity> inProgressOrders = workOrderMapper.selectList(new LambdaQueryWrapper<WorkOrderEntity>()
+                .eq(WorkOrderEntity::getFlowArchived, false)
+                .inSql(WorkOrderEntity::getRequestId, WorkOrderMapper.REPAIR_REQUEST_IDS)
                 .eq(WorkOrderEntity::getCampusId, campusId)
                 .in(WorkOrderEntity::getStatus, WorkOrderTransitions.inProgressSet())
                 .in(visibleOrgIds != null, WorkOrderEntity::getAssignedOrganizationId, visibleOrgIds));
@@ -607,6 +629,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         }
         LocalDateTime since = now.minusDays(30);
         List<WorkOrderEntity> completedOrders = workOrderMapper.selectList(new LambdaQueryWrapper<WorkOrderEntity>()
+                .eq(WorkOrderEntity::getFlowArchived, false)
+                .inSql(WorkOrderEntity::getRequestId, WorkOrderMapper.REPAIR_REQUEST_IDS)
                 .eq(WorkOrderEntity::getCampusId, campusId)
                 .eq(WorkOrderEntity::getStatus, WorkOrderTransitions.Status.COMPLETED.name())
                 .ge(WorkOrderEntity::getCompletedAt, since)
@@ -842,8 +866,13 @@ public class WorkOrderServiceImpl implements WorkOrderService {
     }
 
     private WorkOrderEntity requireOrder(Long orderId) {
-        WorkOrderEntity order = workOrderMapper.selectById(orderId);
-        if (order == null) {
+        WorkOrderEntity order = org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()
+                ? workOrderMapper.selectOne(new LambdaQueryWrapper<WorkOrderEntity>()
+                    .eq(WorkOrderEntity::getId, orderId).last("FOR UPDATE"))
+                : workOrderMapper.selectById(orderId);
+        ServiceRequestEntity request = order == null ? null : serviceRequestMapper.selectById(order.getRequestId());
+        if (order == null || !Boolean.FALSE.equals(order.getFlowArchived()) || request == null
+                || !RequestBusinessView.repair(request)) {
             throw new BusinessException(ErrorCode.ORDER_NOT_FOUND);
         }
         return order;

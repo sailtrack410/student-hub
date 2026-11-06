@@ -10,6 +10,13 @@ class ServiceRequestSummary {
   final String title;
   final String itemName;
   final String status;
+  final String? flowType;
+  final String? itemCode;
+  final String? businessStatus;
+  final String? statusLabel;
+
+  /// null means an older response omitted the action contract; [] is authoritative.
+  final List<String>? availableActions;
   final String? submittedAt;
   final String? completedAt;
   final String? workOrderId;
@@ -23,6 +30,11 @@ class ServiceRequestSummary {
     required this.title,
     required this.itemName,
     required this.status,
+    this.flowType,
+    this.itemCode,
+    this.businessStatus,
+    this.statusLabel,
+    this.availableActions,
     this.submittedAt,
     this.completedAt,
     this.workOrderId,
@@ -38,6 +50,11 @@ class ServiceRequestSummary {
       title: json['title']?.toString() ?? '',
       itemName: json['itemName']?.toString() ?? '',
       status: json['status']?.toString() ?? '',
+      flowType: json['flowType']?.toString(),
+      itemCode: json['itemCode']?.toString(),
+      businessStatus: json['businessStatus']?.toString(),
+      statusLabel: json['statusLabel']?.toString(),
+      availableActions: _availableActions(json),
       submittedAt: json['submittedAt']?.toString(),
       completedAt: json['completedAt']?.toString(),
       workOrderId: json['workOrderId']?.toString(),
@@ -47,18 +64,28 @@ class ServiceRequestSummary {
     );
   }
 
-  bool get isPendingConfirmation => workOrderStatus == 'PENDING_CONFIRMATION';
+  bool get isRepair => flowType != null
+      ? flowType == 'REPAIR'
+      : workOrderId != null || workOrderStatus != null;
+
+  bool get isPendingConfirmation =>
+      isRepair && workOrderStatus == 'PENDING_CONFIRMATION';
+
+  String get displayStatusLabel => statusLabel?.isNotEmpty == true
+      ? statusLabel!
+      : isPendingConfirmation
+      ? '待验收'
+      : serviceRequestStatusLabel(status);
 
   bool get isClosed =>
       status == 'COMPLETED' || status == 'REJECTED' || status == 'CANCELLED';
 
-  bool get canUrge =>
-      (status == 'SUBMITTED' || status == 'PROCESSING') &&
-      !isPendingConfirmation;
+  bool _allows(String action, bool legacyFallback) => availableActions != null
+      ? availableActions!.contains(action)
+      : flowType == null && legacyFallback;
 
-  bool get canCancel =>
-      (status == 'SUBMITTED' || status == 'PROCESSING') &&
-      !isPendingConfirmation;
+  bool get canUrge => _allows('URGE', !isClosed && !isPendingConfirmation);
+  bool get canCancel => _allows('CANCEL', !isClosed && !isPendingConfirmation);
 }
 
 class ServiceRequestTimelineItem {
@@ -212,6 +239,18 @@ class ServiceRequestDetail {
   final String itemName;
   final String? itemIcon;
   final String status;
+  final String? flowType;
+  final String? itemCode;
+  final String? businessStatus;
+  final String? statusLabel;
+  final List<String>? availableActions;
+  final String? leaveType;
+  final String? leaveStartAt;
+  final String? leaveEndAt;
+  final num? leaveDays;
+  final String? approvalComment;
+  final String? leaveCancelAt;
+  final String? leaveCancelStatus;
   final int? slaHours;
   final Map<String, dynamic> formData;
   final String? rejectReason;
@@ -229,6 +268,18 @@ class ServiceRequestDetail {
     required this.itemName,
     this.itemIcon,
     required this.status,
+    this.flowType,
+    this.itemCode,
+    this.businessStatus,
+    this.statusLabel,
+    this.availableActions,
+    this.leaveType,
+    this.leaveStartAt,
+    this.leaveEndAt,
+    this.leaveDays,
+    this.approvalComment,
+    this.leaveCancelAt,
+    this.leaveCancelStatus,
     this.slaHours,
     this.formData = const {},
     this.rejectReason,
@@ -257,6 +308,20 @@ class ServiceRequestDetail {
       itemName: json['itemName']?.toString() ?? '',
       itemIcon: json['itemIcon']?.toString(),
       status: json['status']?.toString() ?? '',
+      flowType: json['flowType']?.toString(),
+      itemCode: json['itemCode']?.toString(),
+      businessStatus: json['businessStatus']?.toString(),
+      statusLabel: json['statusLabel']?.toString(),
+      availableActions: _availableActions(json),
+      leaveType: json['leaveType']?.toString(),
+      leaveStartAt: json['leaveStartAt']?.toString(),
+      leaveEndAt: json['leaveEndAt']?.toString(),
+      leaveDays: json['leaveDays'] is num
+          ? json['leaveDays'] as num
+          : num.tryParse(json['leaveDays']?.toString() ?? ''),
+      approvalComment: json['approvalComment']?.toString(),
+      leaveCancelAt: json['leaveCancelAt']?.toString(),
+      leaveCancelStatus: json['leaveCancelStatus']?.toString(),
       slaHours: (json['slaHours'] as num?)?.toInt(),
       formData: form,
       rejectReason: json['rejectReason']?.toString(),
@@ -282,13 +347,33 @@ class ServiceRequestDetail {
     );
   }
 
+  bool get isRepair =>
+      flowType != null ? flowType == 'REPAIR' : workOrder != null;
+  bool get isLeave => flowType == 'LEAVE_APPROVAL';
+  String get displayStatusLabel => statusLabel?.isNotEmpty == true
+      ? statusLabel!
+      : serviceRequestStatusLabel(status);
+
+  bool _allows(String action, bool legacyFallback) => availableActions != null
+      ? availableActions!.contains(action)
+      : flowType == null && legacyFallback;
+
   bool get canEvaluate =>
-      status == 'COMPLETED' && evaluation == null && workOrder != null;
-
+      isRepair &&
+      _allows(
+        'EVALUATE',
+        status == 'COMPLETED' && evaluation == null && workOrder != null,
+      );
   bool get canConfirm =>
-      workOrder != null && workOrder!.status == 'PENDING_CONFIRMATION';
-
-  bool get canUrge => status == 'SUBMITTED' || status == 'PROCESSING';
+      isRepair &&
+      _allows('CONFIRM', workOrder?.status == 'PENDING_CONFIRMATION');
+  bool get canRejectCompletion =>
+      isRepair &&
+      _allows('REJECT_COMPLETION', workOrder?.status == 'PENDING_CONFIRMATION');
+  bool get canUrge =>
+      _allows('URGE', status == 'SUBMITTED' || status == 'PROCESSING');
+  bool get canCancel =>
+      _allows('CANCEL', status == 'SUBMITTED' || status == 'PROCESSING');
 }
 
 String serviceRequestStatusLabel(String status) {
@@ -314,4 +399,10 @@ String workOrderStatusLabel(String status) {
     'CANCELLED' => '已撤销',
     _ => status.isEmpty ? '待派单' : status,
   };
+}
+
+List<String>? _availableActions(Map<String, dynamic> json) {
+  if (!json.containsKey('availableActions')) return null;
+  final raw = json['availableActions'];
+  return raw is List ? raw.whereType<String>().toList() : const [];
 }

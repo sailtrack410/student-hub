@@ -11,10 +11,12 @@ public record ServiceItemSummaryResponse(
         @Schema(description = "服务项名称") String itemName,
         @Schema(description = "一句话简介", nullable = true) String summary,
         @Schema(description = "图标资源标识", nullable = true) String icon,
-        @Schema(description = "承诺办结时限（小时）", nullable = true) Integer slaHours) {
+        @Schema(description = "承诺办结时限（小时）", nullable = true) Integer slaHours,
+        @Schema(description = "服务流程：REPAIR / LEAVE_APPROVAL / MANUAL / GUIDE") String flowType) {
 
     public static ServiceItemSummaryResponse from(ServiceItemEntity entity) {
         return new ServiceItemSummaryResponse(entity.getId(), entity.getItemCode(), entity.getCategoryId(),
-                entity.getItemName(), entity.getSummary(), entity.getIcon(), entity.getSlaHours());
+                entity.getItemName(), entity.getSummary(), entity.getIcon(), entity.getSlaHours(),
+                com.studenthub.modules.servicecatalog.enums.ServiceFlowType.resolve(entity.getFlowType()).name());
     }
 }

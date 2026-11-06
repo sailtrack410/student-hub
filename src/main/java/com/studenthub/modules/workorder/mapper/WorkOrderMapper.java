@@ -11,6 +11,8 @@ import java.util.List;
 @Mapper
 public interface WorkOrderMapper extends BaseMapper<WorkOrderEntity> {
 
+    String REPAIR_REQUEST_IDS = "SELECT id FROM service_request WHERE flow_type = 'REPAIR' AND deleted = 0";
+
     @Select("SELECT * FROM work_order WHERE request_id = #{requestId} AND deleted = 0 LIMIT 1")
     WorkOrderEntity findByRequestId(@Param("requestId") Long requestId);
 

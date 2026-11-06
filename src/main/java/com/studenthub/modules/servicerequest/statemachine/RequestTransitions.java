@@ -17,13 +17,16 @@ public final class RequestTransitions {
     }
 
     public enum Action {
-        SUBMIT, DISPATCH, START, ARRIVAL_PHOTO, COMPLETION_PHOTO, COMPLETE, CONFIRM, REOPEN, REJECT, CANCEL, EVALUATE,
+        SUBMIT, APPROVE, ACCEPT, LEAVE_CANCEL, DISPATCH, START, ARRIVAL_PHOTO, COMPLETION_PHOTO, COMPLETE, CONFIRM, REOPEN, REJECT, CANCEL, EVALUATE,
         /** 用户催单：纯记录型动作，不改变状态；2 小时限频由业务层实现 */
         URGE
     }
 
     private static final Map<Action, Set<Status>> ALLOWED_FROM = Map.ofEntries(
             Map.entry(Action.SUBMIT, Set.of()),
+            Map.entry(Action.APPROVE, Set.of(Status.SUBMITTED)),
+            Map.entry(Action.ACCEPT, Set.of(Status.SUBMITTED)),
+            Map.entry(Action.LEAVE_CANCEL, Set.of(Status.PROCESSING)),
             Map.entry(Action.DISPATCH, Set.of(Status.SUBMITTED)),
             Map.entry(Action.START, Set.of(Status.PROCESSING)),
             Map.entry(Action.ARRIVAL_PHOTO, Set.of(Status.PROCESSING)),
@@ -49,8 +52,8 @@ public final class RequestTransitions {
         Set<Status> allowed = ALLOWED_FROM.get(action);
         if (allowed.contains(current)) {
             return switch (action) {
-                case DISPATCH, START, ARRIVAL_PHOTO, COMPLETION_PHOTO, CONFIRM, REOPEN -> Status.PROCESSING;
-                case COMPLETE -> Status.COMPLETED;
+                case APPROVE, ACCEPT, DISPATCH, START, ARRIVAL_PHOTO, COMPLETION_PHOTO, CONFIRM, REOPEN -> Status.PROCESSING;
+                case COMPLETE, LEAVE_CANCEL -> Status.COMPLETED;
                 case REJECT -> Status.REJECTED;
                 case CANCEL -> Status.CANCELLED;
                 case SUBMIT, EVALUATE, URGE -> current;

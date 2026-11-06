@@ -83,7 +83,7 @@ void main() {
 
     test('verifies inProgressRequest status text mappings', () {
       const statuses = {
-        'SUBMITTED': '待派单',
+        'SUBMITTED': '已提交',
         'PROCESSING': '处理中',
         'COMPLETED': '已办结',
         'REJECTED': '已驳回',

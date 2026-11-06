@@ -21,6 +21,10 @@ public class ServiceRequestEntity extends BaseEntity {
     private Long campusId;
     private Long itemId;
     private String itemName;
+    /** 提交时的事项编码及流程快照，后续配置变更不改写历史申请。 */
+    private String itemCode;
+    private String flowType;
+    private String approvalComment;
     private Long categoryId;
     private Long requesterId;
     private String title;

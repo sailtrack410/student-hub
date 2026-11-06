@@ -16,7 +16,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -85,24 +84,24 @@ class AdminServiceRequestDetailIntegrationTest {
                 .andExpect(jsonPath("$.data.materials[0].fieldKey").value("photos"))
                 .andExpect(jsonPath("$.data.materials[0].urls[0]", containsString("/api/common/files/view/")))
                 .andExpect(jsonPath("$.data.timeline[0].action").value("SUBMIT"))
-                .andExpect(jsonPath("$.data.availableActions[0]").value("APPROVE"))
+                .andExpect(jsonPath("$.data.availableActions").isEmpty())
                 .andExpect(jsonPath("$.data.workOrder.slaHours").value(24))
                 .andExpect(jsonPath("$.data.workOrder.dueAt").exists())
                 .andExpect(jsonPath("$.data.workOrder.overdue").value(false));
 
-        // 审批通过后：状态转处理中，可执行动作只剩驳回，时间线追加 DISPATCH
+        // 报修禁止用通用审批绕过派单：状态和维修队列保持一致。
         mockMvc.perform(post("/api/admin/service-requests/" + requestId + "/review")
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"action\":\"APPROVE\",\"comment\":\"材料齐全，转维修班组\"}"))
-                .andExpect(status().isOk());
+                .andExpect(status().isConflict());
 
         mockMvc.perform(get("/api/admin/service-requests/" + requestId)
                         .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("PROCESSING"))
-                .andExpect(jsonPath("$.data.availableActions[0]").value("REJECT"))
-                .andExpect(jsonPath("$.data.timeline[?(@.action == 'DISPATCH')]").exists());
+                .andExpect(jsonPath("$.data.status").value("SUBMITTED"))
+                .andExpect(jsonPath("$.data.availableActions").isEmpty())
+                .andExpect(jsonPath("$.data.timeline[?(@.action == 'DISPATCH')]").isEmpty());
     }
 
     @Test

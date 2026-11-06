@@ -51,7 +51,7 @@ import java.util.List;
 
 /**
  * 管理端服务申请审批服务：全平台数据范围分页 + 通过/驳回 + 审批详情。
- * 通过 = SUBMITTED → PROCESSING（DISPATCH 语义：转入处理，后续由工单流转）；
+ * 人工受理通过 = SUBMITTED → PROCESSING（ACCEPT）；请假复用独立审批，维修必须走派工；
  * 驳回 = SUBMITTED/PROCESSING → REJECTED。
  */
 @Slf4j
@@ -72,6 +72,8 @@ public class AdminServiceRequestService {
     private final FileStorageService fileStorageService;
     private final ObjectMapper objectMapper;
     private final AdminDataScopeService adminDataScopeService;
+    private final LeaveRequestService leaveRequestService;
+    private final com.studenthub.modules.notification.service.NotificationService notificationService;
 
     public PageResult<AdminServiceRequestSummaryResponse> page(AdminServiceRequestPageQuery query) {
         AdminDataScope dataScope = adminDataScopeService.current();
@@ -124,7 +126,8 @@ public class AdminServiceRequestService {
         JsonNode formSchema = item == null ? null : parseJson(item.getFormSchema());
         JsonNode formData = enrichImageUrls(entity.getId(), parseJson(entity.getFormData()), formSchema);
         List<AdminRequestMaterialResponse> materials = extractMaterials(formData, formSchema);
-        WorkOrderEntity order = workOrderMapper.findByRequestId(entity.getId());
+        WorkOrderEntity order = RequestBusinessView.repair(entity) ? workOrderMapper.findByRequestId(entity.getId()) : null;
+        if (order != null && Boolean.TRUE.equals(order.getFlowArchived())) order = null;
         List<AdminRequestAttachmentResponse> attachments = extractAttachments(order);
 
         return new AdminServiceRequestDetailResponse(
@@ -153,19 +156,32 @@ public class AdminServiceRequestService {
                         signPhoto(order.getCompletionPhotoFileId())),
                 evaluation(entity.getId()),
                 timeline(entity.getId()),
-                availableActions(entity.getStatus()));
+                availableActions(entity), RequestBusinessView.flowType(entity), entity.getItemCode(),
+                RequestBusinessView.status(entity, order == null ? null : order.getStatus()),
+                RequestBusinessView.label(entity, order == null ? null : order.getStatus()), entity.getApprovalComment());
     }
 
     @Transactional(rollbackFor = Exception.class)
     public void review(AuthenticatedUser operator, Long requestId, AdminReviewRequest request) {
         ServiceRequestEntity entity = requireCampusRequest(requestId);
+        ensureScope(entity);
+        if (RequestBusinessView.leave(entity)) {
+            if (AdminReviewRequest.ACTION_APPROVE.equals(request.action())) leaveRequestService.approve(operator, requestId, request.comment());
+            else if (AdminReviewRequest.ACTION_REJECT.equals(request.action())) leaveRequestService.reject(operator, requestId, request.comment());
+            else throw new BusinessException(ErrorCode.INVALID_PARAMETER, "未知审批动作");
+            return;
+        }
+        requireManual(entity);
         RequestTransitions.Status from = RequestTransitions.parse(entity.getStatus());
         RequestTransitions.Action action = toAction(request.action());
+        if (action == RequestTransitions.Action.REJECT && (request.comment() == null || request.comment().isBlank()))
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "驳回必须填写原因");
         RequestTransitions.Status to = RequestTransitions.target(action, from);
 
         ServiceRequestEntity update = new ServiceRequestEntity();
         update.setId(entity.getId());
         update.setStatus(to.name());
+        update.setApprovalComment(request.comment());
         if (to == RequestTransitions.Status.REJECTED) {
             update.setRejectReason(request.comment());
         }
@@ -176,6 +192,43 @@ public class AdminServiceRequestService {
 
         requestLogRecorder.record(entity.getId(), null, action, from, to,
                 operator.userId(), operator.displayName(), request.comment());
+        notificationService.send(new com.studenthub.modules.notification.service.dto.NotificationSendCommand(
+                entity.getRequesterId(), "REQUEST", to == RequestTransitions.Status.REJECTED ? "申请已驳回" : "申请已受理",
+                "申请「" + entity.getTitle() + "」" + (to == RequestTransitions.Status.REJECTED ? "已驳回：" + request.comment() : "已转人工处理。"),
+                "SERVICE_REQUEST", entity.getId()));
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void complete(AuthenticatedUser operator, Long requestId, String comment) {
+        ServiceRequestEntity entity = requireCampusRequest(requestId);
+        ensureScope(entity);
+        requireManual(entity);
+        RequestTransitions.Status from = RequestTransitions.parse(entity.getStatus());
+        RequestTransitions.Status to = RequestTransitions.target(RequestTransitions.Action.COMPLETE, from);
+        ServiceRequestEntity update = new ServiceRequestEntity();
+        update.setId(entity.getId());
+        update.setStatus(to.name());
+        update.setCompletedAt(java.time.LocalDateTime.now());
+        update.setVersion(entity.getVersion());
+        if (requestMapper.updateById(update) == 0) throw new BusinessException(ErrorCode.REQUEST_STATE_INVALID, "状态已变更，请刷新");
+        requestLogRecorder.record(entity.getId(), null, RequestTransitions.Action.COMPLETE, from, to,
+                operator.userId(), operator.displayName(), comment);
+        notificationService.send(new com.studenthub.modules.notification.service.dto.NotificationSendCommand(
+                entity.getRequesterId(), "REQUEST", "申请已完成", "申请「" + entity.getTitle() + "」已由受理人员完成。" +
+                (comment == null ? "" : comment), "SERVICE_REQUEST", entity.getId()));
+    }
+
+    private void requireManual(ServiceRequestEntity entity) {
+        if (com.studenthub.modules.servicecatalog.enums.ServiceFlowType.resolve(entity.getFlowType())
+                != com.studenthub.modules.servicecatalog.enums.ServiceFlowType.MANUAL)
+            throw new BusinessException(ErrorCode.REQUEST_STATE_INVALID, "请在对应业务队列处理此申请");
+    }
+
+    private void ensureScope(ServiceRequestEntity entity) {
+        AdminDataScope scope = adminDataScopeService.current();
+        if (!scope.unrestricted() && !scope.allowsOrganization(entity.getHandlerOrganizationId())
+                && !(scope.selfOnly() && java.util.Objects.equals(scope.userId(), entity.getRequesterId())))
+            throw new BusinessException(ErrorCode.REQUEST_NOT_FOUND);
     }
 
     /**
@@ -183,7 +236,7 @@ public class AdminServiceRequestService {
      */
     private RequestTransitions.Action toAction(String action) {
         if (AdminReviewRequest.ACTION_APPROVE.equals(action)) {
-            return RequestTransitions.Action.DISPATCH;
+            return RequestTransitions.Action.ACCEPT;
         }
         if (AdminReviewRequest.ACTION_REJECT.equals(action)) {
             return RequestTransitions.Action.REJECT;
@@ -192,7 +245,8 @@ public class AdminServiceRequestService {
     }
 
     private ServiceRequestEntity requireCampusRequest(Long requestId) {
-        ServiceRequestEntity entity = requestMapper.selectById(requestId);
+        ServiceRequestEntity entity = org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()
+                ? requestMapper.lockById(requestId) : requestMapper.selectById(requestId);
         if (entity == null || entity.getDeleted() != null && entity.getDeleted() == 1
                 || !campusContextService.currentCampusId().equals(entity.getCampusId())) {
             throw new BusinessException(ErrorCode.REQUEST_NOT_FOUND);
@@ -280,17 +334,19 @@ public class AdminServiceRequestService {
                 .stream().map(RequestLogResponse::from).toList();
     }
 
-    /** 可执行审批动作：仅待审批可通过/驳回，处理中仅可驳回，其余状态无可执行动作。 */
-    private List<String> availableActions(String status) {
-        RequestTransitions.Status current;
-        try {
-            current = RequestTransitions.parse(status);
-        } catch (BusinessException exception) {
-            return List.of();
-        }
-        return switch (current) {
-            case SUBMITTED -> List.of(AdminReviewRequest.ACTION_APPROVE, AdminReviewRequest.ACTION_REJECT);
-            case PROCESSING -> List.of(AdminReviewRequest.ACTION_REJECT);
+    /** 请假使用审批/销假动作，人工服务使用受理/办结动作，维修由工单队列处理。 */
+    private List<String> availableActions(ServiceRequestEntity entity) {
+        if (RequestBusinessView.repair(entity)) return List.of();
+        if (RequestBusinessView.leave(entity)) return switch (entity.getStatus()) {
+            case "SUBMITTED" -> List.of("APPROVE", "REJECT");
+            case "PROCESSING" -> List.of("LEAVE_CANCEL");
+            default -> List.of();
+        };
+        if (com.studenthub.modules.servicecatalog.enums.ServiceFlowType.resolve(entity.getFlowType())
+                != com.studenthub.modules.servicecatalog.enums.ServiceFlowType.MANUAL) return List.of();
+        return switch (entity.getStatus()) {
+            case "SUBMITTED" -> List.of("APPROVE", "REJECT");
+            case "PROCESSING" -> List.of("COMPLETE", "REJECT");
             default -> List.of();
         };
     }
@@ -334,6 +390,7 @@ public class AdminServiceRequestService {
                 entity.getStatus(),
                 entity.getSubmittedAt(),
                 entity.getCompletedAt(),
-                entity.getRejectReason());
+                entity.getRejectReason(), RequestBusinessView.flowType(entity), entity.getItemCode(),
+                RequestBusinessView.status(entity, null), RequestBusinessView.label(entity, null), availableActions(entity));
     }
 }

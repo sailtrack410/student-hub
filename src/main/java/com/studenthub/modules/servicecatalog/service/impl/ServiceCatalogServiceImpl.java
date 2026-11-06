@@ -15,6 +15,7 @@ import com.studenthub.modules.servicecatalog.controller.dto.ServiceItemDetailRes
 import com.studenthub.modules.servicecatalog.controller.dto.ServiceItemUpsertRequest;
 import com.studenthub.modules.servicecatalog.entity.ServiceCategoryEntity;
 import com.studenthub.modules.servicecatalog.entity.ServiceItemEntity;
+import com.studenthub.modules.servicecatalog.enums.ServiceFlowType;
 import com.studenthub.modules.identity.entity.OrganizationEntity;
 import com.studenthub.modules.identity.mapper.OrganizationMapper;
 import com.studenthub.modules.servicecatalog.mapper.ServiceCategoryMapper;
@@ -122,7 +123,7 @@ public class ServiceCatalogServiceImpl implements ServiceCatalogService {
                 Boolean.TRUE.equals(item.getPhotoWorkflowRequired()),
                 item.getGuideContent(),
                 parseOptionalJson(item.getId(), item.getMaterialList()),
-                parseOptionalJson(item.getId(), item.getFaq()));
+                parseOptionalJson(item.getId(), item.getFaq()), ServiceFlowType.resolve(item.getFlowType()).name());
     }
 
     @Override
@@ -196,6 +197,9 @@ public class ServiceCatalogServiceImpl implements ServiceCatalogService {
             entity.setCategoryId(request.categoryId());
         }
         entity.setItemCode(request.itemCode());
+        if (request.flowType() != null || entity.getId() == null) {
+            entity.setFlowType(ServiceFlowType.resolve(request.flowType()).name());
+        }
         entity.setItemName(request.itemName());
         entity.setSummary(request.summary());
         entity.setDescription(request.description());
@@ -245,6 +249,7 @@ public class ServiceCatalogServiceImpl implements ServiceCatalogService {
         copy.setCategoryId(source.getCategoryId());
         copy.setItemCode(nextCopyCode(source.getCampusId(), source.getItemCode()));
         copy.setItemName(truncate(source.getItemName() == null ? "服务项" : source.getItemName(), 120) + "（副本）");
+        copy.setFlowType(ServiceFlowType.resolve(source.getFlowType()).name());
         copy.setSummary(source.getSummary());
         copy.setDescription(source.getDescription());
         copy.setIcon(source.getIcon());

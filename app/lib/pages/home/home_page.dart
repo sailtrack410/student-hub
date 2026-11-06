@@ -38,9 +38,7 @@ import '../login/login_page.dart';
 import '../profile/jw_auth_page.dart';
 import '../schedule/schedule_page.dart';
 import '../service/my_requests_page.dart';
-import '../service/repair_apply_page.dart';
 import '../service/service_hall_page.dart';
-import '../service/service_apply_page.dart';
 
 /// 首页按课程、待办、服务和资讯排列，业务数据来自真实聚合接口。
 class HomePage extends StatefulWidget {
@@ -476,19 +474,25 @@ class _HomePageState extends State<HomePage>
       _showAnnouncementModal(ann);
       return;
     }
-    if (title == '教室报修') {
+    final serviceCode = switch (title) {
+      '宿舍报修' => 'REPAIR-DORM',
+      '教室报修' => 'REPAIR-PUBLIC',
+      '请假申请' => 'AFFAIR-LEAVE',
+      '在读证明' => 'CERT-ENROLL',
+      '场地申请' => 'AFFAIR-VENUE',
+      '校园咨询' => 'GUIDE-CONSULT',
+      _ => null,
+    };
+    if (serviceCode != null) {
+      for (final item in _serviceItems) {
+        if (item.itemCode == serviceCode) {
+          _handleServiceItemTap(item);
+          return;
+        }
+      }
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) =>
-              const RepairApplyPage(title: '教室与公共区域报修', itemId: '1002'),
-        ),
-      );
-      return;
-    }
-    if (title == '宿舍报修') {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => const RepairApplyPage(title: '宿舍报修', itemId: '1001'),
+          builder: (_) => const ServiceHallPage(showBack: true),
         ),
       );
       return;
@@ -507,37 +511,6 @@ class _HomePageState extends State<HomePage>
     if (title == '消息通知') {
       // 消息为一级 Tab，不再 push 二级页
       _switchTab(3);
-      return;
-    }
-    if (title == '在读证明') {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) =>
-              const ServiceApplyPage(itemId: '3001', itemName: '在读证明申请'),
-        ),
-      );
-      return;
-    }
-    if (title == '请假申请') {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) =>
-              const ServiceApplyPage(itemId: '2001', itemName: '请假申请'),
-        ),
-      );
-      return;
-    }
-    if (title == '场地申请') {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) =>
-              const ServiceApplyPage(itemId: '2002', itemName: '活动场地申请'),
-        ),
-      );
-      return;
-    }
-    if (title == '校园咨询') {
-      _switchTab(2);
       return;
     }
     if (title == '服务大厅' || title == '更多服务') {
@@ -1274,8 +1247,7 @@ class _HomePageState extends State<HomePage>
     );
   }
 
-  /// 服务项点击路由：REPAIR-* 报修、SCHEDULE-VIEW 课表、GUIDE-CONSULT 咨询，
-  /// 其余（AFFAIR / CERTIFICATE / 未知编码）统一进入服务申请页兜底。
+  /// 服务项按后端流程配置进入报修、审批、人工受理或指南入口。
   void _handleServiceItemTap(ServiceItemData item) =>
       HomeNavigation.openService(context, item, onOpenAi: () => _switchTab(2));
 

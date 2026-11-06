@@ -13,8 +13,13 @@ import 'evaluation_sheet.dart';
 /// 评价全部按真实 requestId / workOrderId 调用后端。
 class WorkOrderDetailPage extends StatefulWidget {
   final String requestId;
+  final Future<Map<String, dynamic>?> Function(String requestId)? detailLoader;
 
-  const WorkOrderDetailPage({super.key, required this.requestId});
+  const WorkOrderDetailPage({
+    super.key,
+    required this.requestId,
+    this.detailLoader,
+  });
 
   @override
   State<WorkOrderDetailPage> createState() => _WorkOrderDetailPageState();
@@ -39,7 +44,9 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage> {
       _loading = true;
       _error = false;
     });
-    final detail = await _api.fetchRequestDetail(widget.requestId);
+    final detail = await (widget.detailLoader ?? _api.fetchRequestDetail)(
+      widget.requestId,
+    );
     if (!mounted) return;
     setState(() {
       _detail = detail == null ? null : ServiceRequestDetail.fromJson(detail);
@@ -69,15 +76,18 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage> {
     if (!mounted) return;
     setState(() => _actionLoading = false);
     if (result == null) {
-      _toast('催单失败，请稍后重试');
+      _toast('催办失败，请稍后重试');
       return;
     }
     if (result['urged'] == false) {
       final seconds = result['nextUrgeAvailableSeconds'] ?? 0;
-      _toast('催单过于频繁，请 ${seconds}s 后再试', color: const Color(0xFFD97706));
+      _toast('催办过于频繁，请 ${seconds}s 后再试', color: const Color(0xFFD97706));
       return;
     }
-    _toast('已向师傅发送催单加急通知', color: const Color(0xFF16A34A));
+    _toast(
+      result['message']?.toString() ?? '催办已记录',
+      color: const Color(0xFF16A34A),
+    );
   }
 
   Future<void> _cancel() async {
@@ -87,7 +97,9 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('撤销申请'),
-        content: const Text('撤销后申请将终止，已派工的工单会同步撤销。确定继续吗？'),
+        content: Text(
+          detail.isRepair ? '撤销后申请将终止，已派工的工单会同步撤销。确定继续吗？' : '撤销后申请将终止，确定继续吗？',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -249,14 +261,17 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage> {
                 children: [
                   _buildHeaderCard(_detail!),
                   const SizedBox(height: 12),
-                  _buildWorkOrderCard(_detail!),
+                  if (_detail!.isRepair)
+                    _buildWorkOrderCard(_detail!)
+                  else
+                    _buildBusinessCard(_detail!),
                   const SizedBox(height: 12),
                   _buildFormCard(_detail!),
                   if (_detail!.timeline.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     _buildTimelineCard(_detail!),
                   ],
-                  if (_detail!.evaluation != null) ...[
+                  if (_detail!.isRepair && _detail!.evaluation != null) ...[
                     const SizedBox(height: 12),
                     _buildEvaluationCard(_detail!.evaluation!),
                   ],
@@ -331,7 +346,7 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage> {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  serviceRequestStatusLabel(detail.status),
+                  detail.displayStatusLabel,
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
@@ -368,6 +383,48 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage> {
             const SizedBox(height: 10),
             _notice('撤销原因：${detail.cancelReason}', const Color(0xFF64748B)),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBusinessCard(ServiceRequestDetail detail) {
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            detail.isLeave ? '请假审批' : '办理进度',
+            style: const TextStyle(
+              fontFamily: 'Noto Sans SC',
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 10),
+          _infoRow('业务状态', detail.displayStatusLabel),
+          if (detail.isLeave) ...[
+            if (detail.leaveType?.isNotEmpty == true)
+              _infoRow('请假类型', detail.leaveType!),
+            _infoRow('开始时间', _formatTime(detail.leaveStartAt)),
+            _infoRow('结束时间', _formatTime(detail.leaveEndAt)),
+            if (detail.leaveDays != null)
+              _infoRow('请假天数', '${detail.leaveDays} 天'),
+            if (detail.approvalComment?.isNotEmpty == true)
+              _infoRow('审批意见', detail.approvalComment!),
+            if (detail.leaveCancelAt?.isNotEmpty == true)
+              _infoRow('销假时间', _formatTime(detail.leaveCancelAt)),
+            if (detail.businessStatus == 'APPROVED')
+              const Text(
+                '请假已批准，返校后请联系受理部门办理销假。',
+                style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+              ),
+          ] else if (detail.status == 'SUBMITTED')
+            const Text(
+              '申请已提交，等待受理部门人工处理。',
+              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+            ),
         ],
       ),
     );
@@ -476,7 +533,10 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage> {
           ),
           const SizedBox(height: 8),
           for (final entry in textEntries)
-            _infoRow(_fieldLabel(entry.key), entry.value.toString()),
+            _infoRow(
+              _fieldLabel(entry.key, isRepair: detail.isRepair),
+              entry.value.toString(),
+            ),
           if (imageUrls.isNotEmpty) ...[
             const SizedBox(height: 10),
             const Text(
@@ -652,72 +712,61 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage> {
 
   Widget _buildActionBar(ServiceRequestDetail detail) {
     final buttons = <Widget>[];
+    void add(Widget button) {
+      if (buttons.isNotEmpty) buttons.add(const SizedBox(width: 10));
+      buttons.add(Expanded(child: button));
+    }
+
+    if (detail.canRejectCompletion) {
+      add(
+        OutlinedButton(
+          onPressed: _actionLoading ? null : _rejectCompletion,
+          child: const Text('未修好，退回'),
+        ),
+      );
+    }
     if (detail.canConfirm) {
-      buttons.add(
-        Expanded(
-          child: OutlinedButton(
-            onPressed: _actionLoading ? null : _rejectCompletion,
-            child: const Text('未修好，退回'),
-          ),
+      add(
+        ElevatedButton(
+          onPressed: _actionLoading ? null : _confirmCompletion,
+          child: const Text('确认完工'),
         ),
       );
-      buttons.add(const SizedBox(width: 10));
-      buttons.add(
-        Expanded(
-          child: ElevatedButton(
-            onPressed: _actionLoading ? null : _confirmCompletion,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.brand,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('确认完工'),
-          ),
+    }
+    if (detail.canEvaluate) {
+      add(
+        ElevatedButton(
+          onPressed: _actionLoading ? null : _openEvaluation,
+          child: const Text('评价本次服务'),
         ),
       );
-    } else if (detail.canEvaluate) {
-      buttons.add(
-        Expanded(
-          child: ElevatedButton(
-            onPressed: _actionLoading ? null : _openEvaluation,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.brand,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('评价本次服务'),
-          ),
+    }
+    if (detail.canCancel) {
+      add(
+        OutlinedButton(
+          onPressed: _actionLoading ? null : _cancel,
+          child: const Text('撤销申请'),
         ),
       );
-    } else if (detail.canUrge) {
-      if (detail.status == 'SUBMITTED') {
-        buttons.add(
-          Expanded(
-            child: OutlinedButton(
-              onPressed: _actionLoading ? null : _cancel,
-              child: const Text('撤销申请'),
-            ),
+    }
+    if (detail.canUrge) {
+      add(
+        ElevatedButton(
+          onPressed: _actionLoading ? null : _urge,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.brand,
+            foregroundColor: Colors.white,
           ),
-        );
-        buttons.add(const SizedBox(width: 10));
-      }
-      buttons.add(
-        Expanded(
-          child: ElevatedButton(
-            onPressed: _actionLoading ? null : _urge,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.brand,
-              foregroundColor: Colors.white,
-            ),
-            child: _actionLoading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Text('催单'),
-          ),
+          child: _actionLoading
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : Text(detail.isRepair ? '催单' : '催办'),
         ),
       );
     }
@@ -855,12 +904,20 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage> {
     return normalized.length > 16 ? normalized.substring(0, 16) : normalized;
   }
 
-  String _fieldLabel(String key) {
+  String _fieldLabel(String key, {required bool isRepair}) {
     return switch (key) {
       'contactPhone' => '联系电话',
-      'address' || 'repairAddress' || 'location' => '报修地址',
-      'faultType' || 'category' => '故障类型',
-      'description' => '问题描述',
+      'address' || 'repairAddress' || 'location' => isRepair ? '报修地址' : '地址',
+      'faultType' || 'category' => isRepair ? '故障类型' : '类别',
+      'description' => isRepair ? '问题描述' : '申请说明',
+      'reason' => '申请事由',
+      'leaveType' => '请假类型',
+      'startDate' || 'startTime' || 'leaveStartAt' => '开始时间',
+      'endDate' || 'endTime' || 'leaveEndAt' => '结束时间',
+      'destination' => '目的地',
+      'copies' => '份数',
+      'purpose' => '用途',
+      'venue' => '申请场地',
       'dormBuilding' => '宿舍楼',
       'expectDate' => '期望上门日期',
       'contactName' => '联系人',
@@ -871,17 +928,21 @@ class _WorkOrderDetailPageState extends State<WorkOrderDetailPage> {
   String _timelineActionLabel(String action) {
     return switch (action) {
       'SUBMIT' => '提交申请',
-      'DISPATCH' => '已派单',
+      'DISPATCH' => _detail?.isRepair == true ? '已派单' : '历史受理记录',
+      'APPROVE' => '审批通过',
+      'ACCEPT' => '人工受理',
+      'LEAVE_CANCEL' || 'CLOSE_LEAVE' => '已销假',
+      'FLOW_MIGRATE' || 'ARCHIVE_NON_REPAIR' => '历史流程更正',
       'START' => '开始处理',
       'ARRIVAL_PHOTO' => '现场拍照',
       'COMPLETION_PHOTO' => '完工拍照',
-      'COMPLETE' => '工单办结',
+      'COMPLETE' => _detail?.isRepair == true ? '工单办结' : '办理完成',
       'CONFIRM' => '确认完工',
       'REOPEN' => '退回重办',
       'REJECT' => '申请驳回',
       'CANCEL' => '撤销申请',
       'EVALUATE' => '提交评价',
-      'URGE' => '催单',
+      'URGE' => _detail?.isRepair == true ? '催单' : '催办',
       _ => action.isEmpty ? '状态更新' : action,
     };
   }

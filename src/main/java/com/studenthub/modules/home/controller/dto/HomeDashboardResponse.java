@@ -47,6 +47,7 @@ public record HomeDashboardResponse(
             @Schema(description = "工单号（已派单时）") String orderNo,
             @Schema(description = "服务项名") String itemName,
             @Schema(description = "申请状态") String currentStatus,
-            @Schema(description = "提交时间") String submittedAt) {
+            @Schema(description = "提交时间") String submittedAt,
+            String flowType, String businessStatus, String statusLabel) {
     }
 }

@@ -26,7 +26,8 @@ public record ServiceItemAdminResponse(
         @Schema(description = "材料清单 JSON 数组", nullable = true) JsonNode materialList,
         @Schema(description = "常见问题 JSON 数组", nullable = true) JsonNode faq,
         @Schema(description = "动态申请表单字段定义") JsonNode formSchema,
-        @Schema(description = "更新时间") LocalDateTime updatedAt) {
+        @Schema(description = "更新时间") LocalDateTime updatedAt,
+        @Schema(description = "服务流程：REPAIR / LEAVE_APPROVAL / MANUAL / GUIDE") String flowType) {
 
     public static ServiceItemAdminResponse from(ServiceItemEntity entity, String categoryName, JsonNode formSchema,
                                                 JsonNode materialList, JsonNode faq) {
@@ -36,6 +37,7 @@ public record ServiceItemAdminResponse(
                 entity.getStatus(), entity.getSlaHours(), entity.getSortOrder(),
                 entity.getHandlerOrganizationId(), entity.getDefaultPriority(),
                 Boolean.TRUE.equals(entity.getPhotoWorkflowRequired()),
-                entity.getGuideContent(), materialList, faq, formSchema, entity.getUpdatedAt());
+                entity.getGuideContent(), materialList, faq, formSchema, entity.getUpdatedAt(),
+                com.studenthub.modules.servicecatalog.enums.ServiceFlowType.resolve(entity.getFlowType()).name());
     }
 }

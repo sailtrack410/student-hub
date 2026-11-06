@@ -14,6 +14,7 @@ public record AdminServiceRequestSummaryResponse(
         String status,
         LocalDateTime submittedAt,
         LocalDateTime completedAt,
-        String rejectReason
+        String rejectReason, String flowType, String itemCode, String businessStatus, String statusLabel,
+        java.util.List<String> availableActions
 ) {
 }

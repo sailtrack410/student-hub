@@ -35,14 +35,15 @@
             '<div class="cap" style="font-size:14px">服务项<span class="cnt">{{ activeCategoryId ? categoryName(activeCategoryId) : "全部分类" }}</span>',
             '<span class="r"><span class="srch"><input v-model="keyword" placeholder="搜索名称 / 编码 / 简介" /></span></span></div>',
             '<div class="tblw" style="flex:1;min-height:0;overflow:auto"><table class="pk">',
-            '<colgroup><col style="width:250px"><col style="width:110px"><col style="width:86px"><col style="width:80px"><col style="width:74px"><col style="width:64px"><col style="width:60px"><col style="width:140px"><col style="width:190px"></colgroup>',
-            '<thead><tr><th>服务项</th><th>分类</th><th>状态</th><th>SLA</th><th>默认</th><th>拍照</th><th>排序</th><th>更新时间</th><th class="r">操作</th></tr></thead>',
+            '<colgroup><col style="width:250px"><col style="width:110px"><col style="width:110px"><col style="width:86px"><col style="width:80px"><col style="width:74px"><col style="width:64px"><col style="width:60px"><col style="width:140px"><col style="width:190px"></colgroup>',
+            '<thead><tr><th>服务项</th><th>分类</th><th>流程类型</th><th>状态</th><th>SLA</th><th>默认</th><th>拍照</th><th>排序</th><th>更新时间</th><th class="r">操作</th></tr></thead>',
             '<tbody>',
-            '<tr v-if="!filteredItems.length"><td colspan="9" style="text-align:center;color:var(--tk-muted);padding:24px 0">暂无服务项</td></tr>',
+            '<tr v-if="!filteredItems.length"><td colspan="10" style="text-align:center;color:var(--tk-muted);padding:24px 0">暂无服务项</td></tr>',
             '<tr v-for="it in filteredItems" :key="it.itemId">',
             '<td><div style="display:flex;flex-direction:column;gap:2px"><b style="font-size:13px;color:var(--tk-text)">{{ it.itemName }}</b>',
             '<span style="font-size:11px;color:var(--tk-text3)">{{ it.itemCode }}<template v-if="it.summary"> · {{ it.summary }}</template></span></div></td>',
             '<td style="color:var(--tk-text2)">{{ it.categoryName }}</td>',
+            '<td>{{ flowLabel(it.flowType) }}</td>',
             '<td><span class="bdg" :class="it.status===\'ENABLED\'?\'g\':\'i\'">{{ it.status===\'ENABLED\'?\'已上线\':\'已停用\' }}</span></td>',
             '<td style="color:var(--tk-text3)">{{ it.slaHours ? it.slaHours + "h" : "-" }}</td>',
             '<td><span class="bdg" :class="it.defaultPriority===\'URGENT\'?\'r\':\'n2\'">{{ it.defaultPriority===\'URGENT\'?\'加急\':\'普通\' }}</span></td>',
@@ -72,6 +73,7 @@
             '</select></div></div>',
             '<div class="fld"><label>图标标识</label><div class="pin"><input v-model="itemForm.icon" maxlength="128" placeholder="可选，如 fix-water" /></div></div>',
             '</div>',
+            '<div class="fld"><label>流程类型 <em>*</em></label><div class="pin"><select v-model="itemForm.flowType" style="width:100%"><option value="MANUAL">人工受理</option><option value="REPAIR">报修派工</option><option value="LEAVE_APPROVAL">请假审批</option><option value="GUIDE">仅办事指南</option></select></div><div style="font-size:11px;color:var(--tk-text3);margin-top:4px">报修派工才会创建维修工单；请假审批由请假管理处理；人工受理不代表已接通预约或出证；仅指南不接收申请。修改只影响后续申请。</div></div>',
             '<div class="fld"><label>一句话简介</label><div class="pin"><input v-model="itemForm.summary" maxlength="512" placeholder="列表与详情页展示" /></div></div>',
             '<div class="fld"><label>服务说明</label><textarea class="pta" v-model="itemForm.description" placeholder="可选：办理说明、适用范围等"></textarea></div>',
             '<div class="frow">',
@@ -87,7 +89,7 @@
             '<div class="fld"><label>承诺办结时限（小时，SLA）</label><div class="pin"><input type="number" v-model.number="itemForm.slaHours" min="1" placeholder="如 24" /></div></div>',
             '<div class="fld"><label>排序值</label><div class="pin"><input type="number" v-model.number="itemForm.sortOrder" placeholder="越小越靠前" /></div></div>',
             '</div>',
-            '<div class="fld"><label>拍照确认流程</label><div class="pin" style="height:auto;padding:8px 10px"><label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--tk-text2);cursor:pointer">',
+            '<div class="fld" v-if="itemForm.flowType === \'REPAIR\'"><label>拍照确认流程</label><div class="pin" style="height:auto;padding:8px 10px"><label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--tk-text2);cursor:pointer">',
             '<input type="checkbox" v-model="itemForm.photoWorkflowRequired" /> 需要服务人员现场拍照 + 完工拍照 + 申请人确认</label></div></div>',
             '<div class="fld"><label>办事指南正文（S02）</label><textarea class="pta" v-model="itemForm.guideContent" maxlength="2000" placeholder="办理流程、注意事项、领取方式等，展示在服务详情页"></textarea></div>',
             '<div class="frow">',
@@ -118,7 +120,7 @@
             var activeCategoryId = V.ref(null), keyword = V.ref('');
             var itemDialog = V.ref(false), itemEditId = V.ref(null);
             var orgOptions = V.ref([]);
-            var itemForm = V.reactive({ categoryId: null, itemCode: '', itemName: '', summary: '', description: '', icon: '', handlerOrganizationId: null, defaultPriority: 'NORMAL', photoWorkflowRequired: false, slaHours: null, sortOrder: null, guideContent: '', materialListText: '', faqText: '', formSchemaText: '' });
+            var itemForm = V.reactive({ categoryId: null, itemCode: '', itemName: '', flowType: 'MANUAL', summary: '', description: '', icon: '', handlerOrganizationId: null, defaultPriority: 'NORMAL', photoWorkflowRequired: false, slaHours: null, sortOrder: null, guideContent: '', materialListText: '', faqText: '', formSchemaText: '' });
             var categoryDialog = V.ref(false);
             var categoryForm = V.reactive({ categoryCode: '', categoryName: '', icon: '', description: '', sortOrder: null });
 
@@ -162,17 +164,18 @@
                 return c ? c.categoryName : '';
             }
             function fmt(x) { return api.fmtDateTime(x); }
+            function flowLabel(flow) { return { REPAIR: '报修派工', LEAVE_APPROVAL: '请假审批', MANUAL: '人工受理', GUIDE: '仅办事指南' }[flow] || '人工受理'; }
 
             function openItemCreate() {
                 if (!categories.value.length) { E.ElMessage.warning('请先创建服务分类'); return; }
                 itemEditId.value = null;
-                Object.assign(itemForm, { categoryId: activeCategoryId.value || categories.value[0].categoryId, itemCode: '', itemName: '', summary: '', description: '', icon: '', handlerOrganizationId: null, defaultPriority: 'NORMAL', photoWorkflowRequired: false, slaHours: null, sortOrder: null, guideContent: '', materialListText: '', faqText: '', formSchemaText: '' });
+                Object.assign(itemForm, { categoryId: activeCategoryId.value || categories.value[0].categoryId, itemCode: '', itemName: '', flowType: 'MANUAL', summary: '', description: '', icon: '', handlerOrganizationId: null, defaultPriority: 'NORMAL', photoWorkflowRequired: false, slaHours: null, sortOrder: null, guideContent: '', materialListText: '', faqText: '', formSchemaText: '' });
                 itemDialog.value = true;
             }
             function openItemEdit(it) {
                 itemEditId.value = it.itemId;
                 Object.assign(itemForm, {
-                    categoryId: it.categoryId, itemCode: it.itemCode, itemName: it.itemName,
+                    categoryId: it.categoryId, itemCode: it.itemCode, itemName: it.itemName, flowType: it.flowType || 'MANUAL',
                     summary: it.summary || '', description: it.description || '', icon: it.icon || '',
                     handlerOrganizationId: it.handlerOrganizationId || null,
                     defaultPriority: it.defaultPriority || 'NORMAL',
@@ -224,12 +227,13 @@
                     categoryId: itemForm.categoryId,
                     itemCode: itemForm.itemCode.trim(),
                     itemName: itemForm.itemName.trim(),
+                    flowType: itemForm.flowType || 'MANUAL',
                     summary: itemForm.summary.trim() || null,
                     description: itemForm.description.trim() || null,
                     icon: itemForm.icon.trim() || null,
                     handlerOrganizationId: itemForm.handlerOrganizationId || null,
                     defaultPriority: itemForm.defaultPriority || 'NORMAL',
-                    photoWorkflowRequired: !!itemForm.photoWorkflowRequired,
+                    photoWorkflowRequired: itemForm.flowType === 'REPAIR' && !!itemForm.photoWorkflowRequired,
                     guideContent: (itemForm.guideContent || '').trim() || null,
                     materialList: materials,
                     faq: faq,
@@ -296,7 +300,7 @@
                 totalCount: totalCount, filteredItems: filteredItems,
                 itemDialog: itemDialog, itemEditId: itemEditId, itemForm: itemForm, orgOptions: orgOptions,
                 categoryDialog: categoryDialog, categoryForm: categoryForm,
-                selectCategory: selectCategory, categoryName: categoryName, fmt: fmt,
+                selectCategory: selectCategory, categoryName: categoryName, fmt: fmt, flowLabel: flowLabel,
                 openItemCreate: openItemCreate, openItemEdit: openItemEdit, saveItem: saveItem,
                 toggleStatus: toggleStatus, removeItem: removeItem, copyItem: copyItem,
                 openCategoryCreate: openCategoryCreate, saveCategory: saveCategory

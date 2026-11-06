@@ -17,5 +17,6 @@ public record ServiceItemDetailResponse(
         @Schema(description = "是否需要拍照确认流程") boolean photoWorkflowRequired,
         @Schema(description = "办事指南正文（S02）", nullable = true) String guideContent,
         @Schema(description = "材料清单 JSON 数组（S02）", nullable = true) JsonNode materialList,
-        @Schema(description = "常见问题 JSON 数组（S02）", nullable = true) JsonNode faq) {
+        @Schema(description = "常见问题 JSON 数组（S02）", nullable = true) JsonNode faq,
+        @Schema(description = "服务流程：REPAIR / LEAVE_APPROVAL / MANUAL / GUIDE") String flowType) {
 }

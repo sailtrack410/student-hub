@@ -33,6 +33,8 @@ import com.studenthub.modules.servicerequest.entity.ServiceRequestLogEntity;
 import com.studenthub.modules.servicerequest.mapper.ServiceRequestLogMapper;
 import com.studenthub.modules.servicerequest.mapper.ServiceRequestMapper;
 import com.studenthub.modules.servicerequest.service.LeaveRequestService;
+import com.studenthub.modules.servicerequest.service.RequestBusinessView;
+import com.studenthub.modules.servicecatalog.enums.ServiceFlowType;
 import com.studenthub.modules.servicerequest.service.RequestLogRecorder;
 import com.studenthub.modules.servicerequest.statemachine.RequestTransitions;
 import lombok.RequiredArgsConstructor;
@@ -55,7 +57,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 独立请假审批实现：复用 service_request 存储，按服务事项 item_code = AFFAIR-LEAVE 过滤。
+ * 独立请假审批实现：按申请的 LEAVE_APPROVAL 流程快照过滤，独立于维修工单。
  *
  * <p>领取假专属列（V76）为空的历史数据，接口会从 form_data 解析请假类型/起止时间作为兜底展示；
  * 审批与销假写操作会把解析值回填到专属列，保证后续筛选与统计真实可用。</p>
@@ -65,14 +67,13 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class LeaveRequestServiceImpl implements LeaveRequestService {
 
-    private static final String LEAVE_ITEM_CODE = "AFFAIR-LEAVE";
-    private static final String LEAVE_ITEM_NAME_KEYWORD = "请假";
 
-    private static final Set<String> STATUS_FILTERS = Set.of("PENDING", "APPROVED", "REJECTED", "CANCELLED");
+    private static final Set<String> STATUS_FILTERS = Set.of("PENDING", "APPROVED", "REJECTED", "CANCELLED", "WITHDRAWN", "COMPLETED");
     private static final Map<String, String> STATUS_MAP = Map.of(
             "PENDING", RequestTransitions.Status.SUBMITTED.name(),
             "APPROVED", RequestTransitions.Status.PROCESSING.name(),
-            "REJECTED", RequestTransitions.Status.REJECTED.name());
+            "REJECTED", RequestTransitions.Status.REJECTED.name(),
+            "COMPLETED", RequestTransitions.Status.COMPLETED.name());
 
     private final ServiceRequestMapper requestMapper;
     private final ServiceRequestLogMapper requestLogMapper;
@@ -88,12 +89,8 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
 
     @Override
     public PageResult<AdminLeaveSummaryResponse> page(AdminLeavePageQuery query) {
-        Set<Long> leaveItemIds = leaveItemIds();
-        if (leaveItemIds.isEmpty()) {
-            return PageResult.of(query.pageNumOrDefault(), query.pageSizeOrDefault(), 0, List.of());
-        }
         AdminDataScope dataScope = adminDataScopeService.current();
-        LambdaQueryWrapper<ServiceRequestEntity> wrapper = baseWrapper(leaveItemIds, dataScope);
+        LambdaQueryWrapper<ServiceRequestEntity> wrapper = baseWrapper(dataScope);
         applyStatusFilter(wrapper, query.status());
         if (query.leaveType() != null && !query.leaveType().isBlank()) {
             wrapper.eq(ServiceRequestEntity::getLeaveType, query.leaveType().trim());
@@ -113,22 +110,17 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
 
     @Override
     public AdminLeaveStatsResponse stats() {
-        Set<Long> leaveItemIds = leaveItemIds();
-        if (leaveItemIds.isEmpty()) {
-            return new AdminLeaveStatsResponse(0, 0, 0, 0, 0);
-        }
         AdminDataScope dataScope = adminDataScopeService.current();
-        long pending = requestMapper.selectCount(baseWrapper(leaveItemIds, dataScope)
+        long pending = requestMapper.selectCount(baseWrapper(dataScope)
                 .eq(ServiceRequestEntity::getStatus, RequestTransitions.Status.SUBMITTED.name()));
-        long approved = requestMapper.selectCount(baseWrapper(leaveItemIds, dataScope)
-                .in(ServiceRequestEntity::getStatus, RequestTransitions.Status.PROCESSING.name(),
-                        RequestTransitions.Status.COMPLETED.name())
+        long approved = requestMapper.selectCount(baseWrapper(dataScope)
+                .eq(ServiceRequestEntity::getStatus, RequestTransitions.Status.PROCESSING.name())
                 .isNull(ServiceRequestEntity::getLeaveCancelAt));
-        long rejected = requestMapper.selectCount(baseWrapper(leaveItemIds, dataScope)
+        long rejected = requestMapper.selectCount(baseWrapper(dataScope)
                 .eq(ServiceRequestEntity::getStatus, RequestTransitions.Status.REJECTED.name()));
-        long cancelled = requestMapper.selectCount(baseWrapper(leaveItemIds, dataScope)
+        long cancelled = requestMapper.selectCount(baseWrapper(dataScope)
                 .isNotNull(ServiceRequestEntity::getLeaveCancelAt));
-        long total = requestMapper.selectCount(baseWrapper(leaveItemIds, dataScope));
+        long total = requestMapper.selectCount(baseWrapper(dataScope));
         return new AdminLeaveStatsResponse(pending, approved, rejected, cancelled, total);
     }
 
@@ -149,7 +141,9 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
                 form.days(), form.reason(), entity.getStatus(), leaveStatus(entity), entity.getSubmittedAt(),
                 entity.getCompletedAt(), entity.getLeaveCancelAt(), entity.getRejectReason(),
                 entity.getCancelReason(), formData, formSchema, materials(formData, formSchema),
-                timeline(entity.getId()), availableActions(entity));
+                timeline(entity.getId()), availableActions(entity), entity.getApprovalComment(),
+                RequestBusinessView.flowType(entity), entity.getItemCode(), RequestBusinessView.status(entity, null),
+                RequestBusinessView.label(entity, null));
     }
 
     @Override
@@ -158,19 +152,20 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         ServiceRequestEntity entity = requireLeaveRequest(requestId);
         ensureScope(entity);
         RequestTransitions.Status from = RequestTransitions.parse(entity.getStatus());
-        RequestTransitions.Status to = RequestTransitions.target(RequestTransitions.Action.DISPATCH, from);
+        RequestTransitions.Status to = RequestTransitions.target(RequestTransitions.Action.APPROVE, from);
         LeaveForm form = leaveForm(entity);
 
         ServiceRequestEntity update = new ServiceRequestEntity();
         update.setId(entity.getId());
         update.setStatus(to.name());
+        update.setApprovalComment(comment == null ? null : comment.trim());
         fillLeaveColumns(update, form);
         update.setVersion(entity.getVersion());
         if (requestMapper.updateById(update) == 0) {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "状态已变更，请刷新后重试");
         }
         String logComment = comment == null || comment.isBlank() ? "请假审批通过" : comment.trim();
-        requestLogRecorder.record(entity.getId(), null, RequestTransitions.Action.DISPATCH, from, to,
+        requestLogRecorder.record(entity.getId(), null, RequestTransitions.Action.APPROVE, from, to,
                 operator.userId(), operator.displayName(), logComment);
         notify(entity.getRequesterId(), "请假审批通过",
                 "你的请假申请「" + requestTitle(entity) + "」已通过，请按请假时间安排。", entity.getId());
@@ -186,6 +181,9 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER, "驳回必须填写原因");
         }
         RequestTransitions.Status from = RequestTransitions.parse(entity.getStatus());
+        if (from != RequestTransitions.Status.SUBMITTED) {
+            throw new BusinessException(ErrorCode.REQUEST_STATE_INVALID, "仅待审批的请假申请可以驳回");
+        }
         RequestTransitions.Status to = RequestTransitions.target(RequestTransitions.Action.REJECT, from);
         LeaveForm form = leaveForm(entity);
 
@@ -193,6 +191,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         update.setId(entity.getId());
         update.setStatus(to.name());
         update.setRejectReason(reason.trim());
+        update.setApprovalComment(reason.trim());
         fillLeaveColumns(update, form);
         update.setVersion(entity.getVersion());
         if (requestMapper.updateById(update) == 0) {
@@ -214,7 +213,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
             throw new BusinessException(ErrorCode.REQUEST_STATE_INVALID, "该请假已销假，请勿重复操作");
         }
         RequestTransitions.Status from = RequestTransitions.parse(entity.getStatus());
-        RequestTransitions.Status to = RequestTransitions.target(RequestTransitions.Action.COMPLETE, from);
+        RequestTransitions.Status to = RequestTransitions.target(RequestTransitions.Action.LEAVE_CANCEL, from);
         LeaveForm form = leaveForm(entity);
         LocalDateTime now = LocalDateTime.now();
 
@@ -230,7 +229,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "状态已变更，请刷新后重试");
         }
         String logComment = comment == null || comment.isBlank() ? "销假" : "销假：" + comment.trim();
-        requestLogRecorder.record(entity.getId(), null, RequestTransitions.Action.COMPLETE, from, to,
+        requestLogRecorder.record(entity.getId(), null, RequestTransitions.Action.LEAVE_CANCEL, from, to,
                 operator.userId(), operator.displayName(), logComment);
         notify(entity.getRequesterId(), "请假已销假",
                 "你的请假申请「" + requestTitle(entity) + "」已办理销假。", entity.getId());
@@ -241,27 +240,12 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
     // 查询条件与数据范围
     // ---------------------------------------------------------------------
 
-    /** 真实服务事项 code 为 AFFAIR-LEAVE（V8 种子）；找不到时按事项名称包含“请假”兜底。 */
-    private Set<Long> leaveItemIds() {
-        Long campusId = campusContextService.currentCampusId();
-        List<ServiceItemEntity> items = serviceItemMapper.selectList(new LambdaQueryWrapper<ServiceItemEntity>()
-                .eq(ServiceItemEntity::getItemCode, LEAVE_ITEM_CODE));
-        if (items.isEmpty()) {
-            items = serviceItemMapper.selectList(new LambdaQueryWrapper<ServiceItemEntity>()
-                    .like(ServiceItemEntity::getItemName, LEAVE_ITEM_NAME_KEYWORD));
-        }
-        Set<Long> ids = items.stream()
-                .filter(item -> item.getCampusId() == null || item.getCampusId().equals(0L)
-                        || item.getCampusId().equals(campusId))
-                .map(ServiceItemEntity::getId).collect(Collectors.toSet());
-        return ids;
-    }
-
-    private LambdaQueryWrapper<ServiceRequestEntity> baseWrapper(Set<Long> leaveItemIds, AdminDataScope dataScope) {
+    /** 使用流程快照查询，不因目录更名或后续配置变化改写历史申请。 */
+    private LambdaQueryWrapper<ServiceRequestEntity> baseWrapper(AdminDataScope dataScope) {
         LambdaQueryWrapper<ServiceRequestEntity> wrapper = new LambdaQueryWrapper<ServiceRequestEntity>()
                 .eq(ServiceRequestEntity::getDeleted, 0)
                 .eq(ServiceRequestEntity::getCampusId, campusContextService.currentCampusId())
-                .in(ServiceRequestEntity::getItemId, leaveItemIds);
+                .eq(ServiceRequestEntity::getFlowType, ServiceFlowType.LEAVE_APPROVAL.name());
         if (!dataScope.unrestricted()) {
             wrapper.and(w -> {
                 boolean hasCondition = false;
@@ -291,15 +275,19 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         String normalized = status.trim().toUpperCase(java.util.Locale.ROOT);
         if (!STATUS_FILTERS.contains(normalized)) {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER,
-                    "请假状态仅支持 PENDING/APPROVED/REJECTED/CANCELLED");
+                    "请假状态仅支持 PENDING/APPROVED/REJECTED/CANCELLED/WITHDRAWN/COMPLETED");
         }
         if ("CANCELLED".equals(normalized)) {
             wrapper.isNotNull(ServiceRequestEntity::getLeaveCancelAt);
             return;
         }
-        if ("APPROVED".equals(normalized)) {
-            wrapper.in(ServiceRequestEntity::getStatus, RequestTransitions.Status.PROCESSING.name(),
-                            RequestTransitions.Status.COMPLETED.name())
+        if ("WITHDRAWN".equals(normalized)) {
+            wrapper.eq(ServiceRequestEntity::getStatus, RequestTransitions.Status.CANCELLED.name())
+                    .isNull(ServiceRequestEntity::getLeaveCancelAt);
+            return;
+        }
+        if ("APPROVED".equals(normalized) || "COMPLETED".equals(normalized)) {
+            wrapper.eq(ServiceRequestEntity::getStatus, STATUS_MAP.get(normalized))
                     .isNull(ServiceRequestEntity::getLeaveCancelAt);
             return;
         }
@@ -333,10 +321,11 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
     }
 
     private ServiceRequestEntity requireLeaveRequest(Long requestId) {
-        ServiceRequestEntity entity = requestMapper.selectById(requestId);
+        ServiceRequestEntity entity = org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()
+                ? requestMapper.lockById(requestId) : requestMapper.selectById(requestId);
         if (entity == null || entity.getDeleted() != null && entity.getDeleted() == 1
                 || !campusContextService.currentCampusId().equals(entity.getCampusId())
-                || entity.getItemId() == null || !leaveItemIds().contains(entity.getItemId())) {
+                || !RequestBusinessView.leave(entity)) {
             throw new BusinessException(ErrorCode.REQUEST_NOT_FOUND, "请假申请不存在或不在当前校区");
         }
         return entity;
@@ -403,7 +392,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
             case "PROCESSING" -> "APPROVED";
             case "REJECTED" -> "REJECTED";
             case "CANCELLED" -> "CANCELLED";
-            case "COMPLETED" -> "APPROVED";
+            case "COMPLETED" -> "COMPLETED";
             default -> entity.getStatus();
         };
     }
@@ -433,7 +422,9 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         return new AdminLeaveSummaryResponse(entity.getId(), entity.getRequestNo(), entity.getRequesterId(),
                 requester == null ? null : requester.getDisplayName(), organizationName, form.leaveType(),
                 form.startAt(), form.endAt(), form.days(), entity.getStatus(), leaveStatus(entity),
-                entity.getSubmittedAt(), entity.getCompletedAt(), entity.getLeaveCancelAt(), entity.getRejectReason());
+                entity.getSubmittedAt(), entity.getCompletedAt(), entity.getLeaveCancelAt(), entity.getRejectReason(),
+                RequestBusinessView.flowType(entity), entity.getItemCode(), RequestBusinessView.status(entity, null),
+                RequestBusinessView.label(entity, null), availableActions(entity));
     }
 
     private Map<Long, UserEntity> usersOf(List<ServiceRequestEntity> entities) {

@@ -11,7 +11,7 @@ import java.time.LocalDate;
 public record AdminLeavePageQuery(
         @Schema(description = "页码，从 1 开始") @Min(1) Integer pageNum,
         @Schema(description = "每页条数，最大 100") @Min(1) @Max(100) Integer pageSize,
-        @Schema(description = "状态：PENDING/APPROVED/REJECTED/CANCELLED（销假），空为全部") String status,
+        @Schema(description = "状态：PENDING/APPROVED/REJECTED/CANCELLED（已销假）/WITHDRAWN（已撤回）/COMPLETED（历史已办结），空为全部") String status,
         @Schema(description = "请假类型：病假/事假/其他，空为全部") String leaveType,
         @Schema(description = "关键词：申请单号/标题/申请人姓名") String keyword,
         @Schema(description = "请假开始日期（含）") LocalDate startDate,

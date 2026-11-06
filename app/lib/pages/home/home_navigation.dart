@@ -51,11 +51,11 @@ abstract final class HomeNavigation {
     ServiceItemData item, {
     required VoidCallback onOpenAi,
   }) {
-    if (item.itemCode == 'GUIDE-CONSULT') {
+    if (item.flowType == null && item.itemCode == 'GUIDE-CONSULT') {
       onOpenAi();
       return;
     }
-    final Widget destination = item.itemCode.startsWith('REPAIR')
+    final Widget destination = item.isRepair
         ? RepairApplyPage(title: item.name, itemId: item.itemId)
         : item.itemCode == 'SCHEDULE-VIEW'
         ? const SchedulePage()

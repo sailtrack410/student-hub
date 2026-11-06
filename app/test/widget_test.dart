@@ -215,7 +215,7 @@ void main() {
       expect(find.text('后勤报修服务'), findsOneWidget);
       expect(find.text('学生事务办理'), findsOneWidget);
       expect(find.text('证明开具与指引'), findsOneWidget);
-      expect(find.text('24h响应'), findsWidgets);
+      expect(find.text('24h办结'), findsWidgets);
       // 二级入口不应再带底栏
       expect(find.text('首页'), findsNothing);
 

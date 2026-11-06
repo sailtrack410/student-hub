@@ -70,6 +70,8 @@ public class SlaServiceImpl implements SlaService {
                 .collect(Collectors.toMap(ServiceItemEntity::getId, i -> i));
         Map<Long, WorkOrderEntity> orderByRequest = requestIds.isEmpty() ? Map.of()
                 : workOrderMapper.selectList(new LambdaQueryWrapper<WorkOrderEntity>()
+                        .eq(WorkOrderEntity::getFlowArchived, false)
+                        .inSql(WorkOrderEntity::getRequestId, WorkOrderMapper.REPAIR_REQUEST_IDS)
                         .in(WorkOrderEntity::getRequestId, requestIds)).stream()
                 .collect(Collectors.toMap(WorkOrderEntity::getRequestId, o -> o, (a, b) -> a));
         Map<Long, ServiceEvaluationEntity> evaluationByRequest = requestIds.isEmpty() ? Map.of()

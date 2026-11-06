@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 独立请假审批（H01）：数据来自 service_request 中 item_code = AFFAIR-LEAVE 的申请。
+ * 独立请假审批（H01）：数据来自 service_request 中 flow_type = LEAVE_APPROVAL 的申请。
  * 通过 = SUBMITTED→PROCESSING；驳回 = →REJECTED；销假 = PROCESSING→COMPLETED 并写 leave_cancel_at。
  */
 @RestController
@@ -37,7 +37,7 @@ public class AdminLeaveRequestController {
     private final CurrentUserProvider currentUserProvider;
 
     @GetMapping
-    @Operation(summary = "请假申请分页", description = "按当前管理端校区与数据范围过滤；status=PENDING/APPROVED/REJECTED/CANCELLED。",
+    @Operation(summary = "请假申请分页", description = "按当前管理端校区与数据范围过滤；status=PENDING/APPROVED/REJECTED/CANCELLED（已销假）/WITHDRAWN（已撤回）/COMPLETED（历史已办结）。返回业务状态、名称与管理端可执行动作。",
             operationId = "adminPageLeaveRequests")
     public Result<PageResult<AdminLeaveSummaryResponse>> page(AdminLeavePageQuery query) {
         return Result.success(leaveRequestService.page(query));
@@ -68,7 +68,7 @@ public class AdminLeaveRequestController {
     }
 
     @PostMapping("/{requestId}/reject")
-    @Operation(summary = "驳回请假", description = "驳回原因必填；待审批/处理中可驳回。",
+    @Operation(summary = "驳回请假", description = "驳回原因必填；仅待审批的请假可驳回。",
             operationId = "adminRejectLeaveRequest")
     public Result<Void> reject(@PathVariable Long requestId,
                                @RequestBody @Valid AdminLeaveRejectRequest request) {

@@ -39,6 +39,8 @@ public class EvaluationServiceImpl implements EvaluationService {
         if (serviceRequest == null || !serviceRequest.getRequesterId().equals(evaluator.userId())) {
             throw new BusinessException(ErrorCode.REQUEST_NOT_FOUND);
         }
+        if (!com.studenthub.modules.servicerequest.service.RequestBusinessView.repair(serviceRequest))
+            throw new BusinessException(ErrorCode.REQUEST_STATE_INVALID, "此事项不适用维修评价");
         RequestTransitions.target(RequestTransitions.Action.EVALUATE,
                 RequestTransitions.parse(serviceRequest.getStatus()));
         if (evaluationMapper.selectByRequestId(requestId) != null) {

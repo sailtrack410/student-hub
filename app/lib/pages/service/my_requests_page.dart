@@ -199,15 +199,18 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
     final result = await ServiceRequestApi.urge(item.requestId);
     if (!mounted) return;
     if (result == null) {
-      _toast('催单失败，请稍后重试');
+      _toast('催办失败，请稍后重试');
       return;
     }
     if (result['urged'] == false) {
       final seconds = result['nextUrgeAvailableSeconds'] ?? 0;
-      _toast('催单过于频繁，请 ${seconds}s 后再试', color: const Color(0xFFD97706));
+      _toast('催办过于频繁，请 ${seconds}s 后再试', color: const Color(0xFFD97706));
       return;
     }
-    _toast('已向师傅发送催单加急通知', color: const Color(0xFF16A34A));
+    _toast(
+      result['message']?.toString() ?? '催办已记录',
+      color: const Color(0xFF16A34A),
+    );
   }
 
   Future<void> _cancel(ServiceRequestSummary item) async {
@@ -449,9 +452,7 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
                 ),
               ),
               _statusPill(
-                item.isPendingConfirmation
-                    ? '待验收'
-                    : serviceRequestStatusLabel(item.status),
+                item.displayStatusLabel,
                 item.isPendingConfirmation ? const Color(0xFFD97706) : color,
               ),
             ],
@@ -476,7 +477,9 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
               color: AppColors.textSecondary,
             ),
           ),
-          if (item.workOrderNo != null && item.workOrderNo!.isNotEmpty) ...[
+          if (item.isRepair &&
+              item.workOrderNo != null &&
+              item.workOrderNo!.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.cardGroupGap),
             Container(
               width: double.infinity,
@@ -514,18 +517,18 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
               if (item.canUrge) ...[
                 OutlinedButton(
                   onPressed: () => _urge(item),
-                  child: const Text('催单'),
+                  child: Text(item.isRepair ? '催单' : '催办'),
                 ),
                 const SizedBox(width: 8),
-                if (item.canCancel)
-                  TextButton(
-                    onPressed: () => _cancel(item),
-                    child: const Text(
-                      '撤销',
-                      style: TextStyle(color: Color(0xFFDC2626)),
-                    ),
-                  ),
               ],
+              if (item.canCancel)
+                TextButton(
+                  onPressed: () => _cancel(item),
+                  child: const Text(
+                    '撤销',
+                    style: TextStyle(color: Color(0xFFDC2626)),
+                  ),
+                ),
               const Spacer(),
               TextButton(
                 onPressed: () => _openDetail(item),

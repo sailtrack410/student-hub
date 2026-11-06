@@ -22,7 +22,7 @@ public record AdminLeaveDetailResponse(
         @Schema(description = "请假天数") BigDecimal leaveDays,
         @Schema(description = "请假事由") String leaveReason,
         @Schema(description = "申请单状态") String status,
-        @Schema(description = "请假状态") String leaveStatus,
+        @Schema(description = "旧版请假状态；撤回与销假均为 CANCELLED，展示请使用 businessStatus/statusLabel") String leaveStatus,
         @Schema(description = "提交时间") LocalDateTime submittedAt,
         @Schema(description = "办结时间") LocalDateTime completedAt,
         @Schema(description = "销假时间") LocalDateTime leaveCancelAt,
@@ -32,5 +32,6 @@ public record AdminLeaveDetailResponse(
         @Schema(description = "表单 Schema") JsonNode formSchema,
         @Schema(description = "材料图片") List<AdminRequestMaterialResponse> materials,
         @Schema(description = "处理时间线") List<RequestLogResponse> timeline,
-        @Schema(description = "可执行动作：APPROVE/REJECT/CANCEL") List<String> availableActions) {
+        @Schema(description = "可执行动作：APPROVE/REJECT/CANCEL") List<String> availableActions, String approvalComment, String flowType, String itemCode,
+        String businessStatus, String statusLabel) {
 }

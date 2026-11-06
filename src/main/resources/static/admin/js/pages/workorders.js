@@ -39,7 +39,7 @@
             '  <div class="page-h">',
             '    <div>',
             '      <h1>工单调度</h1>',
-            '      <div class="sub">SLA 时限跟踪 · 派单/改派/批量派发 · 处理人负载</div>',
+            '      <div class="sub">维修事项专用 · SLA 时限跟踪 · 派单/改派/批量派发 · 处理人负载</div>',
             '    </div>',
             '    <div class="r">',
             '      <button class="btn2" @click="toggleBatchMode">{{ batchMode ? "退出批量" : "批量派单" }}</button>',

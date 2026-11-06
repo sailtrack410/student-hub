@@ -57,8 +57,8 @@ public class ServiceRequestTransitionService {
     /** 动作的期望终态，仅用于幂等判断；迁移合法性仍由状态机裁决。URGE 为纯记录型动作，不经本服务。 */
     private static RequestTransitions.Status intendedTarget(RequestTransitions.Action action) {
         return switch (action) {
-            case DISPATCH, START, ARRIVAL_PHOTO, COMPLETION_PHOTO, CONFIRM, REOPEN -> RequestTransitions.Status.PROCESSING;
-            case COMPLETE, EVALUATE -> RequestTransitions.Status.COMPLETED;
+            case APPROVE, ACCEPT, DISPATCH, START, ARRIVAL_PHOTO, COMPLETION_PHOTO, CONFIRM, REOPEN -> RequestTransitions.Status.PROCESSING;
+            case COMPLETE, LEAVE_CANCEL, EVALUATE -> RequestTransitions.Status.COMPLETED;
             case REJECT -> RequestTransitions.Status.REJECTED;
             case CANCEL -> RequestTransitions.Status.CANCELLED;
             case SUBMIT -> RequestTransitions.Status.SUBMITTED;

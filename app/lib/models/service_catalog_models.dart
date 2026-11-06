@@ -2,6 +2,7 @@
 class ServiceItemData {
   final String itemId;
   final String itemCode;
+  final String? flowType;
   final String categoryCode;
   final String name;
   final String summary;
@@ -14,11 +15,16 @@ class ServiceItemData {
     required this.name,
     required this.summary,
     this.categoryCode = '',
+    this.flowType,
     this.icon,
     this.slaHours,
   });
 
-  bool get isRepair => itemCode == 'REPAIR-DORM' || itemCode == 'REPAIR-PUBLIC';
+  bool get isRepair => flowType != null
+      ? flowType == 'REPAIR'
+      : itemCode == 'REPAIR-DORM' || itemCode == 'REPAIR-PUBLIC';
+  bool get isLeave => flowType == 'LEAVE_APPROVAL';
+  bool get isGuide => flowType == 'GUIDE';
   bool get isSchedule => itemCode == 'SCHEDULE-VIEW';
 }
 

@@ -177,6 +177,9 @@ class HomeInProgressRequestModel {
   final String? orderNo;
   final String itemName;
   final String currentStatus;
+  final String? flowType;
+  final String? businessStatus;
+  final String? statusLabel;
   final String? submittedAt;
 
   const HomeInProgressRequestModel({
@@ -184,13 +187,17 @@ class HomeInProgressRequestModel {
     this.orderNo,
     required this.itemName,
     required this.currentStatus,
+    this.flowType,
+    this.businessStatus,
+    this.statusLabel,
     this.submittedAt,
   });
 
   String get statusText {
+    if (statusLabel?.isNotEmpty == true) return statusLabel!;
     switch (currentStatus) {
       case 'SUBMITTED':
-        return '待派单';
+        return flowType == 'REPAIR' ? '待派单' : '已提交';
       case 'PROCESSING':
         return '处理中';
       case 'COMPLETED':
@@ -210,6 +217,9 @@ class HomeInProgressRequestModel {
       orderNo: json['orderNo']?.toString(),
       itemName: json['itemName']?.toString() ?? '服务申请',
       currentStatus: json['currentStatus']?.toString() ?? 'PROCESSING',
+      flowType: json['flowType']?.toString(),
+      businessStatus: json['businessStatus']?.toString(),
+      statusLabel: json['statusLabel']?.toString(),
       submittedAt: json['submittedAt']?.toString(),
     );
   }

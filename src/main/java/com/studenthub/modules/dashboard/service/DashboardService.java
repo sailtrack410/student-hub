@@ -240,6 +240,8 @@ public class DashboardService {
 
     private QueryWrapper<WorkOrderEntity> wrapper() {
         return new QueryWrapper<WorkOrderEntity>().eq("deleted", 0)
+                .eq("flow_archived", false)
+                .inSql("request_id", WorkOrderMapper.REPAIR_REQUEST_IDS)
                 .eq("campus_id", campusContextService.currentCampusId());
     }
 

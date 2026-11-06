@@ -20,6 +20,9 @@ import com.studenthub.modules.notification.service.dto.NotificationSendCommand;
 import com.studenthub.modules.servicecatalog.entity.ServiceItemEntity;
 import com.studenthub.modules.servicecatalog.mapper.ServiceItemMapper;
 import com.studenthub.modules.servicecatalog.service.ServiceCatalogService;
+import com.studenthub.modules.servicecatalog.enums.ServiceFlowType;
+import com.studenthub.modules.servicerequest.service.RequestBusinessView;
+import com.studenthub.modules.servicerequest.service.RequestRoutingNotifications;
 import com.studenthub.modules.servicerequest.controller.dto.RequestLogResponse;
 import com.studenthub.modules.servicerequest.controller.dto.ServiceRequestDetailResponse;
 import com.studenthub.modules.servicerequest.controller.dto.ServiceRequestSummaryResponse;
@@ -73,12 +76,20 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
     private final com.studenthub.modules.file.service.FileStorageService fileStorageService;
     private final UserMapper userMapper;
     private final ObjectMapper objectMapper;
+    private final RequestRoutingNotifications routingNotifications;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public ServiceRequestDetailResponse submit(AuthenticatedUser requester, SubmitServiceRequestRequest request,
                                                String idempotencyKey) {
+        ServiceRequestEntity previous = idempotencyKey == null || idempotencyKey.isBlank() ? null
+                : findByIdempotencyKey(requester.userId(), idempotencyKey.trim());
+        if (previous != null) return detail(requester, previous.getId());
         ServiceItemEntity item = serviceCatalogService.requireEnabledItem(request.itemId());
+        ServiceFlowType flow = ServiceFlowType.resolve(item.getFlowType());
+        if (flow == ServiceFlowType.GUIDE) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "此事项仅提供办事指南，请按指南办理");
+        }
         String normalizedFormData = serviceCatalogService.validateAndNormalizeFormData(
                 request.itemId(), request.formData());
 
@@ -87,12 +98,14 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
         entity.setCampusId(item.getCampusId());
         entity.setItemId(item.getId());
         entity.setItemName(item.getItemName());
+        entity.setItemCode(item.getItemCode());
+        entity.setFlowType(flow.name());
         entity.setCategoryId(item.getCategoryId());
         entity.setRequesterId(requester.userId());
         entity.setTitle(request.title() == null || request.title().isBlank()
                 ? item.getItemName() : request.title().trim());
         entity.setFormData(normalizedFormData);
-        applyLeaveFields(entity, item, normalizedFormData);
+        applyLeaveFields(entity, normalizedFormData);
         entity.setStatus(RequestTransitions.Status.SUBMITTED.name());
         entity.setHandlerOrganizationId(item.getHandlerOrganizationId());
         entity.setIdempotencyKey(idempotencyKey == null || idempotencyKey.isBlank()
@@ -121,11 +134,16 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
         requestLogRecorder.record(entity.getId(), null, RequestTransitions.Action.SUBMIT,
                 null, RequestTransitions.Status.SUBMITTED, requester.userId(), requester.displayName(),
                 "提交申请");
-        workOrderService.createPendingForRequest(entity);
+        if (RequestBusinessView.repair(entity)) workOrderService.createPendingForRequest(entity);
 
         notificationService.send(new NotificationSendCommand(requester.userId(), "REQUEST",
-                "申请已受理", "你的申请「" + entity.getTitle() + "」已提交成功，等待调度分配。",
+                "申请已提交", "你的申请「" + entity.getTitle() + "」已提交成功，"
+                        + (RequestBusinessView.repair(entity) ? "等待维修调度分配。"
+                        : RequestBusinessView.leave(entity) ? "等待请假审批。" : "等待人工受理。"),
                 "SERVICE_REQUEST", entity.getId()));
+        if (!RequestBusinessView.repair(entity)) routingNotifications.notifyQueue(entity,
+                RequestBusinessView.leave(entity) ? "新请假待审批" : "新申请待人工受理",
+                "申请「" + entity.getTitle() + "」已提交，请在对应业务队列处理。");
         log.info("服务申请已提交, requestId={}, itemId={}, requesterId={}",
                 entity.getId(), item.getId(), requester.userId());
         return detail(requester, entity.getId());
@@ -134,8 +152,11 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public ServiceRequestDetailResponse cancel(AuthenticatedUser requester, Long requestId, String reason) {
-        ServiceRequestEntity entity = requireOwnedRequest(requester.userId(), requestId);
+        ServiceRequestEntity entity = requireOwnedRequestForUpdate(requester.userId(), requestId);
         RequestTransitions.Status from = RequestTransitions.parse(entity.getStatus());
+        if (!RequestBusinessView.actions(entity, null, false).contains("CANCEL")) {
+            throw new BusinessException(ErrorCode.REQUEST_STATE_INVALID, "当前业务状态不允许撤回");
+        }
         RequestTransitions.Status to = RequestTransitions.target(RequestTransitions.Action.CANCEL, from);
 
         ServiceRequestEntity update = new ServiceRequestEntity();
@@ -143,12 +164,16 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
         update.setStatus(to.name());
         update.setCancelReason(reason);
         update.setVersion(entity.getVersion());
-        serviceRequestMapper.updateById(update);
+        if (serviceRequestMapper.updateById(update) == 0) throw new BusinessException(ErrorCode.REQUEST_STATE_INVALID, "状态已变更，请刷新");
         entity.setStatus(to.name());
 
-        workOrderService.cancelForRequest(entity, requester, reason);
+        if (RequestBusinessView.repair(entity)) workOrderService.cancelForRequest(entity, requester, reason);
         requestLogRecorder.record(entity.getId(), null, RequestTransitions.Action.CANCEL,
                 from, to, requester.userId(), requester.displayName(), reason);
+        notificationService.send(new NotificationSendCommand(requester.userId(), "REQUEST", "申请已撤回",
+                "申请「" + entity.getTitle() + "」已撤回。", "SERVICE_REQUEST", entity.getId()));
+        if (!RequestBusinessView.repair(entity)) routingNotifications.notifyQueue(entity, "申请已撤回",
+                "申请「" + entity.getTitle() + "」已由申请人撤回，无需继续受理。");
         log.info("服务申请已撤销, requestId={}, requesterId={}", requestId, requester.userId());
         return detail(requester, requestId);
     }
@@ -170,11 +195,15 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
         Map<Long, WorkOrderEntity> orders = requestIds.isEmpty()
                 ? Map.of()
                 : workOrderMapper.selectList(new LambdaQueryWrapper<WorkOrderEntity>()
-                        .in(WorkOrderEntity::getRequestId, requestIds))
+                        .in(WorkOrderEntity::getRequestId, requestIds).eq(WorkOrderEntity::getFlowArchived, false))
                 .stream()
                 .collect(Collectors.toMap(WorkOrderEntity::getRequestId, Function.identity(), (left, right) -> left));
+        java.util.Set<Long> evaluatedIds = requestIds.isEmpty() ? java.util.Set.of()
+                : evaluationMapper.selectList(new LambdaQueryWrapper<ServiceEvaluationEntity>()
+                        .in(ServiceEvaluationEntity::getRequestId, requestIds))
+                        .stream().map(ServiceEvaluationEntity::getRequestId).collect(Collectors.toSet());
         List<ServiceRequestSummaryResponse> records = page.getRecords().stream()
-                .map(entity -> ServiceRequestSummaryResponse.from(entity, orders.get(entity.getId())))
+                .map(entity -> ServiceRequestSummaryResponse.from(entity, orders.get(entity.getId()), evaluatedIds.contains(entity.getId())))
                 .toList();
         return PageResult.of(page.getCurrent(), page.getSize(), page.getTotal(), records);
     }
@@ -190,7 +219,8 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
         String itemIcon = item == null ? null : item.getIcon();
         Integer slaHours = item == null ? null : item.getSlaHours();
 
-        WorkOrderEntity order = workOrderMapper.findByRequestId(entity.getId());
+        WorkOrderEntity order = RequestBusinessView.repair(entity) ? workOrderMapper.findByRequestId(entity.getId()) : null;
+        if (order != null && Boolean.TRUE.equals(order.getFlowArchived())) order = null;
         List<String> completionPhotoUrls = order == null ? List.of() : JsonIds.parse(order.getCompletionPhotoFileIds()).stream()
                 .map(fileStorageService::signViewPath).toList();
         if (order != null && completionPhotoUrls.isEmpty() && order.getCompletionPhotoFileId() != null) {
@@ -252,8 +282,10 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public UrgeResponse urge(AuthenticatedUser requester, Long requestId) {
-        ServiceRequestEntity entity = requireOwnedRequest(requester.userId(), requestId);
+        ServiceRequestEntity entity = requireOwnedRequestForUpdate(requester.userId(), requestId);
         RequestTransitions.Status from = RequestTransitions.parse(entity.getStatus());
+        if (!RequestBusinessView.actions(entity, null, false).contains("URGE"))
+            throw new BusinessException(ErrorCode.REQUEST_STATE_INVALID, "当前业务状态不支持催办");
         RequestTransitions.target(RequestTransitions.Action.URGE, from);
 
         // 2 小时限频：查最近一条 URGE 日志，未满冷却期直接拒绝催单
@@ -274,21 +306,25 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
 
         requestLogRecorder.record(entity.getId(), null, RequestTransitions.Action.URGE,
                 from, from, requester.userId(), requester.displayName(), "用户催单");
-        notifyAssigneeForUrge(entity);
+        int sent = notifyAssigneeForUrge(entity);
         log.info("服务申请已催单, requestId={}, requesterId={}", requestId, requester.userId());
         return new UrgeResponse(requestId, true, URGE_COOLDOWN_HOURS * 3600L,
-                "已为您提醒负责师傅尽快处理");
+                sent == 0 ? "已记录催办，当前暂无可通知的受理人员"
+                        : RequestBusinessView.leave(entity) ? "已提醒请假审批受理人员"
+                        : RequestBusinessView.repair(entity) ? "已提醒维修受理人员" : "已提醒事项受理人员");
     }
 
     /** 催单提醒发给当前工单接单师傅；未派单或师傅无账号则跳过 */
-    private void notifyAssigneeForUrge(ServiceRequestEntity entity) {
-        WorkOrderEntity order = workOrderMapper.findByRequestId(entity.getId());
+    private int notifyAssigneeForUrge(ServiceRequestEntity entity) {
+        WorkOrderEntity order = RequestBusinessView.repair(entity) ? workOrderMapper.findByRequestId(entity.getId()) : null;
         if (order == null || order.getAssigneeId() == null) {
-            return;
+            return routingNotifications.notifyQueue(entity, "申请催办提醒",
+                    "申请「" + entity.getTitle() + "」（" + entity.getRequestNo() + "）的申请人催促尽快处理。");
         }
         notificationService.send(new NotificationSendCommand(order.getAssigneeId(), "REQUEST",
                 "用户催单提醒", "申请「" + entity.getTitle() + "」（" + entity.getRequestNo() + "）的用户催促尽快处理。",
                 "SERVICE_REQUEST", entity.getId()));
+        return 1;
     }
 
     private ServiceRequestEntity requireOwnedRequest(Long requesterId, Long requestId) {
@@ -297,6 +333,13 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
             // 非本人申请不暴露存在性
             throw new BusinessException(ErrorCode.REQUEST_NOT_FOUND);
         }
+        return entity;
+    }
+
+    private ServiceRequestEntity requireOwnedRequestForUpdate(Long requesterId, Long requestId) {
+        ServiceRequestEntity entity = serviceRequestMapper.lockById(requestId);
+        if (entity == null || !requesterId.equals(entity.getRequesterId()))
+            throw new BusinessException(ErrorCode.REQUEST_NOT_FOUND);
         return entity;
     }
 
@@ -315,18 +358,21 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
         return pageSize == null ? 10 : pageSize;
     }
 
-    /** 请假事项（AFFAIR-LEAVE）在提交时落请假专属列；其他事项不写。 */
-    private void applyLeaveFields(ServiceRequestEntity entity, ServiceItemEntity item, String formData) {
-        if (item == null || item.getItemCode() == null || !"AFFAIR-LEAVE".equalsIgnoreCase(item.getItemCode())) {
+    /** 按请假流程快照落请假专属列；其他流程不写。 */
+    private void applyLeaveFields(ServiceRequestEntity entity, String formData) {
+        if (!RequestBusinessView.leave(entity)) {
             return;
         }
         JsonNode node = parseFormData(formData);
         if (node == null) {
-            return;
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "请假起止日期必填");
         }
         String leaveType = text(node, "leaveType");
         LocalDate start = parseDate(text(node, "startDate"));
         LocalDate end = parseDate(text(node, "endDate"));
+        if (start == null || end == null || end.isBefore(start)) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "请假结束日期不得早于开始日期，且起止日期必填");
+        }
         entity.setLeaveType(leaveType);
         entity.setLeaveStartAt(start == null ? null : start.atStartOfDay());
         entity.setLeaveEndAt(end == null ? null : end.atTime(23, 59, 59));

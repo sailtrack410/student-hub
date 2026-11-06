@@ -145,6 +145,8 @@ public class ScreenServiceImpl implements ScreenService {
 
     private ScreenOverviewResponse.OrderStats orderStats(LocalDateTime todayStart) {
         List<WorkOrderEntity> orders = workOrderMapper.selectList(new LambdaQueryWrapper<WorkOrderEntity>()
+                        .eq(WorkOrderEntity::getFlowArchived, false)
+                        .inSql(WorkOrderEntity::getRequestId, WorkOrderMapper.REPAIR_REQUEST_IDS)
                 .select(WorkOrderEntity::getId, WorkOrderEntity::getStatus, WorkOrderEntity::getCompletedAt));
         long completed = 0;
         long processing = 0;
@@ -173,6 +175,8 @@ public class ScreenServiceImpl implements ScreenService {
             long created = requestMapper.selectCount(new LambdaQueryWrapper<ServiceRequestEntity>()
                     .ge(ServiceRequestEntity::getCreatedAt, start).lt(ServiceRequestEntity::getCreatedAt, end));
             long resolved = workOrderMapper.selectCount(new LambdaQueryWrapper<WorkOrderEntity>()
+                        .eq(WorkOrderEntity::getFlowArchived, false)
+                        .inSql(WorkOrderEntity::getRequestId, WorkOrderMapper.REPAIR_REQUEST_IDS)
                     .ge(WorkOrderEntity::getCompletedAt, start).lt(WorkOrderEntity::getCompletedAt, end));
             trend.add(new ScreenOverviewResponse.TrendPoint(day.format(DAY),
                     WEEKDAYS[day.getDayOfWeek().getValue() - 1], created, resolved));
@@ -220,6 +224,8 @@ public class ScreenServiceImpl implements ScreenService {
     /** 最新办结动态：仅返回服务项名称与办结时间，不含任何个人数据 */
     private List<ScreenOverviewResponse.RecentCompleted> recentCompleted() {
         List<WorkOrderEntity> orders = workOrderMapper.selectList(new LambdaQueryWrapper<WorkOrderEntity>()
+                        .eq(WorkOrderEntity::getFlowArchived, false)
+                        .inSql(WorkOrderEntity::getRequestId, WorkOrderMapper.REPAIR_REQUEST_IDS)
                 .select(WorkOrderEntity::getId, WorkOrderEntity::getTitle, WorkOrderEntity::getCompletedAt)
                 .eq(WorkOrderEntity::getStatus, "COMPLETED")
                 .isNotNull(WorkOrderEntity::getCompletedAt)
@@ -272,6 +278,8 @@ public class ScreenServiceImpl implements ScreenService {
                     .eq(ServiceRequestEntity::getRequestNo, key));
         } else if (key.startsWith("WO-")) {
             WorkOrderEntity order = workOrderMapper.selectOne(new LambdaQueryWrapper<WorkOrderEntity>()
+                        .eq(WorkOrderEntity::getFlowArchived, false)
+                        .inSql(WorkOrderEntity::getRequestId, WorkOrderMapper.REPAIR_REQUEST_IDS)
                     .eq(WorkOrderEntity::getOrderNo, key));
             if (order == null) {
                 throw new BusinessException(ErrorCode.NOT_FOUND, "未查到该工单，请核对单号");
@@ -286,6 +294,8 @@ public class ScreenServiceImpl implements ScreenService {
 
         String orderNo = null;
         WorkOrderEntity order = workOrderMapper.selectOne(new LambdaQueryWrapper<WorkOrderEntity>()
+                        .eq(WorkOrderEntity::getFlowArchived, false)
+                        .inSql(WorkOrderEntity::getRequestId, WorkOrderMapper.REPAIR_REQUEST_IDS)
                 .eq(WorkOrderEntity::getRequestId, request.getId()));
         String status;
         if (order != null) {
@@ -297,7 +307,7 @@ public class ScreenServiceImpl implements ScreenService {
 
         List<ScreenOrderProgressResponse.TimelinePoint> timeline = buildTimeline(request, order);
         return new ScreenOrderProgressResponse(orderNo, request.getRequestNo(), request.getItemName(),
-                status, orderStatusText(status),
+                status, com.studenthub.modules.servicerequest.service.RequestBusinessView.label(request, order == null ? null : order.getStatus()),
                 request.getSubmittedAt() == null ? null : request.getSubmittedAt().format(DT),
                 timeline);
     }
@@ -310,12 +320,10 @@ public class ScreenServiceImpl implements ScreenService {
             points.add(new ScreenOrderProgressResponse.TimelinePoint(request.getSubmittedAt().format(DT),
                     "提交申请", "申请材料已提交"));
         }
-        if (order != null) {
+        {
             List<ServiceRequestLogEntity> logs = requestLogMapper.selectList(
                     new LambdaQueryWrapper<ServiceRequestLogEntity>()
                             .eq(ServiceRequestLogEntity::getRequestId, request.getId())
-                            .and(w -> w.eq(ServiceRequestLogEntity::getWorkOrderId, order.getId())
-                                    .or().isNull(ServiceRequestLogEntity::getWorkOrderId))
                             .orderByAsc(ServiceRequestLogEntity::getCreatedAt));
             for (ServiceRequestLogEntity entry : logs) {
                 String action = timelineAction(entry.getAction());
@@ -334,6 +342,9 @@ public class ScreenServiceImpl implements ScreenService {
         }
         return switch (action) {
             case "SUBMIT" -> "提交申请";
+            case "APPROVE" -> "审批通过";
+            case "LEAVE_CANCEL" -> "销假";
+            case "FLOW_DETACH" -> "流程更正";
             case "DISPATCH" -> "受理派单";
             case "START" -> "开始处理";
             case "ARRIVAL_PHOTO" -> "到达现场";

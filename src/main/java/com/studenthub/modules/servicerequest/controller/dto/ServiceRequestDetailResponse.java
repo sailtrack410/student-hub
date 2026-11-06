@@ -2,6 +2,7 @@ package com.studenthub.modules.servicerequest.controller.dto;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.studenthub.modules.servicerequest.entity.ServiceRequestEntity;
+import com.studenthub.modules.servicerequest.service.RequestBusinessView;
 import com.studenthub.modules.workorder.controller.dto.WorkOrderSummaryResponse;
 import com.studenthub.modules.evaluation.controller.dto.EvaluationResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -25,7 +26,10 @@ public record ServiceRequestDetailResponse(
         @Schema(description = "办结时间", nullable = true) LocalDateTime completedAt,
         @Schema(description = "工单信息", nullable = true) WorkOrderSummaryResponse workOrder,
         @Schema(description = "评价信息", nullable = true) EvaluationResponse evaluation,
-        @Schema(description = "状态时间线") List<RequestLogResponse> timeline) {
+        @Schema(description = "状态时间线") List<RequestLogResponse> timeline,
+        String flowType, String itemCode, String businessStatus, String statusLabel, List<String> availableActions,
+        String leaveType, LocalDateTime leaveStartAt, LocalDateTime leaveEndAt, java.math.BigDecimal leaveDays,
+        String approvalComment, LocalDateTime leaveCancelAt) {
 
     public static ServiceRequestDetailResponse from(ServiceRequestEntity entity, String itemIcon,
                                                     Integer slaHours, JsonNode formData,
@@ -35,6 +39,12 @@ public record ServiceRequestDetailResponse(
         return new ServiceRequestDetailResponse(entity.getId(), entity.getRequestNo(), entity.getTitle(),
                 entity.getItemName(), itemIcon, entity.getStatus(), slaHours, formData,
                 entity.getRejectReason(), entity.getCancelReason(), entity.getSubmittedAt(), entity.getCompletedAt(),
-                workOrder, evaluation, timeline);
+                workOrder, evaluation, timeline,
+                RequestBusinessView.flowType(entity), entity.getItemCode(),
+                RequestBusinessView.status(entity, workOrder == null ? null : workOrder.status()),
+                RequestBusinessView.label(entity, workOrder == null ? null : workOrder.status()),
+                RequestBusinessView.actions(entity, workOrder == null ? null : workOrder.status(), evaluation != null),
+                entity.getLeaveType(), entity.getLeaveStartAt(), entity.getLeaveEndAt(), entity.getLeaveDays(),
+                entity.getApprovalComment(), entity.getLeaveCancelAt());
     }
 }

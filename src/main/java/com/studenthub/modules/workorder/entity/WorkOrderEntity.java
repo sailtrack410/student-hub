@@ -26,6 +26,8 @@ public class WorkOrderEntity extends BaseEntity {
     private Long assigneeId;
     private String assigneeName;
     private String status;
+    /** 历史非报修工单保留审计，但不再参与维修业务。 */
+    private Boolean flowArchived;
     private String priority;
     /** SLA 承诺时限快照（小时），创建工单时按服务项 slaHours 写入，缺省 24 */
     private Integer slaHours;

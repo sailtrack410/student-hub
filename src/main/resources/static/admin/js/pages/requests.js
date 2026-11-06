@@ -6,7 +6,7 @@
     window.AdminPages = window.AdminPages || {};
 
     var STATUS_TEXT = {
-        SUBMITTED: '待审批', PROCESSING: '处理中', COMPLETED: '已完成',
+        SUBMITTED: '待受理', PROCESSING: '处理中', COMPLETED: '已完成',
         REJECTED: '已驳回', CANCELLED: '已取消'
     };
     var STATUS_TONE = {
@@ -14,7 +14,7 @@
     };
     var TABS = [
         { value: '', label: '全部' },
-        { value: 'SUBMITTED', label: '待审批' },
+        { value: 'SUBMITTED', label: '待受理' },
         { value: 'PROCESSING', label: '处理中' },
         { value: 'COMPLETED', label: '已完成' },
         { value: 'REJECTED', label: '已驳回' }
@@ -25,7 +25,7 @@
         template: [
             '<div class="pgw" style="display:flex;flex-direction:column;gap:16px;flex:1;min-height:0">',
             '  <div class="page-h">',
-            '    <div><h1>服务申请</h1><div class="sub">全校服务申请统一受理与审批 · 点击行查看完整材料与处理时间线</div></div>',
+            '    <div><h1>服务申请</h1><div class="sub">按流程类型办理 · 请假进入独立审批，报修进入维修调度，其他事项人工受理</div></div>',
             '    <div class="r"><button class="btn2" :disabled="exporting" @click="exportCsv">{{ exporting ? "导出中…" : "导出 CSV" }}</button><button class="btn2" @click="load">刷新</button></div>',
             '  </div>',
 
@@ -44,14 +44,14 @@
             '          <tr v-if="loading"><td colspan="7" style="text-align:center;color:var(--tk-muted);padding:32px 0">加载中…</td></tr>',
             '          <tr v-for="row in rows" :key="row.requestId" style="cursor:pointer" @click="openDetail(row)">',
             '            <td style="color:var(--tk-muted)">{{ row.requestNo }}</td>',
-            '            <td style="color:var(--tk-text)">{{ row.itemName }}</td>',
+            '            <td style="color:var(--tk-text)">{{ row.itemName }}<div style="font-size:11px;color:var(--tk-text3)">{{ flowLabel(row.flowType) }}</div></td>',
             '            <td>{{ row.title }}</td>',
-            '            <td><span class="bdg" :class="statusTone(row.status)">{{ statusText(row.status) }}</span></td>',
+            '            <td><span class="bdg" :class="statusTone(row.status)">{{ row.statusLabel || statusText(row.status) }}</span></td>',
             '            <td style="color:var(--tk-text3)">{{ fmt(row.submittedAt) }}</td>',
             '            <td style="color:var(--tk-text3)">{{ fmt(row.completedAt) }}</td>',
             '            <td class="r" @click.stop>',
             '              <span class="op" @click="openDetail(row)">详情</span>',
-            '              <template v-if="row.status === \'SUBMITTED\'"> · <span class="op" @click="openDetail(row)">审批</span></template>',
+            '              <template v-if="canOperate(row)"> · <span class="op" @click="openDetail(row)">办理</span></template>',
             '            </td>',
             '          </tr>',
             '        </tbody>',
@@ -80,7 +80,7 @@
             '      <div class="ph"><b>审批详情</b><span class="no">{{ detail.requestNo }}</span><span class="sp"></span><span class="x" @click="detailVisible = false">✕</span></div>',
 
             '      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">',
-            '        <span class="bdg" :class="statusTone(detail.status)">{{ statusText(detail.status) }}</span>',
+            '        <span class="bdg" :class="statusTone(detail.status)">{{ detail.statusLabel || statusText(detail.status) }}</span>',
             '        <b style="font-size:13px;color:var(--tk-text)">{{ detail.title }}</b>',
             '        <span style="font-size:12px;color:var(--tk-text3)">{{ detail.itemName }}<template v-if="detail.categoryName"> · {{ detail.categoryName }}</template></span>',
             '      </div>',
@@ -95,6 +95,7 @@
             '        <div class="row" v-if="detail.slaHours">承诺时限　{{ detail.slaHours }} 小时</div>',
             '        <div class="row" v-if="detail.rejectReason" style="color:var(--tk-bad)">驳回原因　{{ detail.rejectReason }}</div>',
             '        <div class="row" v-if="detail.cancelReason" style="color:var(--tk-bad)">撤销原因　{{ detail.cancelReason }}</div>',
+            '        <div class="row" v-if="detail.approvalComment">办理意见　{{ detail.approvalComment }}</div>',
             '      </div>',
 
             '      <template v-if="formEntries.length">',
@@ -118,7 +119,7 @@
             '        </div>',
             '      </template>',
 
-            '      <template v-if="(detail.attachments || []).length">',
+            '      <template v-if="detail.flowType === \'REPAIR\' && (detail.attachments || []).length">',
             '        <div class="plbl">工单附件</div>',
             '        <div style="display:flex;gap:8px;flex-wrap:wrap">',
             '          <div v-for="(file, idx) in detail.attachments" :key="idx" style="display:flex;flex-direction:column;gap:4px">',
@@ -130,7 +131,7 @@
             '        </div>',
             '      </template>',
 
-            '      <template v-if="detail.workOrder">',
+            '      <template v-if="detail.flowType === \'REPAIR\' && detail.workOrder">',
             '        <div class="plbl">关联工单</div>',
             '        <div class="kv">',
             '          <div class="row">工单号　　{{ detail.workOrder.orderNo || "-" }}</div>',
@@ -163,12 +164,13 @@
             '      </template>',
 
             '      <template v-if="(detail.availableActions || []).length">',
-            '        <div class="plbl">审批操作</div>',
-            '        <div class="radio" v-if="detail.availableActions.indexOf(\'APPROVE\') >= 0" :class="{ on: action === \'APPROVE\' }" @click="action = \'APPROVE\'"><span class="dot"></span>通过（转处理中，进入派单流程）</div>',
-            '        <div class="radio" :class="{ on: action === \'REJECT\' }" @click="action = \'REJECT\'"><span class="dot"></span>驳回（需填写驳回原因）</div>',
+            '        <div class="plbl">办理操作</div>',
+            '        <div class="radio" v-if="detail.availableActions.indexOf(\'APPROVE\') >= 0" :class="{ on: action === \'APPROVE\' }" @click="action = \'APPROVE\'"><span class="dot"></span>受理（转人工处理中）</div>',
+            '        <div class="radio" v-if="detail.availableActions.indexOf(\'REJECT\') >= 0" :class="{ on: action === \'REJECT\' }" @click="action = \'REJECT\'"><span class="dot"></span>驳回（需填写驳回原因）</div>',
+            '        <div class="radio" v-if="detail.availableActions.indexOf(\'COMPLETE\') >= 0" :class="{ on: action === \'COMPLETE\' }" @click="action = \'COMPLETE\'"><span class="dot"></span>人工办结（记录实际办理结果）</div>',
             '        <div class="fld"><label>审批意见</label><textarea class="pta" v-model="comment" maxlength="512" placeholder="将记录到申请时间线"></textarea></div>',
             '        <div class="pbtn"><span class="sp"></span><button class="c ghost" @click="detailVisible = false">取消</button>',
-            '          <button class="c" :class="action === \'APPROVE\' ? \'green\' : \'red\'" :disabled="submitting" @click="submit">{{ submitting ? "提交中…" : (action === \'APPROVE\' ? "确认通过" : "确认驳回") }}</button></div>',
+            '          <button class="c" :class="action === \'REJECT\' ? \'red\' : \'green\'" :disabled="submitting" @click="submit">{{ submitting ? "提交中…" : (action === \'APPROVE\' ? "确认受理" : action === \'COMPLETE\' ? "确认办结" : "确认驳回") }}</button></div>',
             '      </template>',
             '      <div class="pbtn" v-else><span class="sp"></span><button class="c ghost" @click="detailVisible = false">关闭</button></div>',
             '    </div>',
@@ -222,13 +224,15 @@
             function goPage(p) { if (p >= 1 && p <= totalPages.value && p !== pageNum.value) { pageNum.value = p; load(); } }
 
             function openDetail(row) {
+                if (row.flowType === 'LEAVE_APPROVAL') { openLeave(row); return; }
                 detail.value = null;
                 detailVisible.value = true;
                 api.get('/api/admin/service-requests/' + row.requestId)
                     .then(function (data) {
+                        if (data.flowType === 'LEAVE_APPROVAL') { detailVisible.value = false; openLeave(data); return; }
                         detail.value = data;
                         var actions = data.availableActions || [];
-                        action.value = actions.indexOf('APPROVE') >= 0 ? 'APPROVE' : 'REJECT';
+                        action.value = actions.indexOf('APPROVE') >= 0 ? 'APPROVE' : actions.indexOf('COMPLETE') >= 0 ? 'COMPLETE' : 'REJECT';
                         comment.value = '';
                     })
                     .catch(function (error) {
@@ -238,16 +242,17 @@
             }
 
             function submit() {
-                if (!detail.value) return;
+                if (!detail.value || (detail.value.availableActions || []).indexOf(action.value) < 0) return;
                 if (action.value === 'REJECT' && !comment.value.trim()) {
                     El.ElMessage.warning('驳回需填写原因');
                     return;
                 }
                 submitting.value = true;
-                api.post('/api/admin/service-requests/' + detail.value.requestId + '/review',
-                        { action: action.value, comment: comment.value.trim() || null })
+                var body = { comment: comment.value.trim() || null };
+                if (action.value !== 'COMPLETE') body.action = action.value;
+                api.post('/api/admin/service-requests/' + detail.value.requestId + (action.value === 'COMPLETE' ? '/complete' : '/review'), body)
                     .then(function () {
-                        El.ElMessage.success(action.value === 'APPROVE' ? '已通过' : '已驳回');
+                        El.ElMessage.success(action.value === 'APPROVE' ? '已受理' : action.value === 'COMPLETE' ? '已办结' : '已驳回');
                         detailVisible.value = false;
                         load();
                     })
@@ -318,7 +323,7 @@
                     var lines = [header.join(',')];
                     records.forEach(function (row) {
                         lines.push([row.requestNo || '', row.itemName || '', row.title || '',
-                            statusText(row.status), fmt(row.submittedAt), fmt(row.completedAt),
+                            row.statusLabel || statusText(row.status), fmt(row.submittedAt), fmt(row.completedAt),
                             row.rejectReason || ''].map(function (value) {
                             return '"' + String(value).replace(/"/g, '""') + '"';
                         }).join(','));
@@ -349,6 +354,9 @@
                 return String(value);
             }
 
+            function flowLabel(flow) { return { REPAIR: '报修派工', LEAVE_APPROVAL: '请假审批', MANUAL: '人工受理', GUIDE: '仅办事指南' }[flow] || '流程待确认'; }
+            function openLeave(row) { window.location.hash = '#/leave?requestId=' + encodeURIComponent(row.requestId); }
+            function canOperate(row) { return (row.availableActions || []).length > 0; }
             function statusText(v) { return STATUS_TEXT[v] || v || '-'; }
             function statusTone(v) { return STATUS_TONE[v] || 'n2'; }
             function slaTone(order) {
@@ -376,7 +384,7 @@
                 loading: loading, totalPages: totalPages, pageNumbers: pageNumbers, goPage: goPage,
                 switchStatus: switchStatus, load: load, reload: reload, exporting: exporting, exportCsv: exportCsv,
                 detail: detail, detailVisible: detailVisible, action: action, comment: comment, submitting: submitting,
-                openDetail: openDetail, submit: submit, formEntries: formEntries,
+                openDetail: openDetail, submit: submit, formEntries: formEntries, flowLabel: flowLabel, canOperate: canOperate,
                 slaTone: slaTone, slaText: slaText,
                 statusText: statusText, statusTone: statusTone, fmt: fmt
             };

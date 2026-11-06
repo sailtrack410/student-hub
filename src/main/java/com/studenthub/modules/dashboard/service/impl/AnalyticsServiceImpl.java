@@ -64,9 +64,13 @@ public class AnalyticsServiceImpl implements AnalyticsService {
                 .eq(ServiceRequestEntity::getCampusId, campusId)
                 .ge(ServiceRequestEntity::getCompletedAt, startTs).lt(ServiceRequestEntity::getCompletedAt, endTs));
         long workOrdersCreated = workOrderMapper.selectCount(new LambdaQueryWrapper<WorkOrderEntity>()
+                        .eq(WorkOrderEntity::getFlowArchived, false)
+                        .inSql(WorkOrderEntity::getRequestId, WorkOrderMapper.REPAIR_REQUEST_IDS)
                 .eq(WorkOrderEntity::getCampusId, campusId)
                 .ge(WorkOrderEntity::getCreatedAt, startTs).lt(WorkOrderEntity::getCreatedAt, endTs));
         long workOrdersCompleted = workOrderMapper.selectCount(new LambdaQueryWrapper<WorkOrderEntity>()
+                        .eq(WorkOrderEntity::getFlowArchived, false)
+                        .inSql(WorkOrderEntity::getRequestId, WorkOrderMapper.REPAIR_REQUEST_IDS)
                 .eq(WorkOrderEntity::getCampusId, campusId)
                 .ge(WorkOrderEntity::getCompletedAt, startTs).lt(WorkOrderEntity::getCompletedAt, endTs));
         long posts = postMapper.selectCount(new LambdaQueryWrapper<CommunityPostEntity>()
