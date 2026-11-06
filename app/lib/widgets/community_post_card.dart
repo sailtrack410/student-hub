@@ -72,22 +72,27 @@ class CommunityPostCard extends StatelessWidget {
         height: fixedHeight,
         clipBehavior: Clip.hardEdge,
         decoration: const BoxDecoration(color: Colors.white),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.pageHorizontal,
+          AppSpacing.cardGroupGap,
+          AppSpacing.pageHorizontal,
+          AppSpacing.cardGroupGap,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildHeaderRow(),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.titleSummaryGapLarge),
             _buildTitleRow(),
-            const SizedBox(height: 6),
+            const SizedBox(height: AppSpacing.titleSummaryGap),
             _buildSummary(),
             if (_hasMedia) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.titleSummaryGapLarge),
               SizedBox(height: 92, width: double.infinity, child: _buildImageRow(context, post)),
             ],
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.titleSummaryGapLarge),
             _buildTopicRow(),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.titleSummaryGapLarge),
             SizedBox(
               height: 20,
               width: double.infinity,
@@ -151,15 +156,15 @@ class CommunityPostCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontFamily: 'Noto Sans SC',
-                            fontSize: 14,
+                            fontFamily: AppTypography.fontFamily,
+                            fontSize: AppTypography.itemTitleSize,
                             fontWeight: FontWeight.bold,
                             color: AppColors.textPrimary,
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: AppSpacing.titleSummaryGap),
                     // 徽章内容恒短（官方/Lv.X），不参与抢占，避免挤压缩略
                     _buildLevelBadge(),
                     if (post.badgeAsset != null && post.badgeAsset!.isNotEmpty) ...[
@@ -171,16 +176,16 @@ class CommunityPostCard extends StatelessWidget {
                         errorBuilder: (_, _, _) => const SizedBox.shrink(),
                       ),
                     ],
-                    const SizedBox(width: 6),
+                    const SizedBox(width: AppSpacing.titleSummaryGap),
                     Expanded(
                       child: Text(
                         metaText,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontFamily: 'Noto Sans SC',
-                          fontSize: 11,
-                          color: AppColors.textTertiary,
+                        style: const TextStyle(
+                          fontFamily: AppTypography.fontFamily,
+                          fontSize: AppTypography.feedMetaSize,
+                          color: AppColors.textSecondary,
                         ),
                       ),
                     ),
@@ -200,9 +205,12 @@ class CommunityPostCard extends StatelessWidget {
   Widget _buildLevelBadge() {
     return Container(
       key: const ValueKey('community-level-badge'),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.titleSummaryGap,
+        vertical: 1,
+      ),
       decoration: BoxDecoration(
-        color: post.authorOfficial ? const Color(0xFFEFF6FF) : post.levelBgColor,
+        color: post.authorOfficial ? AppColors.brandSoft : post.levelBgColor,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
@@ -210,11 +218,11 @@ class CommunityPostCard extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          fontFamily: 'Noto Sans SC',
-          fontSize: 10,
+          fontFamily: AppTypography.fontFamily,
+          fontSize: AppTypography.badgeSize,
           fontWeight: FontWeight.bold,
           color: post.authorOfficial
-              ? const Color(0xFF1D4ED8)
+              ? AppColors.brandDeep
               : post.levelTextColor,
         ),
       ),
@@ -258,14 +266,14 @@ class CommunityPostCard extends StatelessWidget {
               child: const Text(
                 '文章',
                 style: TextStyle(
-                  fontFamily: 'Noto Sans SC',
-                  fontSize: 10,
+                  fontFamily: AppTypography.fontFamily,
+                  fontSize: AppTypography.badgeSize,
                   color: Color(0xFF7C3AED),
                   fontWeight: FontWeight.bold,
                 ),
               ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: AppSpacing.titleSummaryGap),
           ],
           Expanded(
             child: Text(
@@ -273,9 +281,9 @@ class CommunityPostCard extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                fontFamily: 'Noto Sans SC',
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
+                fontFamily: AppTypography.fontFamily,
+                fontSize: AppTypography.feedTitleSize,
+                fontWeight: AppTypography.postTitleWeight,
                 color: AppColors.textPrimary,
                 height: 1.3,
               ),
@@ -297,8 +305,8 @@ class CommunityPostCard extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
-            fontFamily: 'Noto Sans SC',
-            fontSize: 13,
+            fontFamily: AppTypography.fontFamily,
+            fontSize: AppTypography.feedSummarySize,
             color: AppColors.textBody,
             height: 1.35,
           ),
@@ -315,18 +323,18 @@ class CommunityPostCard extends StatelessWidget {
       width: double.infinity,
       child: Wrap(
         clipBehavior: Clip.hardEdge,
-        spacing: 8,
+        spacing: AppSpacing.compactAvatarGap,
         children: post.topics
             .map(
               (topic) => Text(
                 '# $topic',
                 maxLines: 1,
                 style: const TextStyle(
-                  fontFamily: 'Noto Sans SC',
-                  fontSize: 12,
+                  fontFamily: AppTypography.fontFamily,
+                  fontSize: AppTypography.metaSize,
                   color: AppColors.brand,
                   fontWeight: FontWeight.w500,
-                  height: 1.4,
+                  height: AppTypography.titleLineHeight,
                 ),
               ),
             )

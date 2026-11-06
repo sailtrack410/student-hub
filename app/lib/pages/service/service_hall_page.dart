@@ -9,6 +9,7 @@ import '../../api/service_catalog_api.dart';
 import '../../api/service_request_api.dart';
 import '../../models/community_models.dart';
 import '../../models/service_catalog_models.dart';
+import '../../models/service_request_models.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/community_ad_card.dart';
 import '../../widgets/skeleton_shimmer.dart';
@@ -18,9 +19,10 @@ import '../schedule/schedule_page.dart';
 import 'my_requests_page.dart';
 import 'repair_apply_page.dart';
 import 'service_apply_page.dart';
+import 'work_order_detail_page.dart';
 
 /// APP-服务大厅 (画布 5:1191)
-/// 顶部搜索 + 高频快捷办事 + 分类服务组 + 我的申请入口；数据走 /api/app/services。
+/// 顶部搜索 + 进行中申请状态条 + 分类服务组 + 我的申请入口；数据走 /api/app/services。
 class ServiceHallPage extends StatefulWidget {
   /// 二级入口：显示左上返回键、隐藏底栏
   final bool showBack;
@@ -28,12 +30,14 @@ class ServiceHallPage extends StatefulWidget {
   /// 测试/预览注入
   final List<ServiceCategoryData>? initialCategories;
   final int? initialRequestCount;
+  final ServiceRequestSummary? initialActiveRequest;
 
   const ServiceHallPage({
     super.key,
     this.showBack = false,
     this.initialCategories,
     this.initialRequestCount,
+    this.initialActiveRequest,
   });
 
   @override
@@ -46,6 +50,7 @@ class _ServiceHallPageState extends State<ServiceHallPage> {
   List<ServiceCategoryData> _categories = [];
   String _keyword = '';
   int _myRequestCount = 0;
+  ServiceRequestSummary? _activeRequest;
   bool _loading = true;
   bool _error = false;
 
@@ -61,6 +66,7 @@ class _ServiceHallPageState extends State<ServiceHallPage> {
     if (widget.initialCategories != null) {
       _categories = List<ServiceCategoryData>.of(widget.initialCategories!);
       _myRequestCount = widget.initialRequestCount ?? 0;
+      _activeRequest = widget.initialActiveRequest;
       _loading = false;
       _error = false;
     } else {
@@ -134,7 +140,7 @@ class _ServiceHallPageState extends State<ServiceHallPage> {
     final client = ApiClient();
     final catalog = await ServiceCatalogApi(client).fetchCatalog();
     final requests = await ServiceRequestApi(client)
-        .fetchMyRequests(pageNum: 1, pageSize: 1);
+        .fetchMyRequests(pageNum: 1, pageSize: 10);
     if (!mounted) return;
 
     final categories = <ServiceCategoryData>[];
@@ -167,11 +173,26 @@ class _ServiceHallPageState extends State<ServiceHallPage> {
       }
     }
 
+    ServiceRequestSummary? activeRequest;
+    final rawRecords = requests?['records'];
+    if (rawRecords is List) {
+      for (final raw in rawRecords.whereType<Map>()) {
+        final item = ServiceRequestSummary.fromJson(
+          Map<String, dynamic>.from(raw),
+        );
+        if (item.requestId.isNotEmpty && !item.isClosed) {
+          activeRequest = item;
+          break;
+        }
+      }
+    }
+
     setState(() {
       _categories = categories;
       _myRequestCount = requests == null
           ? 0
           : int.tryParse(requests['total']?.toString() ?? '') ?? 0;
+      _activeRequest = activeRequest;
       _loading = false;
       _error = catalog == null;
     });
@@ -189,13 +210,6 @@ class _ServiceHallPageState extends State<ServiceHallPage> {
               item.name.contains(keyword) || item.summary.contains(keyword),
         )
         .toList();
-  }
-
-  ServiceItemData? _findItem(String code) {
-    for (final item in _allItems) {
-      if (item.itemCode == code) return item;
-    }
-    return null;
   }
 
   String _groupTitle(String code) {
@@ -376,8 +390,13 @@ class _ServiceHallPageState extends State<ServiceHallPage> {
 
   Widget _buildHeader() {
     return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(12, 6, 16, 6),
+      color: AppColors.card,
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.cardGroupGap,
+        6,
+        AppSpacing.pageHorizontal,
+        6,
+      ),
       child: Row(
         children: [
           if (widget.showBack)
@@ -389,18 +408,21 @@ class _ServiceHallPageState extends State<ServiceHallPage> {
                 color: AppColors.textPrimary,
               ),
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              constraints: const BoxConstraints(
+                minWidth: AppSpacing.preferredTapTarget,
+                minHeight: AppSpacing.preferredTapTarget,
+              ),
             )
           else
             const SizedBox(width: 4),
-          Expanded(
+          const Expanded(
             child: Text(
               '服务大厅',
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontFamily: 'Noto Sans SC',
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
+              style: TextStyle(
+                fontFamily: AppTypography.fontFamily,
+                fontSize: AppTypography.navTitleSize,
+                fontWeight: AppTypography.navTitleWeight,
                 color: AppColors.textPrimary,
               ),
             ),
@@ -413,8 +435,8 @@ class _ServiceHallPageState extends State<ServiceHallPage> {
               child: Text(
                 _myRequestCount > 0 ? '我的申请 ($_myRequestCount)' : '我的申请',
                 style: const TextStyle(
-                  fontFamily: 'Noto Sans SC',
-                  fontSize: 13,
+                  fontFamily: AppTypography.fontFamily,
+                  fontSize: AppTypography.feedSummarySize,
                   fontWeight: FontWeight.w600,
                   color: AppColors.brand,
                 ),
@@ -428,13 +450,20 @@ class _ServiceHallPageState extends State<ServiceHallPage> {
 
   Widget _buildSearchBar() {
     return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
+      color: AppColors.card,
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.pageHorizontal,
+        2,
+        AppSpacing.pageHorizontal,
+        10,
+      ),
       child: Container(
-        constraints: const BoxConstraints(minHeight: 48),
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        constraints: const BoxConstraints(
+          minHeight: AppSpacing.preferredTapTarget,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.cardGroupGap),
         decoration: BoxDecoration(
-          color: const Color(0xFFF1F5F9),
+          color: AppColors.chipBg,
           borderRadius: BorderRadius.circular(19),
         ),
         child: Row(
@@ -521,12 +550,14 @@ class _ServiceHallPageState extends State<ServiceHallPage> {
         children: [
           // 服务大厅顶部广告位：开关关闭/无数据时不占位
           if (_serviceHallAd != null) _buildSlotAdCard(_serviceHallAd!),
-          _padded(_buildQuickSection()),
-          const SizedBox(height: 16),
+          if (_activeRequest != null) ...[
+            _padded(_buildActiveRequestBanner(_activeRequest!)),
+            const SizedBox(height: 12),
+          ],
           if (FeatureFlags.homeworkEnabled) ...[
             // feature.homework=false 时隐藏作业入口（不进入作业中心，也不请求作业接口）
             _padded(_buildHomeworkEntry()),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
           ],
           ..._categories.map((c) => _padded(_buildCategoryCard(c))),
           const SizedBox(height: 8),
@@ -561,112 +592,139 @@ class _ServiceHallPageState extends State<ServiceHallPage> {
     );
   }
 
-  Widget _buildQuickSection() {
-    const quickCodes = [
-      'REPAIR-DORM',
-      'REPAIR-PUBLIC',
-      'AFFAIR-LEAVE',
-      'CERT-ENROLL',
-    ];
-    final items = quickCodes
-        .map(_findItem)
-        .whereType<ServiceItemData>()
-        .toList();
-    if (items.isEmpty) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '高频快捷办事',
-          style: TextStyle(
-            fontFamily: 'Noto Sans SC',
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
+  Widget _buildActiveRequestBanner(ServiceRequestSummary item) {
+    final isPendingConfirm = item.isPendingConfirmation;
+    final statusLabel = isPendingConfirm
+        ? '待验收'
+        : (item.status == 'SUBMITTED' ? '已提交' : '处理中');
+    final accentColor = isPendingConfirm
+        ? const Color(0xFF16A34A)
+        : const Color(0xFFD97706);
+    final bgColor = isPendingConfirm
+        ? const Color(0xFFF0FDF4)
+        : const Color(0xFFFFFBEB);
+    return Material(
+      color: bgColor,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        key: const ValueKey('service-hall-active-request'),
+        borderRadius: BorderRadius.circular(14),
+        onTap: () async {
+          await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => WorkOrderDetailPage(requestId: item.requestId),
+            ),
+          );
+          if (mounted && widget.initialCategories == null) _load();
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isPendingConfirm
+                  ? const Color(0xFFBBF7D0)
+                  : const Color(0xFFFDE68A),
+            ),
           ),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: items.map((item) {
-            final style = _quickStyle(item);
-            return Expanded(
-              child: GestureDetector(
-                onTap: () => _openItem(item),
-                behavior: HitTestBehavior.opaque,
-                child: Container(
-                  height: 32,
-                  margin: const EdgeInsets.only(right: 8),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: style.$1,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    _quickLabel(item),
-                    style: TextStyle(
-                      fontFamily: 'Noto Sans SC',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: style.$2,
+          child: Row(
+            children: [
+              Icon(
+                isPendingConfirm
+                    ? Icons.fact_check_outlined
+                    : Icons.pending_actions_rounded,
+                size: 20,
+                color: accentColor,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 1,
+                          ),
+                          decoration: BoxDecoration(
+                            color: accentColor.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '我的进行中申请 · $statusLabel',
+                            style: TextStyle(
+                              fontFamily: 'Noto Sans SC',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: accentColor,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
+                    const SizedBox(height: 4),
+                    Text(
+                      item.title.isNotEmpty ? item.title : item.itemName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Noto Sans SC',
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            );
-          }).toList(),
+              const SizedBox(width: 8),
+              Text(
+                isPendingConfirm ? '去验收' : '查看进度',
+                style: TextStyle(
+                  fontFamily: 'Noto Sans SC',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: accentColor,
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: accentColor,
+              ),
+            ],
+          ),
         ),
-      ],
+      ),
     );
-  }
-
-  String _quickLabel(ServiceItemData item) {
-    switch (item.itemCode) {
-      case 'REPAIR-DORM':
-        return '宿舍报修';
-      case 'REPAIR-PUBLIC':
-        return '教室报修';
-      case 'AFFAIR-LEAVE':
-        return '请假申请';
-      case 'CERT-ENROLL':
-        return '在读证明';
-      default:
-        return item.name;
-    }
-  }
-
-  (Color, Color) _quickStyle(ServiceItemData item) {
-    switch (item.itemCode) {
-      case 'REPAIR-DORM':
-        return (const Color(0xFFEFF6FF), const Color(0xFF2563EB));
-      case 'REPAIR-PUBLIC':
-        return (const Color(0xFFF0FDFA), const Color(0xFF0D9488));
-      case 'AFFAIR-LEAVE':
-        return (const Color(0xFFFFFBEB), const Color(0xFFD97706));
-      case 'CERT-ENROLL':
-        return (const Color(0xFFF0FDF4), const Color(0xFF16A34A));
-      default:
-        return (const Color(0xFFF1F5F9), const Color(0xFF475569));
-    }
   }
 
   Widget _buildCategoryCard(ServiceCategoryData category) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: AppSpacing.cardGap),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
+        border: Border.all(color: AppColors.feedDivider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 2),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.cardPadding,
+              AppSpacing.cardGroupGap,
+              AppSpacing.cardPadding,
+              2,
+            ),
             child: Text(
               _groupTitle(category.categoryCode),
               style: const TextStyle(
-                fontFamily: 'Noto Sans SC',
-                fontSize: 15,
+                fontFamily: AppTypography.fontFamily,
+                fontSize: AppTypography.groupTitleSize,
                 fontWeight: FontWeight.bold,
                 color: AppColors.textPrimary,
               ),
@@ -677,9 +735,9 @@ class _ServiceHallPageState extends State<ServiceHallPage> {
               const Divider(
                 height: 1,
                 thickness: 1,
-                color: Color(0xFFF8FAFC),
-                indent: 14,
-                endIndent: 14,
+                color: AppColors.feedDivider,
+                indent: AppSpacing.cardPadding,
+                endIndent: AppSpacing.cardPadding,
               ),
             _buildItemRow(category.items[i]),
           ],
@@ -693,7 +751,12 @@ class _ServiceHallPageState extends State<ServiceHallPage> {
     return InkWell(
       onTap: () => _openItem(item),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.cardPadding,
+          AppSpacing.cardGroupGap,
+          AppSpacing.cardGroupGap,
+          AppSpacing.cardGroupGap,
+        ),
         child: Row(
           children: [
             Expanded(
@@ -703,33 +766,33 @@ class _ServiceHallPageState extends State<ServiceHallPage> {
                   Text(
                     item.name,
                     style: const TextStyle(
-                      fontFamily: 'Noto Sans SC',
-                      fontSize: 14,
+                      fontFamily: AppTypography.fontFamily,
+                      fontSize: AppTypography.itemTitleSize,
                       fontWeight: FontWeight.bold,
                       color: AppColors.textPrimary,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpacing.titleSummaryGap),
                   Text(
                     item.summary,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontFamily: 'Noto Sans SC',
-                      fontSize: 12,
-                      height: 1.4,
-                      color: Color(0xFF64748B),
+                      fontFamily: AppTypography.fontFamily,
+                      fontSize: AppTypography.metaSize,
+                      height: AppTypography.titleLineHeight,
+                      color: AppColors.textSecondary,
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.compactAvatarGap),
             Text(
               _badgeText(item),
               style: TextStyle(
-                fontFamily: 'Noto Sans SC',
-                fontSize: 12,
+                fontFamily: AppTypography.fontFamily,
+                fontSize: AppTypography.metaSize,
                 fontWeight: FontWeight.w600,
                 color: _badgeColor(item),
               ),

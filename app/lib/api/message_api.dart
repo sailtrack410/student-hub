@@ -1,4 +1,5 @@
 import 'api_client.dart';
+import '../services/message_state_events.dart';
 import '../models/message_models.dart';
 
 /// 消息中心 / 统一收件箱 API
@@ -17,6 +18,7 @@ class MessageApi {
     try {
       final res = await _instance.apiClient.get(
         '/api/app/messages/inbox',
+        cancellation: RequestCancellation(),
         query: {'pageNum': '$pageNum', 'pageSize': '$pageSize'},
       );
       final data = res is Map<String, dynamic> ? res : null;
@@ -54,6 +56,7 @@ class MessageApi {
     try {
       final res = await _instance.apiClient.get(
         '/api/app/messages/category-summary',
+        cancellation: RequestCancellation(),
       );
       if (res is Map<String, dynamic>) {
         return MessageCategorySummary.fromJson(res);
@@ -63,9 +66,10 @@ class MessageApi {
   }
 
   /// 社区互动通知分页（GET /api/app/notifications?communityOnly=true）
-  static Future<List<CommunityNotificationItem>> fetchCommunityNotifications({
+  static Future<List<CommunityNotificationItem>?> fetchCommunityNotifications({
     int pageNum = 1,
     int pageSize = 20,
+    bool communityOnly = true,
   }) async {
     try {
       final res = await _instance.apiClient.get(
@@ -73,27 +77,53 @@ class MessageApi {
         query: {
           'pageNum': '$pageNum',
           'pageSize': '$pageSize',
-          'communityOnly': 'true',
+          'communityOnly': '$communityOnly',
         },
       );
       final data = res is Map<String, dynamic> ? res : null;
-      if (data == null || data['records'] is! List) return const [];
+      if (data == null || data['records'] is! List) return null;
       return (data['records'] as List)
           .whereType<Map<String, dynamic>>()
           .map(CommunityNotificationItem.fromJson)
           .toList();
     } catch (_) {
-      return const [];
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> resolveNotificationTarget(
+    String id,
+  ) async {
+    final res = await _instance.apiClient.get(
+      '/api/app/notifications/$id/target',
+    );
+    return res is Map<String, dynamic> ? res : null;
+  }
+
+  static Future<MessageCategorySummary?> markAllRead() async {
+    try {
+      final res = await _instance.apiClient.post(
+        '/api/app/messages/read-all',
+        body: {},
+      );
+      if (res is! Map<String, dynamic>) return null;
+      MessageStateEvents.changed();
+      return MessageCategorySummary.fromJson(res);
+    } catch (_) {
+      return null;
     }
   }
 
   /// 全部通知标记已读（POST /api/app/notifications/read-all）
-  static Future<bool> markAllNotificationsRead() async {
+  static Future<bool> markAllNotificationsRead({
+    bool communityOnly = false,
+  }) async {
     try {
       await _instance.apiClient.post(
-        '/api/app/notifications/read-all',
+        '/api/app/notifications/read-all?communityOnly=$communityOnly',
         body: {},
       );
+      MessageStateEvents.changed();
       return true;
     } catch (_) {
       return false;
@@ -108,6 +138,7 @@ class MessageApi {
         '/api/app/notifications/$notificationId/read',
         body: {},
       );
+      MessageStateEvents.changed();
       return true;
     } catch (_) {
       return false;
@@ -122,6 +153,7 @@ class MessageApi {
         '/api/app/community/messages/read?withUserId=$peerId',
         body: {},
       );
+      MessageStateEvents.changed();
       return true;
     } catch (_) {
       return false;

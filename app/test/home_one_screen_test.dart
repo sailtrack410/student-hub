@@ -188,6 +188,8 @@ void main() {
       await tester.pump();
       expect(find.text('校园咨询'), findsOneWidget);
       expect(find.text('全部服务'), findsOneWidget);
+      expect(find.byType(Image), findsNWidgets(3));
+      expect(find.byKey(const ValueKey('home-service-3')), findsOneWidget);
       expect(tester.getTopLeft(find.text('校园咨询')).dx, lessThan(100));
       await tester.tap(find.byKey(const ValueKey('home-all-services')));
       expect(openedAll, isTrue);

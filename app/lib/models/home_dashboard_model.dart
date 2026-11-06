@@ -141,20 +141,32 @@ class HomeAnnouncementModel {
   final String title;
   final String tag;
   final String? url;
+  final bool read;
+  final String? summary;
+  final String? publishDate;
+  final String? author;
 
   const HomeAnnouncementModel({
     required this.id,
     required this.title,
     this.tag = '通知',
     this.url,
+    this.read = false,
+    this.summary,
+    this.publishDate,
+    this.author,
   });
 
   factory HomeAnnouncementModel.fromJson(Map<String, dynamic> json) {
     return HomeAnnouncementModel(
       id: json['id']?.toString() ?? '',
       title: json['title']?.toString() ?? '',
-      tag: json['tag']?.toString() ?? '通知',
+      tag: json['typeText']?.toString() ?? json['tag']?.toString() ?? '通知',
+      read: json['read'] == true,
       url: json['url']?.toString(),
+      summary: json['summary']?.toString(),
+      publishDate: json['publishDate']?.toString(),
+      author: json['author']?.toString(),
     );
   }
 }

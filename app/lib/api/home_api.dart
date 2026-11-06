@@ -28,7 +28,10 @@ class HomeApi {
   /// 获取首页综合仪表盘原生方法
   Future<HomeDashboardData?> fetchDashboardRaw() async {
     try {
-      final res = await apiClient.get('/api/app/home/dashboard');
+      final res = await apiClient.get(
+        '/api/app/home/dashboard',
+        cancellation: RequestCancellation(),
+      );
       if (res is Map<String, dynamic>) {
         if (res['success'] == true && res['data'] is Map<String, dynamic>) {
           return HomeDashboardData.fromJson(

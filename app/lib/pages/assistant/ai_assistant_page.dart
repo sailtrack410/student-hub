@@ -2,6 +2,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../api/p1_api.dart';
+
 import '../../services/ai_chat_controller.dart';
 import '../../services/ai_chat_gateway.dart';
 import '../../widgets/ai_sources_panel.dart';
@@ -73,6 +75,7 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
   int get _conversationGeneration => _chat.generation;
   List<AiChatMessage> get _messages => _chat.messages;
   int _attachmentGeneration = 0;
+  bool _attachmentPicking = false;
   _AiAttachment? _attachment;
   bool _voiceSheetOpen = false;
 
@@ -242,21 +245,29 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
         generation == _attachmentGeneration &&
         conversationGeneration == _conversationGeneration;
     // 选择新附件即取代旧操作；迟到的选择、上传和异常都不能改写新状态。
-    setState(() => _attachment = null);
+    setState(() {
+      _attachmentPicking = true;
+      _attachment = null;
+    });
     bool uploading = false;
     try {
       final file = await (isImage
           ? widget.gateway.pickImageAttachment()
           : widget.gateway.pickDocumentAttachment());
-      if (!isCurrent() || file == null) return;
-      setState(
-        () => _attachment = _AiAttachment(
+      if (!isCurrent()) return;
+      if (file == null) {
+        setState(() => _attachmentPicking = false);
+        return;
+      }
+      setState(() {
+        _attachmentPicking = false;
+        _attachment = _AiAttachment(
           name: file.name,
           bytes: file.bytes,
           isImage: file.isImage,
           uploading: true,
-        ),
-      );
+        );
+      });
       uploading = true;
       final uploaded = await widget.gateway.uploadAttachment(file);
       if (!mounted || !isCurrent()) return;
@@ -272,7 +283,10 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
       });
     } catch (_) {
       if (!mounted || !isCurrent()) return;
-      setState(() => _attachment = null);
+      setState(() {
+        _attachmentPicking = false;
+        _attachment = null;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(uploading ? '附件上传失败，请重试' : '选择附件失败，请重试')),
       );
@@ -281,7 +295,10 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
 
   void _removeAttachment() {
     _attachmentGeneration++;
-    setState(() => _attachment = null);
+    setState(() {
+      _attachmentPicking = false;
+      _attachment = null;
+    });
   }
 
   void _handleSend([String? presetText]) {
@@ -323,6 +340,41 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
     String? retryMessageId,
   }) => _chat.submit(request, retryMessageId: retryMessageId);
 
+  Future<void> _saveTodo(AiChatMessage msg) async {
+    final actions = msg.actionButtons ?? [];
+    final index = await showModalBottomSheet<int>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < actions.length; i++)
+              ListTile(
+                title: Text(actions[i].label),
+                onTap: () => Navigator.of(ctx).pop(i),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (index == null) return;
+    try {
+      await P1Api.addTodo(
+        msg.serverMessageId!,
+        actions[index].sourceIndex ?? index,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('已加入AI待办')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+  }
+
   void _handleActionButton(AiChatAction action) {
     final page = switch (action.kind) {
       AiActionKind.schedule => const SchedulePage(),
@@ -346,6 +398,19 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
   }
 
   void _clearChat() {
+    if (_messages.length <= 1 &&
+        !_isSending &&
+        !_isThinking &&
+        !_attachmentPicking &&
+        _attachment == null) {
+      setState(() {
+        _attachmentGeneration++;
+        _attachmentPicking = false;
+        _attachment = null;
+        _chat.reset();
+      });
+      return;
+    }
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -365,12 +430,13 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
               Navigator.of(ctx).pop();
               setState(() {
                 _attachmentGeneration++;
+                _attachmentPicking = false;
                 _attachment = null;
                 _chat.reset();
               });
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEF4444),
+              backgroundColor: const Color(0xFF2563EB),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
               ),
@@ -484,8 +550,8 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
                 ),
               ),
 
-              // 2. 快捷问答胶囊栏
-              _buildQuickPromptBar(),
+              // 2. 快捷问答胶囊栏（仅首次欢迎态展示，进入多轮对话后收起释放阅读高度）
+              if (hasOnlyWelcome) _buildQuickPromptBar(),
 
               // 3. 底部输入栏
               _buildInputBar(),
@@ -514,18 +580,11 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
-              borderRadius: BorderRadius.circular(22),
-            ),
-            child: const Icon(
-              Icons.psychology_rounded,
-              color: Color(0xFF2563EB),
-              size: 26,
-            ),
+          Image.asset(
+            'assets/images/home/campus-ai-companion.png',
+            width: 52,
+            height: 52,
+            fit: BoxFit.contain,
           ),
           const SizedBox(width: 12),
           const Expanded(
@@ -798,6 +857,14 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
                 if (msg.actionButtons != null &&
                     msg.actionButtons!.isNotEmpty) ...[
                   const SizedBox(height: 8),
+                  if (!msg.isUser &&
+                      !msg.isStreaming &&
+                      msg.serverMessageId != null)
+                    TextButton.icon(
+                      onPressed: () => _saveTodo(msg),
+                      icon: const Icon(Icons.playlist_add),
+                      label: const Text('加入AI待办'),
+                    ),
                   Wrap(
                     spacing: 8,
                     runSpacing: 6,

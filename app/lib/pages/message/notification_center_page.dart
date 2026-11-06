@@ -6,12 +6,13 @@ import '../../api/message_api.dart';
 import '../../models/community_models.dart';
 import '../../models/message_models.dart';
 import '../../services/community_socket.dart';
+import '../../services/message_state_events.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/skeleton_shimmer.dart';
 import '../assistant/ai_assistant_page.dart';
 import '../community/chat_detail_page.dart';
-import '../service/my_requests_page.dart';
 import 'announcement_list_page.dart';
+import 'ai_todo_page.dart';
 import 'community_notification_list_page.dart';
 
 /// APP-消息中心 (画布 5:2433)
@@ -46,7 +47,8 @@ class NotificationCenterPage extends StatefulWidget {
   State<NotificationCenterPage> createState() => _NotificationCenterPageState();
 }
 
-class _NotificationCenterPageState extends State<NotificationCenterPage> {
+class _NotificationCenterPageState extends State<NotificationCenterPage>
+    with WidgetsBindingObserver {
   static const List<_QuickEntry> _quickEntries = [
     _QuickEntry(
       key: 'process',
@@ -91,9 +93,15 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
   StreamSubscription<DirectMessage>? _socketSubscription;
   StreamSubscription<AppNotificationEvent>? _notificationSubscription;
 
+  StreamSubscription<void>? _unreadSubscription;
+  StreamSubscription<bool>? _statusSubscription;
+  int _loadGeneration = 0;
+  int _loadedRecords = 0;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (widget.initialItems != null) {
       _items = widget.initialItems!.where((item) => !item.isAi).toList();
       _summary = widget.initialSummary ?? const MessageCategorySummary();
@@ -113,21 +121,43 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
             widget.onUnreadChanged?.call();
             _load(reset: true);
           });
+      _unreadSubscription = MessageStateEvents.changes.listen(
+        (_) => _load(reset: true),
+      );
+      _statusSubscription = CommunitySocket.shared.connectionStatus.listen((
+        connected,
+      ) {
+        if (connected) _load(reset: true);
+      });
       CommunitySocket.shared.connect();
     }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _unreadSubscription?.cancel();
+    _statusSubscription?.cancel();
+    _loadGeneration++;
     _socketSubscription?.cancel();
     _notificationSubscription?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && widget.initialItems == null) {
+      _load(reset: true);
+    }
+  }
+
   Future<void> _load({bool reset = false}) async {
+    if (!reset && (_loading || _loadingMore || !_hasMore)) return;
+    final generation = ++_loadGeneration;
     if (reset) {
       _pageNum = 1;
+      _loadedRecords = 0;
       _hasMore = true;
       if (_items.isEmpty && mounted) {
         setState(() => _loading = true);
@@ -140,7 +170,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     final page = await MessageApi.fetchInbox(pageNum: _pageNum, pageSize: 20);
     final summary = await MessageApi.fetchCategorySummary();
 
-    if (!mounted) return;
+    if (!mounted || generation != _loadGeneration) return;
     if (page == null) {
       setState(() {
         _loading = false;
@@ -157,9 +187,13 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
       if (reset) {
         _items = page.items.where((item) => !item.isAi).toList();
       } else {
-        _items.addAll(page.items);
+        final known = _items.map((e) => e.sessionId).toSet();
+        _items.addAll(
+          page.items.where((e) => !e.isAi && known.add(e.sessionId)),
+        );
       }
-      _hasMore = page.items.isNotEmpty && _items.length < page.total;
+      _loadedRecords += page.items.length;
+      _hasMore = page.items.isNotEmpty && _loadedRecords < page.total;
       if (_hasMore) _pageNum++;
       if (summary != null) _summary = summary;
     });
@@ -206,10 +240,10 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
   }
 
   Future<void> _markAllRead() async {
-    // 注入数据（测试/预览）时本地模拟，不依赖网络
-    final ok = widget.initialItems != null
-        ? true
-        : await MessageApi.markAllNotificationsRead();
+    final result = widget.initialItems != null
+        ? const MessageCategorySummary()
+        : await MessageApi.markAllRead();
+    final ok = result != null;
     if (!mounted) return;
     if (ok) {
       setState(() {
@@ -229,8 +263,10 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
               ),
             )
             .toList();
-        _summary = const MessageCategorySummary();
+        _summary = result;
       });
+      if (widget.initialItems == null) await _load(reset: true);
+      if (!mounted) return;
       widget.onUnreadChanged?.call();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -241,6 +277,9 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
           ),
         ),
       );
+    } else {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('标记已读失败，请重试')));
     }
   }
 
@@ -260,26 +299,35 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
       return;
     }
     if (item.isProcess) {
-      MessageApi.markAllNotificationsRead().then((_) {
-        if (mounted) widget.onUnreadChanged?.call();
-      });
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => const MyRequestsPage(initialFilterIndex: 1),
-        ),
-      );
+      Navigator.of(context)
+          .push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  const CommunityNotificationListPage(communityOnly: false),
+            ),
+          )
+          .then((_) {
+            if (!mounted) return;
+            widget.onUnreadChanged?.call();
+            _load(reset: true);
+          });
       return;
     }
     if (item.isDirect) {
-      if (item.peerId != null) {
-        MessageApi.markMessageRead(item.peerId!);
-      }
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) =>
-              ChatDetailPage(peerId: item.peerId ?? '', peerName: item.title),
-        ),
-      );
+      Navigator.of(context)
+          .push(
+            MaterialPageRoute(
+              builder: (_) => ChatDetailPage(
+                peerId: item.peerId ?? '',
+                peerName: item.title,
+              ),
+            ),
+          )
+          .then((_) {
+            if (!mounted) return;
+            widget.onUnreadChanged?.call();
+            _load(reset: true);
+          });
       return;
     }
     if (item.isAi) {
@@ -316,14 +364,14 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
         title: const Text(
           '消息中心',
           style: TextStyle(
-            fontFamily: 'Noto Sans SC',
-            fontSize: 17,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF0F172A),
+            fontFamily: AppTypography.fontFamily,
+            fontSize: AppTypography.navTitleSize,
+            fontWeight: AppTypography.navTitleWeight,
+            color: AppColors.textPrimary,
           ),
         ),
         centerTitle: false,
-        titleSpacing: 16,
+        titleSpacing: AppSpacing.pageHorizontal,
         actions: [
           if (unreadTotal > 0)
             TextButton(
@@ -331,9 +379,9 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
               child: const Text(
                 '全部已读',
                 style: TextStyle(
-                  fontFamily: 'Noto Sans SC',
-                  fontSize: 13,
-                  color: Color(0xFF2563EB),
+                  fontFamily: AppTypography.fontFamily,
+                  fontSize: AppTypography.feedSummarySize,
+                  color: AppColors.brand,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -344,7 +392,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
         children: [
           _buildSearchBar(),
           _buildQuickEntries(),
-          const Divider(height: 1, thickness: 1, color: Color(0xFFF1F5F9)),
+          const Divider(height: 1, thickness: 1, color: AppColors.feedDivider),
           if (_filter != null) _buildFilterTip(),
           Expanded(child: _buildBody(visible)),
         ],
@@ -355,12 +403,17 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
   Widget _buildSearchBar() {
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.pageHorizontal,
+        8,
+        AppSpacing.pageHorizontal,
+        10,
+      ),
       child: Container(
         height: 38,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.cardGroupGap),
         decoration: BoxDecoration(
-          color: const Color(0xFFF1F5F9),
+          color: AppColors.chipBg,
           borderRadius: BorderRadius.circular(19),
         ),
         child: Row(
@@ -368,15 +421,15 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
             const Icon(
               Icons.search_rounded,
               size: 18,
-              color: Color(0xFF94A3B8),
+              color: AppColors.textTertiary,
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.compactAvatarGap),
             Expanded(
               child: TextField(
                 onChanged: (value) => setState(() => _keyword = value),
                 style: const TextStyle(
-                  fontFamily: 'Noto Sans SC',
-                  fontSize: 13,
+                  fontFamily: AppTypography.fontFamily,
+                  fontSize: AppTypography.feedSummarySize,
                 ),
                 decoration: const InputDecoration(
                   isDense: true,
@@ -385,9 +438,9 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                   border: InputBorder.none,
                   hintText: '搜索联系人、服务通知、工单进度...',
                   hintStyle: TextStyle(
-                    fontFamily: 'Noto Sans SC',
-                    fontSize: 13,
-                    color: Color(0xFF64748B),
+                    fontFamily: AppTypography.fontFamily,
+                    fontSize: AppTypography.feedSummarySize,
+                    color: AppColors.textSecondary,
                   ),
                 ),
               ),
@@ -398,7 +451,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                 child: const Icon(
                   Icons.close_rounded,
                   size: 16,
-                  color: Color(0xFF94A3B8),
+                  color: AppColors.textTertiary,
                 ),
               ),
           ],
@@ -418,12 +471,18 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
           return Expanded(
             child: GestureDetector(
               onTap: () {
-                if (entry.key == 'announcement') {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const AnnouncementListPage(),
-                    ),
-                  );
+                if (entry.key == 'announcement' || entry.key == 'ai') {
+                  Navigator.of(context)
+                      .push(
+                        MaterialPageRoute(
+                          builder: (_) => entry.key == 'ai'
+                              ? const AiTodoPage()
+                              : const AnnouncementListPage(),
+                        ),
+                      )
+                      .then((_) {
+                        if (mounted) _load(reset: true);
+                      });
                   return;
                 }
                 setState(() => _filter = selected ? null : entry.key);
@@ -490,18 +549,34 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                       ],
                     ),
                     const SizedBox(height: 6),
-                    Text(
-                      entry.label,
-                      style: TextStyle(
-                        fontFamily: 'Noto Sans SC',
-                        fontSize: 12,
-                        fontWeight: selected
-                            ? FontWeight.bold
-                            : FontWeight.w500,
-                        color: selected
-                            ? AppColors.brand
-                            : AppColors.textPrimary,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            entry.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: 'Noto Sans SC',
+                              fontSize: 12,
+                              fontWeight: selected
+                                  ? FontWeight.bold
+                                  : FontWeight.w500,
+                              color: selected
+                                  ? AppColors.brand
+                                  : AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                        if (entry.key == 'announcement' || entry.key == 'ai')
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            size: 13,
+                            color: AppColors.textTertiary,
+                          ),
+                      ],
                     ),
                   ],
                 ),
@@ -560,11 +635,11 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
         padding: const EdgeInsets.only(bottom: 24),
         itemCount: visible.length + (_loadingMore ? 1 : 0),
         separatorBuilder: (_, _) =>
-            const Divider(height: 1, thickness: 1, color: Color(0xFFF1F5F9)),
+            const Divider(height: 1, thickness: 1, color: AppColors.feedDivider),
         itemBuilder: (context, index) {
           if (index >= visible.length) {
             return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
+              padding: EdgeInsets.symmetric(vertical: AppSpacing.cardGroupGap),
               child: Center(
                 child: SizedBox(
                   width: 20,
@@ -587,12 +662,15 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
       behavior: HitTestBehavior.opaque,
       child: Container(
         color: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.pageHorizontal,
+          vertical: AppSpacing.cardPadding,
+        ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildSessionIcon(item),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.avatarTextGap),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -605,43 +683,46 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontFamily: 'Noto Sans SC',
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
+                            fontFamily: AppTypography.fontFamily,
+                            fontSize: AppTypography.sessionTitleSize,
+                            fontWeight: AppTypography.sessionTitleWeight,
                             color: AppColors.textPrimary,
                           ),
                         ),
                       ),
                       if (item.pinned)
                         Container(
-                          margin: const EdgeInsets.only(right: 6),
+                          margin: const EdgeInsets.only(
+                            right: AppSpacing.titleSummaryGap,
+                          ),
                           padding: const EdgeInsets.symmetric(
                             horizontal: 5,
                             vertical: 1,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFEFF6FF),
+                            color: AppColors.brandSoft,
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: const Text(
                             '置顶',
                             style: TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF2563EB),
+                              fontSize: AppTypography.badgeSize,
+                              color: AppColors.brand,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
                       Text(
                         _relativeTime(item.lastTime),
                         style: const TextStyle(
-                          fontFamily: 'Noto Sans SC',
-                          fontSize: 12,
-                          color: Color(0xFF64748B),
+                          fontFamily: AppTypography.fontFamily,
+                          fontSize: AppTypography.metaSize,
+                          color: AppColors.textSecondary,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpacing.titleSummaryGap),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -650,23 +731,38 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                           item.lastContent,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontFamily: 'Noto Sans SC',
-                            fontSize: 12,
-                            height: 1.45,
-                            color: Color(0xFF64748B),
+                          style: TextStyle(
+                            fontFamily: AppTypography.fontFamily,
+                            fontSize: AppTypography.summarySize,
+                            height: AppTypography.summaryLineHeight,
+                            color: unread
+                                ? AppColors.textBody
+                                : AppColors.textSecondary,
                           ),
                         ),
                       ),
                       if (unread) ...[
-                        const SizedBox(width: 8),
+                        const SizedBox(width: AppSpacing.compactAvatarGap),
                         Container(
-                          width: 8,
-                          height: 8,
-                          margin: const EdgeInsets.only(top: 5),
-                          decoration: const BoxDecoration(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          constraints: const BoxConstraints(minWidth: 20),
+                          decoration: BoxDecoration(
                             color: AppColors.danger,
-                            shape: BoxShape.circle,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            item.unreadCount > 99
+                                ? '99+'
+                                : '${item.unreadCount}',
+                            semanticsLabel: '${item.unreadCount} 条未读消息',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                            ),
                           ),
                         ),
                       ],

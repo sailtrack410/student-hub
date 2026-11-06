@@ -1,8 +1,7 @@
 /// 统一收件箱条目（GET /api/app/messages/inbox）
 class InboxItem {
   final String sessionId;
-  final String
-  sessionType; // PROCESS_NOTIFICATION / COMMUNITY_NOTIFICATION / DIRECT_MESSAGE / AI_ASSISTANT
+  final String sessionType; // PROCESS_NOTIFICATION / COMMUNITY_NOTIFICATION / DIRECT_MESSAGE / AI_ASSISTANT
   final String? peerId;
   final String? conversationId;
   final String title;
@@ -55,12 +54,12 @@ class CommunityNotificationItem {
 
   factory CommunityNotificationItem.fromJson(Map<String, dynamic> json) {
     return CommunityNotificationItem(
-      notificationId: (json['notificationId'] as num?)?.toInt() ?? 0,
+      notificationId: int.tryParse('${json['notificationId']}') ?? 0,
       notificationType: json['notificationType']?.toString() ?? '',
       title: json['title']?.toString() ?? '',
       content: json['content']?.toString() ?? '',
       relatedType: json['relatedType']?.toString(),
-      relatedId: (json['relatedId'] as num?)?.toInt(),
+      relatedId: int.tryParse('${json['relatedId']}'),
       read: json['read'] == true,
       createdAt: json['createdAt']?.toString() ?? '',
     );

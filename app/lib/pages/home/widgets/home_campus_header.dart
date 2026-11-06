@@ -102,23 +102,31 @@ class HomeCampusHeader extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    greeting,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 26,
-                      fontWeight: FontWeight.w700,
-                      height: 1.35,
-                      letterSpacing: -0.4,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    date,
-                    style: const TextStyle(
-                      color: Color(0xFFD7E9FF),
-                      fontSize: 13,
-                      height: 1.5,
+                  Padding(
+                    padding: const EdgeInsets.only(right: 92),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          greeting,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w700,
+                            height: 1.35,
+                            letterSpacing: -0.4,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          date,
+                          style: const TextStyle(
+                            color: Color(0xFFD7E9FF),
+                            fontSize: 13,
+                            height: 1.5,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],

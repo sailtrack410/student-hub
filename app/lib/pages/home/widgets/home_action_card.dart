@@ -21,7 +21,7 @@ class HomeActionCard extends StatelessWidget {
         ? AppColors.brandSoft
         : AppColors.warningSoft;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.homeHorizontal),
       child: Semantics(
         button: true,
         label: current == null
@@ -35,7 +35,9 @@ class HomeActionCard extends StatelessWidget {
             onTap: onOpen,
             borderRadius: BorderRadius.circular(14),
             child: Container(
-              constraints: const BoxConstraints(minHeight: 48),
+              constraints: const BoxConstraints(
+                minHeight: AppSpacing.preferredTapTarget,
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
               child: Row(
                 children: [
@@ -46,7 +48,7 @@ class HomeActionCard extends StatelessWidget {
                     color: color,
                     size: 24,
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: AppSpacing.avatarTextGap),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -56,7 +58,7 @@ class HomeActionCard extends StatelessWidget {
                           title,
                           style: const TextStyle(
                             color: AppColors.textPrimary,
-                            fontSize: 14,
+                            fontSize: AppTypography.itemTitleSize,
                             fontWeight: FontWeight.w600,
                             height: 1.45,
                           ),
@@ -66,19 +68,19 @@ class HomeActionCard extends StatelessWidget {
                           subtitle,
                           style: const TextStyle(
                             color: AppColors.textSecondary,
-                            fontSize: 12,
-                            height: 1.5,
+                            fontSize: AppTypography.metaSize,
+                            height: AppTypography.summaryLineHeight,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: AppSpacing.compactAvatarGap),
                   Text(
                     current == null ? '去认证' : '查看进度',
                     style: TextStyle(
                       color: color,
-                      fontSize: 13,
+                      fontSize: AppTypography.feedSummarySize,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

@@ -7,6 +7,7 @@ import '../../api/community_api.dart';
 import '../../models/community_models.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/user_avatar.dart';
+import '../../widgets/community_article_blocks.dart';
 import '../../widgets/community_action_bar.dart';
 import '../../widgets/community_post_card.dart' show communityImageFrameBuilder;
 import 'author_profile_page.dart';
@@ -220,21 +221,25 @@ class _PostDetailPageState extends State<PostDetailPage> {
             children: [
               // 帖子标题
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.pageHorizontal,
+                ),
                 child: Text(
                   _post.title,
                   style: const TextStyle(
-                    fontFamily: 'Noto Sans SC',
+                    fontFamily: AppTypography.fontFamily,
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF0F172A),
-                    height: 1.35,
+                    color: AppColors.textPrimary,
+                    height: AppTypography.titleLineHeight,
                   ),
                 ),
               ),
               if (_post.status == 'REVIEWING' || _post.status == 'PENDING')
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.pageHorizontal,
+                  ),
                   child: ContentUnderReviewCard(
                     reviewReason: _post.hiddenReason == 'BANNED_WORD'
                         ? '内容命中敏感词，人工安全审核中，目前仅自己可见'
@@ -246,18 +251,22 @@ class _PostDetailPageState extends State<PostDetailPage> {
               if (_post.postType == 'ARTICLE' &&
                   _post.contentBlocks.isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.pageHorizontal,
+                  ),
                   child: _buildArticleBlocks(),
                 )
               else
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.pageHorizontal,
+                  ),
                   child: Text(
                     _post.content,
                     style: const TextStyle(
-                      fontFamily: 'Noto Sans SC',
-                      fontSize: 14,
-                      color: Color(0xFF64748B),
+                      fontFamily: AppTypography.fontFamily,
+                      fontSize: AppTypography.summarySize,
+                      color: AppColors.textBody,
                       height: 1.6,
                     ),
                   ),
@@ -528,7 +537,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                   color: Color(0xFF334155),
                 ),
                 title: const Text(
-                  '分享给同学 / 社交平台',
+                  '标题＋链接分享',
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                 ),
                 onTap: () {
@@ -542,22 +551,19 @@ class _PostDetailPageState extends State<PostDetailPage> {
                   color: Color(0xFF334155),
                 ),
                 title: const Text(
-                  '复制帖子内容',
+                  '复制链接',
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                 ),
                 onTap: () async {
-                  final text = [
-                    if (_post.title.trim().isNotEmpty) _post.title.trim(),
-                    if (_post.content.trim().isNotEmpty) _post.content.trim(),
-                    '帖子 ID：${_post.id}',
-                  ].join('\n');
-                  await Clipboard.setData(ClipboardData(text: text));
+                  await Clipboard.setData(
+                    ClipboardData(text: CommunityApi.shareLinkOf(_post)),
+                  );
                   if (!ctx.mounted) return;
                   Navigator.of(ctx).pop();
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('帖子内容已复制到剪贴板'),
+                      content: Text('链接已复制'),
                       behavior: SnackBarBehavior.floating,
                     ),
                   );
@@ -699,45 +705,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
   }
 
   Widget _buildArticleBlocks() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: _post.contentBlocks.map((block) {
-        if (block.type == 'TEXT') {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 14),
-            child: Text(
-              block.text ?? '',
-              style: const TextStyle(
-                fontFamily: 'Noto Sans SC',
-                fontSize: 14,
-                height: 1.75,
-                color: Color(0xFF475569),
-              ),
-            ),
-          );
-        }
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 14),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: Image.network(
-              block.url ?? '',
-              width: double.infinity,
-              fit: BoxFit.fitWidth,
-              errorBuilder: (_, _, _) => Container(
-                height: 180,
-                color: const Color(0xFFF1F5F9),
-                alignment: Alignment.center,
-                child: const Icon(
-                  Icons.broken_image_outlined,
-                  color: Color(0xFF94A3B8),
-                ),
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
+    return CommunityArticleBlocks(blocks: _post.contentBlocks);
   }
 
   Widget _buildDetailImages() {

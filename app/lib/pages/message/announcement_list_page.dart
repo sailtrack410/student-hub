@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../api/home_api.dart';
+import '../../api/p1_api.dart';
+import 'announcement_detail_page.dart';
 import '../../models/home_dashboard_model.dart';
 import '../../theme/app_theme.dart';
 
@@ -16,6 +17,9 @@ class _AnnouncementListPageState extends State<AnnouncementListPage> {
   List<HomeAnnouncementModel> _items = [];
   bool _loading = true;
   bool _error = false;
+  bool _moreBusy = false;
+  int _page = 1;
+  int _total = 0;
 
   @override
   void initState() {
@@ -28,13 +32,56 @@ class _AnnouncementListPageState extends State<AnnouncementListPage> {
       _loading = true;
       _error = false;
     });
-    final list = await HomeApi.fetchAnnouncements(pageNum: 1, pageSize: 20);
-    if (!mounted) return;
-    setState(() {
-      _items = list;
-      _loading = false;
-      _error = list.isEmpty;
-    });
+    try {
+      final result = await P1Api.announcements(1);
+      if (!mounted) return;
+      setState(() {
+        _items = (result['records'] as List)
+            .map(
+              (e) => HomeAnnouncementModel.fromJson(
+                Map<String, dynamic>.from(e as Map),
+              ),
+            )
+            .toList();
+        _total = int.tryParse('${result['total']}') ?? 0;
+        _page = 1;
+        _loading = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _error = true;
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _more() async {
+    if (_moreBusy) return;
+    setState(() => _moreBusy = true);
+    try {
+      final result = await P1Api.announcements(_page + 1);
+      if (!mounted) return;
+      setState(() {
+        _items.addAll(
+          (result['records'] as List).map(
+            (e) => HomeAnnouncementModel.fromJson(
+              Map<String, dynamic>.from(e as Map),
+            ),
+          ),
+        );
+        _page++;
+        _total = int.tryParse('${result['total']}') ?? 0;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _moreBusy = false);
+    }
   }
 
   @override
@@ -62,10 +109,26 @@ class _AnnouncementListPageState extends State<AnnouncementListPage> {
           ),
         ),
         centerTitle: true,
+        actions: [
+          TextButton(
+            onPressed: () async {
+              try {
+                await P1Api.readAnnouncements();
+                if (mounted) await _load();
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(SnackBar(content: Text('$e')));
+                }
+              }
+            },
+            child: const Text('全部已读'),
+          ),
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
-          : _error
+          : _error || _items.isEmpty
           ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -76,9 +139,9 @@ class _AnnouncementListPageState extends State<AnnouncementListPage> {
                     color: Color(0xFFCBD5E1),
                   ),
                   const SizedBox(height: 12),
-                  const Text(
-                    '暂无公告',
-                    style: TextStyle(
+                  Text(
+                    _error ? '公告加载失败' : '暂无公告',
+                    style: const TextStyle(
                       fontFamily: 'Noto Sans SC',
                       color: Color(0xFF64748B),
                     ),
@@ -93,13 +156,20 @@ class _AnnouncementListPageState extends State<AnnouncementListPage> {
               color: AppColors.brand,
               child: ListView.separated(
                 padding: const EdgeInsets.only(bottom: 24),
-                itemCount: _items.length,
+                physics: const AlwaysScrollableScrollPhysics(),
+                itemCount: _items.length + (_items.length < _total ? 1 : 0),
                 separatorBuilder: (_, _) => const Divider(
                   height: 1,
                   thickness: 1,
                   color: Color(0xFFF1F5F9),
                 ),
                 itemBuilder: (context, index) {
+                  if (index == _items.length) {
+                    return TextButton(
+                      onPressed: _moreBusy ? null : _more,
+                      child: Text(_moreBusy ? '加载中' : '加载更多'),
+                    );
+                  }
                   final item = _items[index];
                   return GestureDetector(
                     onTap: () => _showDetail(item),
@@ -143,7 +213,7 @@ class _AnnouncementListPageState extends State<AnnouncementListPage> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  '【${item.tag}】校园通知',
+                                  '【${item.tag}】${item.read ? '已读' : '未读'}',
                                   style: const TextStyle(
                                     fontFamily: 'Noto Sans SC',
                                     fontSize: 12,
@@ -167,62 +237,10 @@ class _AnnouncementListPageState extends State<AnnouncementListPage> {
     );
   }
 
-  void _showDetail(HomeAnnouncementModel item) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          20,
-          20,
-          20 + MediaQuery.of(ctx).padding.bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              item.title,
-              style: const TextStyle(
-                fontFamily: 'Noto Sans SC',
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              '【${item.tag}】该公告来自校园通知中心。请留意图书馆、后勤与教务的后续安排。',
-              style: const TextStyle(
-                fontFamily: 'Noto Sans SC',
-                fontSize: 13,
-                height: 1.6,
-                color: Color(0xFF64748B),
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: OutlinedButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.brand,
-                  side: const BorderSide(color: AppColors.brand),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(22),
-                  ),
-                ),
-                child: const Text('知道了'),
-              ),
-            ),
-          ],
-        ),
-      ),
+  Future<void> _showDetail(HomeAnnouncementModel item) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => AnnouncementDetailPage(id: item.id)),
     );
+    if (mounted) await _load();
   }
 }

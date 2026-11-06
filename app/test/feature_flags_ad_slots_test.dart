@@ -329,7 +329,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('作业中心'), findsNothing);
-      expect(find.text('高频快捷办事'), findsOneWidget);
+      expect(find.text('高频快捷办事'), findsNothing);
       expect(find.text('宿舍报修'), findsWidgets);
     });
 

@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import '../../api/message_api.dart';
 import '../../models/message_models.dart';
 import '../../theme/app_theme.dart';
+import '../../services/notification_navigation.dart';
 
 /// 社区互动通知列表（消息中心「互动提醒」聚合条目点入）
 /// 数据源：GET /api/app/notifications?communityOnly=true
 class CommunityNotificationListPage extends StatefulWidget {
-  const CommunityNotificationListPage({super.key});
+  final bool communityOnly;
+  const CommunityNotificationListPage({super.key, this.communityOnly = true});
 
   @override
   State<CommunityNotificationListPage> createState() =>
@@ -23,6 +25,8 @@ class _CommunityNotificationListPageState
   bool _loadingMore = false;
   bool _hasMore = true;
   int _pageNum = 1;
+  int _generation = 0;
+  bool _opening = false;
 
   @override
   void initState() {
@@ -33,11 +37,14 @@ class _CommunityNotificationListPageState
 
   @override
   void dispose() {
+    _generation++;
     _scrollController.dispose();
     super.dispose();
   }
 
   Future<void> _load({bool reset = false}) async {
+    if (!reset && (_loading || _loadingMore || !_hasMore)) return;
+    final generation = ++_generation;
     if (reset) {
       _pageNum = 1;
       _hasMore = true;
@@ -48,8 +55,17 @@ class _CommunityNotificationListPageState
     }
     final page = await MessageApi.fetchCommunityNotifications(
       pageNum: _pageNum,
+      communityOnly: widget.communityOnly,
     );
-    if (!mounted) return;
+    if (!mounted || generation != _generation) return;
+    if (page == null) {
+      setState(() {
+        _loading = false;
+        _loadingMore = false;
+        _error = true;
+      });
+      return;
+    }
     setState(() {
       _loading = false;
       _loadingMore = false;
@@ -73,50 +89,27 @@ class _CommunityNotificationListPageState
   }
 
   Future<void> _markAllRead() async {
-    final ok = await MessageApi.markAllNotificationsRead();
-    if (!mounted || !ok) return;
-    setState(() {
-      _items = _items
-          .map(
-            (e) => CommunityNotificationItem(
-              notificationId: e.notificationId,
-              notificationType: e.notificationType,
-              title: e.title,
-              content: e.content,
-              relatedType: e.relatedType,
-              relatedId: e.relatedId,
-              read: true,
-              createdAt: e.createdAt,
-            ),
-          )
-          .toList();
-    });
+    final ok = await MessageApi.markAllNotificationsRead(
+      communityOnly: widget.communityOnly,
+    );
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('标记已读失败，请重试')));
+      return;
+    }
+    await _load(reset: true);
   }
 
-  Future<void> _markRead(CommunityNotificationItem item) async {
-    if (item.read) return;
-    final ok = await MessageApi.markNotificationRead(
-      '${item.notificationId}',
-    );
-    if (!mounted || !ok) return;
-    setState(() {
-      _items = _items
-          .map(
-            (e) => e.notificationId == item.notificationId
-                ? CommunityNotificationItem(
-                    notificationId: e.notificationId,
-                    notificationType: e.notificationType,
-                    title: e.title,
-                    content: e.content,
-                    relatedType: e.relatedType,
-                    relatedId: e.relatedId,
-                    read: true,
-                    createdAt: e.createdAt,
-                  )
-                : e,
-          )
-          .toList();
-    });
+  Future<void> _open(CommunityNotificationItem item) async {
+    if (_opening) return;
+    _opening = true;
+    try {
+      await NotificationNavigation.open(context, item);
+      if (mounted) await _load(reset: true);
+    } finally {
+      _opening = false;
+    }
   }
 
   String _formatTime(String raw) {
@@ -146,8 +139,8 @@ class _CommunityNotificationListPageState
           ),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text(
-          '互动提醒',
+        title: Text(
+          widget.communityOnly ? '互动提醒' : '流程办理通知',
           style: TextStyle(
             fontFamily: 'Noto Sans SC',
             fontSize: 17,
@@ -158,7 +151,7 @@ class _CommunityNotificationListPageState
         centerTitle: true,
         actions: [
           TextButton(
-            onPressed: _items.any((e) => !e.read) ? _markAllRead : null,
+            onPressed: _loading ? null : _markAllRead,
             child: const Text(
               '全部已读',
               style: TextStyle(
@@ -172,19 +165,32 @@ class _CommunityNotificationListPageState
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
-          : _error || _items.isEmpty
+          : _error
+          ? Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('加载失败，请重试'),
+                  TextButton(
+                    onPressed: () => _load(reset: true),
+                    child: const Text('重新加载'),
+                  ),
+                ],
+              ),
+            )
+          : _items.isEmpty
           ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(
+                children: [
+                  const Icon(
                     Icons.favorite_border_rounded,
                     size: 48,
                     color: Color(0xFFCBD5E1),
                   ),
                   SizedBox(height: 12),
                   Text(
-                    '暂无互动提醒',
+                    widget.communityOnly ? '暂无互动提醒' : '暂无流程通知',
                     style: TextStyle(
                       fontFamily: 'Noto Sans SC',
                       color: Color(0xFF64748B),
@@ -225,7 +231,7 @@ class _CommunityNotificationListPageState
 
   Widget _buildTile(CommunityNotificationItem item) {
     return GestureDetector(
-      onTap: () => _markRead(item),
+      onTap: () => _open(item),
       behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

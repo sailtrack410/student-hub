@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
@@ -37,6 +38,9 @@ class CommunityHomePage extends StatefulWidget {
   final ValueChanged<int>? onTabChanged;
   final int currentTabIndex;
 
+  /// 外部（如首页全局搜索）传入的初始或联动搜索词变化通知
+  final ValueListenable<String?>? externalSearchKeyword;
+
   /// 测试/预览注入初始帖子；传入时跳过网络请求
   final List<CommunityPost>? initialPosts;
 
@@ -49,6 +53,7 @@ class CommunityHomePage extends StatefulWidget {
     super.key,
     this.onTabChanged,
     this.currentTabIndex = 1,
+    this.externalSearchKeyword,
     this.initialPosts,
     this.interactionStore,
     this.feedGateway,
@@ -100,6 +105,11 @@ class _CommunityHomePageState extends State<CommunityHomePage> {
     //（服务端为准恢复 + 本机独有补上报）。失败静默，下次进社区自然重试。
     unawaited(_interactions.mergeServerBehaviors());
     FeatureFlags.revision.addListener(_onFeatureFlagsChanged);
+    final initialExternalKeyword = widget.externalSearchKeyword?.value?.trim();
+    if (initialExternalKeyword != null && initialExternalKeyword.isNotEmpty) {
+      _keyword = initialExternalKeyword;
+    }
+    widget.externalSearchKeyword?.addListener(_onExternalKeywordChanged);
     if (widget.initialPosts != null) {
       _feed.seed(widget.initialPosts!);
     } else {
@@ -109,8 +119,28 @@ class _CommunityHomePageState extends State<CommunityHomePage> {
     }
   }
 
+  void _onExternalKeywordChanged() {
+    final next = widget.externalSearchKeyword?.value?.trim() ?? '';
+    if (!mounted || next.isEmpty || next == _keyword) return;
+    setState(() {
+      _keyword = next;
+      _feed.clear();
+    });
+    _loadPosts(reset: true);
+  }
+
+  @override
+  void didUpdateWidget(covariant CommunityHomePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.externalSearchKeyword != widget.externalSearchKeyword) {
+      oldWidget.externalSearchKeyword?.removeListener(_onExternalKeywordChanged);
+      widget.externalSearchKeyword?.addListener(_onExternalKeywordChanged);
+    }
+  }
+
   @override
   void dispose() {
+    widget.externalSearchKeyword?.removeListener(_onExternalKeywordChanged);
     FeatureFlags.revision.removeListener(_onFeatureFlagsChanged);
     _feed.removeListener(_onFeedChanged);
     _feed.dispose();
@@ -391,7 +421,7 @@ class _CommunityHomePageState extends State<CommunityHomePage> {
                   color: AppColors.textBody,
                 ),
                 title: const Text(
-                  '分享给同学 / 社交平台',
+                  '标题＋链接分享',
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                 ),
                 onTap: () {
@@ -405,22 +435,19 @@ class _CommunityHomePageState extends State<CommunityHomePage> {
                   color: AppColors.textBody,
                 ),
                 title: const Text(
-                  '复制帖子内容',
+                  '复制链接',
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                 ),
                 onTap: () async {
-                  final text = [
-                    if (post.title.trim().isNotEmpty) post.title.trim(),
-                    if (post.content.trim().isNotEmpty) post.content.trim(),
-                    '帖子 ID：${post.id}',
-                  ].join('\n');
-                  await Clipboard.setData(ClipboardData(text: text));
+                  await Clipboard.setData(
+                    ClipboardData(text: CommunityApi.shareLinkOf(post)),
+                  );
                   if (!ctx.mounted) return;
                   Navigator.of(ctx).pop();
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('帖子内容已复制到剪贴板'),
+                      content: Text('链接已复制'),
                       behavior: SnackBarBehavior.floating,
                     ),
                   );
@@ -645,9 +672,74 @@ class _CommunityHomePageState extends State<CommunityHomePage> {
           children: [
             _buildHeader(),
             _buildNavRow(),
+            if (_keyword.isNotEmpty) _buildActiveSearchBar(),
             Expanded(child: _buildFeed()),
           ],
         ),
+      ),
+    );
+  }
+
+  void _clearKeyword() {
+    if (_keyword.isEmpty) return;
+    setState(() {
+      _keyword = '';
+      _feed.clear();
+    });
+    _loadPosts(reset: true);
+  }
+
+  Widget _buildActiveSearchBar() {
+    return Container(
+      key: const ValueKey('community-search-active-bar'),
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: const BoxDecoration(
+        color: AppColors.brandSoft,
+        border: Border(bottom: BorderSide(color: AppColors.feedDivider)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.search_rounded, size: 15, color: AppColors.brand),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              '搜索：“$_keyword”',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: 'Noto Sans SC',
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.brand,
+              ),
+            ),
+          ),
+          GestureDetector(
+            key: const ValueKey('community-search-clear'),
+            onTap: _clearKeyword,
+            behavior: HitTestBehavior.opaque,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '清除',
+                    style: TextStyle(
+                      fontFamily: 'Noto Sans SC',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.brand,
+                    ),
+                  ),
+                  SizedBox(width: 2),
+                  Icon(Icons.close_rounded, size: 14, color: AppColors.brand),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

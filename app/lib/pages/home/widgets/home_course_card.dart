@@ -44,10 +44,10 @@ class HomeCourseCard extends StatelessWidget {
                 children: [
                   if (current != null)
                     Positioned(
-                      right: -20,
-                      bottom: 4,
+                      right: -12,
+                      bottom: 2,
                       child: Opacity(
-                        opacity: 0.24,
+                        opacity: 0.42,
                         child: Image.asset(
                           'assets/images/home/home-schedule-diorama.png',
                           width: 136,

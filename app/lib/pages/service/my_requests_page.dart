@@ -12,8 +12,17 @@ import 'work_order_detail_page.dart';
 /// 数据来源 `GET /api/app/service-requests`；列表不再使用任何演示卡片。
 class MyRequestsPage extends StatefulWidget {
   final int initialFilterIndex;
+  final Future<Map<String, dynamic>?> Function({
+    int pageNum,
+    int pageSize,
+    String? status,
+  })? requestsLoader;
 
-  const MyRequestsPage({super.key, this.initialFilterIndex = 0});
+  const MyRequestsPage({
+    super.key,
+    this.initialFilterIndex = 0,
+    this.requestsLoader,
+  });
 
   @override
   State<MyRequestsPage> createState() => _MyRequestsPageState();
@@ -21,6 +30,7 @@ class MyRequestsPage extends StatefulWidget {
 
 class _MyRequestsPageState extends State<MyRequestsPage> {
   static const _pageSize = 20;
+  static const _maxAutoPrefetchPages = 5;
   static const _filters = [
     _FilterTabItem('全部'),
     _FilterTabItem('处理中'),
@@ -36,6 +46,23 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
   bool _loading = true;
   bool _loadingMore = false;
   bool _error = false;
+  int _loadGeneration = 0;
+
+  Future<Map<String, dynamic>?> _fetchPage({
+    required int pageNum,
+    required int pageSize,
+    String? status,
+  }) {
+    final loader = widget.requestsLoader;
+    if (loader != null) {
+      return loader(pageNum: pageNum, pageSize: pageSize, status: status);
+    }
+    return _api.fetchMyRequests(
+      pageNum: pageNum,
+      pageSize: pageSize,
+      status: status,
+    );
+  }
 
   @override
   void initState() {
@@ -47,6 +74,7 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
   }
 
   Future<void> _load({bool reset = false}) async {
+    final generation = reset ? ++_loadGeneration : _loadGeneration;
     if (reset) {
       setState(() {
         _loading = true;
@@ -60,11 +88,11 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
       setState(() => _loadingMore = true);
     }
 
-    final page = await _api.fetchMyRequests(
+    final page = await _fetchPage(
       pageNum: _page,
       pageSize: _pageSize,
     );
-    if (!mounted) return;
+    if (!mounted || generation != _loadGeneration) return;
 
     if (page == null) {
       setState(() {
@@ -75,6 +103,36 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
       return;
     }
 
+    _appendPageRecords(page);
+    setState(() {
+      _loading = false;
+      _loadingMore = false;
+      _error = false;
+    });
+
+    // 若总条数超过首屏且在自动预取上限内，自动补齐剩余分页，
+    // 保证「处理中 / 待验收 / 已办结」跨页筛选不漏单且各 Tab 计数完整显示。
+    while (mounted &&
+        generation == _loadGeneration &&
+        _items.length < _total &&
+        _page <= _maxAutoPrefetchPages) {
+      setState(() => _loadingMore = true);
+      final nextPage = await _fetchPage(
+        pageNum: _page,
+        pageSize: _pageSize,
+      );
+      if (!mounted || generation != _loadGeneration) return;
+      if (nextPage == null) {
+        setState(() => _loadingMore = false);
+        break;
+      }
+      final added = _appendPageRecords(nextPage);
+      setState(() => _loadingMore = false);
+      if (added == 0) break;
+    }
+  }
+
+  int _appendPageRecords(Map<String, dynamic> page) {
     final records = (page['records'] as List? ?? const [])
         .whereType<Map>()
         .map(
@@ -86,14 +144,10 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
     final newRecords = records
         .where((item) => !existingIds.contains(item.requestId))
         .toList();
-    setState(() {
-      _items.addAll(newRecords);
-      _total = int.tryParse(page['total']?.toString() ?? '') ?? _items.length;
-      _page += 1;
-      _loading = false;
-      _loadingMore = false;
-      _error = false;
-    });
+    _items.addAll(newRecords);
+    _total = int.tryParse(page['total']?.toString() ?? '') ?? _items.length;
+    _page += 1;
+    return newRecords.length;
   }
 
   List<ServiceRequestSummary> get _visibleItems =>
@@ -114,7 +168,9 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
   }
 
   int _countForFilter(int index) {
-    if (_items.length < _total) return -1;
+    if (index == 0) {
+      return _total > _items.length ? _total : _items.length;
+    }
     return _items.where((item) {
       return switch (index) {
         1 =>
@@ -199,16 +255,16 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7FAF9),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.card,
         elevation: 0,
         title: const Text(
           '我的申请',
           style: TextStyle(
-            fontFamily: 'Noto Sans SC',
-            fontSize: 17,
-            fontWeight: FontWeight.bold,
+            fontFamily: AppTypography.fontFamily,
+            fontSize: AppTypography.navTitleSize,
+            fontWeight: AppTypography.navTitleWeight,
             color: AppColors.textPrimary,
           ),
         ),
@@ -232,8 +288,13 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
 
   Widget _buildFilterBar() {
     return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+      color: AppColors.card,
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.cardGroupGap,
+        4,
+        AppSpacing.cardGroupGap,
+        10,
+      ),
       child: Row(
         children: [
           for (var i = 0; i < _filters.length; i++)
@@ -246,7 +307,7 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   decoration: BoxDecoration(
                     color: _selectedFilterIndex == i
-                        ? const Color(0xFFEFF6FF)
+                        ? AppColors.brandSoft
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -255,14 +316,14 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
                       Text(
                         _filters[i].label,
                         style: TextStyle(
-                          fontFamily: 'Noto Sans SC',
-                          fontSize: 12,
+                          fontFamily: AppTypography.fontFamily,
+                          fontSize: AppTypography.metaSize,
                           fontWeight: _selectedFilterIndex == i
                               ? FontWeight.w600
                               : FontWeight.w400,
                           color: _selectedFilterIndex == i
                               ? AppColors.brand
-                              : const Color(0xFF64748B),
+                              : AppColors.textSecondary,
                         ),
                       ),
                       if (_countForFilter(i) >= 0) ...[
@@ -270,10 +331,10 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
                         Text(
                           '${_countForFilter(i)}',
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: AppTypography.metaSize,
                             color: _selectedFilterIndex == i
                                 ? AppColors.brand
-                                : const Color(0xFF64748B),
+                                : AppColors.textSecondary,
                           ),
                         ),
                       ],
@@ -335,12 +396,19 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
     return RefreshIndicator(
       onRefresh: () => _load(reset: true),
       child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.pageHorizontal,
+          AppSpacing.cardGroupGap,
+          AppSpacing.pageHorizontal,
+          28,
+        ),
         itemCount: visible.length + (_items.length < _total ? 1 : 0),
         itemBuilder: (context, index) {
           if (index >= visible.length) {
             return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              padding: const EdgeInsets.symmetric(
+                vertical: AppSpacing.cardPadding,
+              ),
               child: Center(
                 child: TextButton(
                   onPressed: _loadingMore ? null : () => _load(),
@@ -358,12 +426,12 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
   Widget _buildCard(ServiceRequestSummary item) {
     final color = _statusColor(item.status);
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: AppSpacing.cardGap),
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: AppColors.feedDivider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -374,9 +442,9 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
                 child: Text(
                   item.requestNo.isEmpty ? '申请编号待生成' : item.requestNo,
                   style: const TextStyle(
-                    fontFamily: 'Noto Sans SC',
-                    fontSize: 12,
-                    color: Color(0xFF64748B),
+                    fontFamily: AppTypography.fontFamily,
+                    fontSize: AppTypography.metaSize,
+                    color: AppColors.textSecondary,
                   ),
                 ),
               ),
@@ -388,32 +456,33 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: AppSpacing.cardGroupGap),
           Text(
             item.title.isEmpty ? item.itemName : item.title,
             style: const TextStyle(
-              fontFamily: 'Noto Sans SC',
-              fontSize: 16,
+              fontFamily: AppTypography.fontFamily,
+              fontSize: AppTypography.cardTitleSize,
               fontWeight: FontWeight.bold,
               color: AppColors.textPrimary,
+              height: AppTypography.titleLineHeight,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.titleSummaryGap),
           Text(
             '${item.itemName} · ${_formatTime(item.submittedAt)}提交',
             style: const TextStyle(
-              fontFamily: 'Noto Sans SC',
-              fontSize: 12,
-              color: Color(0xFF64748B),
+              fontFamily: AppTypography.fontFamily,
+              fontSize: AppTypography.metaSize,
+              color: AppColors.textSecondary,
             ),
           ),
           if (item.workOrderNo != null && item.workOrderNo!.isNotEmpty) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: AppSpacing.cardGroupGap),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
+                color: AppColors.background,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -421,17 +490,17 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
                   const Icon(
                     Icons.build_circle_outlined,
                     size: 16,
-                    color: Color(0xFF64748B),
+                    color: AppColors.textSecondary,
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: AppSpacing.titleSummaryGap),
                   Expanded(
                     child: Text(
                       '工单 ${item.workOrderNo} · ${workOrderStatusLabel(item.workOrderStatus ?? '')}'
                       '${item.assigneeName?.isNotEmpty == true ? ' · ${item.assigneeName}' : ''}',
                       style: const TextStyle(
-                        fontFamily: 'Noto Sans SC',
-                        fontSize: 12,
-                        color: Color(0xFF475569),
+                        fontFamily: AppTypography.fontFamily,
+                        fontSize: AppTypography.metaSize,
+                        color: AppColors.textBody,
                       ),
                     ),
                   ),
@@ -439,7 +508,7 @@ class _MyRequestsPageState extends State<MyRequestsPage> {
               ),
             ),
           ],
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.cardGroupGap),
           Row(
             children: [
               if (item.canUrge) ...[

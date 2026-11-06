@@ -6,12 +6,18 @@ import '../../api/auth_service.dart';
 import '../../api/profile_api.dart';
 import '../../models/user_session.dart';
 import '../../services/recently_viewed_store.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/badge_icon.dart';
 import '../../widgets/user_avatar.dart';
+import '../schedule/grade_query_page.dart';
+import '../schedule/schedule_page.dart';
+import '../service/my_requests_page.dart';
 import 'account_center_page.dart';
 import 'badge_wall_page.dart';
 import 'browse_history_page.dart';
+import 'electricity_query_page.dart';
 import 'help_center_page.dart';
+import 'jw_auth_page.dart';
 import 'settings_security_page.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -235,6 +241,7 @@ class _ProfilePageState extends State<ProfilePage> {
             children: [
               _buildIdentity(),
               _buildBadgeRoom(),
+              _buildCampusServices(),
               _buildCommunity(),
               _buildAccount(),
               if (_loading)
@@ -398,20 +405,27 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _buildStat(String label, int value) {
     return Expanded(
-      child: Column(
-        children: [
-          Text(
-            '$value',
-            style: const TextStyle(
-              fontSize: 21,
-              height: 1.2,
-              fontWeight: FontWeight.w600,
-              color: _ink,
-            ),
+      child: InkWell(
+        onTap: _openAccountCenter,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(
+            children: [
+              Text(
+                '$value',
+                style: const TextStyle(
+                  fontSize: 20,
+                  height: 1.2,
+                  fontWeight: FontWeight.w700,
+                  color: _ink,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(label, style: const TextStyle(fontSize: 11, color: _muted)),
+            ],
           ),
-          const SizedBox(height: 6),
-          Text(label, style: const TextStyle(fontSize: 11, color: _muted)),
-        ],
+        ),
       ),
     );
   }
@@ -423,79 +437,164 @@ class _ProfilePageState extends State<ProfilePage> {
         .where((code) => code.isNotEmpty)
         .take(3)
         .toList();
-    return Material(
-      color: const Color(0xFF171916),
-      child: InkWell(
-        onTap: _openBadgeWall,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      '荣誉典藏室',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.5,
-                        color: Color(0xFFE0C995),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Material(
+        color: const Color(0xFF171916),
+        borderRadius: BorderRadius.circular(18),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: _openBadgeWall,
+          borderRadius: BorderRadius.circular(18),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '荣誉典藏室',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1.5,
+                          color: Color(0xFFE0C995),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 9),
-                    Text(
-                      '成长等级与荣誉勋章  ·  $_badgeCount/${_totalBadgeCount ?? _badges.length}',
-                      style: const TextStyle(fontSize: 11, color: _gold),
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      Text(
+                        '成长等级与荣誉勋章  ·  $_badgeCount/${_totalBadgeCount ?? _badges.length}',
+                        style: const TextStyle(fontSize: 11, color: _gold),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              for (final code in recent)
-                Padding(
-                  padding: const EdgeInsets.only(left: 1),
-                  child: BadgeIcon(code: code, size: 49),
+                for (final code in recent)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 2),
+                    child: BadgeIcon(code: code, size: 46),
+                  ),
+                const SizedBox(width: 5),
+                const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 14,
+                  color: _gold,
                 ),
-              const SizedBox(width: 5),
-              const Icon(
-                Icons.arrow_forward_ios_rounded,
-                size: 14,
-                color: _gold,
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildCommunity() {
+  Widget _buildCampusServices() {
+    final isAuthorized =
+        widget.session.authorizationStatus.toUpperCase() == 'AUTHORIZED';
     return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 25, 22, 0),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '社区足迹',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: _muted,
+          const Padding(
+            padding: EdgeInsets.only(left: 4, bottom: 8),
+            child: Text(
+              '校园事务与服务',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: _muted,
+              ),
             ),
           ),
-          _buildMenuItem(
-            title: '我的浏览历史',
-            trailing: RecentlyViewedStore.count == 0
-                ? '暂无'
-                : '${RecentlyViewedStore.count} 条',
-            onTap: () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const BrowseHistoryPage()),
-              );
-              if (mounted) setState(() {});
-            },
+          _buildGroupCard([
+            _buildMenuItem(
+              title: '我的申请',
+              icon: Icons.assignment_outlined,
+              iconColor: AppColors.brand,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const MyRequestsPage()),
+              ),
+            ),
+            _buildMenuItem(
+              title: '我的课表',
+              icon: Icons.calendar_month_outlined,
+              iconColor: AppColors.accentDeep,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SchedulePage()),
+              ),
+            ),
+            _buildMenuItem(
+              title: '成绩与绩点',
+              icon: Icons.military_tech_outlined,
+              iconColor: const Color(0xFF7C3AED),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const GradeQueryPage()),
+              ),
+            ),
+            _buildMenuItem(
+              title: '教务实名认证',
+              icon: Icons.verified_user_outlined,
+              iconColor: const Color(0xFF0284C7),
+              trailing: isAuthorized ? '已认证' : '去认证',
+              onTap: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const JwAuthPage()),
+                );
+                if (mounted) _load();
+              },
+            ),
+            _buildMenuItem(
+              title: '宿舍电费查询',
+              icon: Icons.bolt_rounded,
+              iconColor: const Color(0xFFD97706),
+              showDivider: false,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ElectricityQueryPage()),
+              ),
+            ),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCommunity() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(left: 4, bottom: 8),
+            child: Text(
+              '社区足迹',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: _muted,
+              ),
+            ),
           ),
+          _buildGroupCard([
+            _buildMenuItem(
+              title: '我的浏览历史',
+              icon: Icons.history_rounded,
+              iconColor: AppColors.brand,
+              trailing: RecentlyViewedStore.count == 0
+                  ? '暂无'
+                  : '${RecentlyViewedStore.count} 条',
+              showDivider: false,
+              onTap: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const BrowseHistoryPage()),
+                );
+                if (mounted) setState(() {});
+              },
+            ),
+          ]),
         ],
       ),
     );
@@ -503,34 +602,65 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _buildAccount() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 19, 22, 30),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '账号与管理',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: _muted,
+          const Padding(
+            padding: EdgeInsets.only(left: 4, bottom: 8),
+            child: Text(
+              '账号与管理',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: _muted,
+              ),
             ),
           ),
-          _buildMenuItem(title: '账号中心', onTap: _openAccountCenter),
-          _buildMenuItem(title: '设置与账号安全', onTap: _openSettings),
-          _buildMenuItem(
-            title: '帮助中心与反馈',
-            showDivider: false,
-            onTap: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const HelpCenterPage())),
-          ),
+          _buildGroupCard([
+            _buildMenuItem(
+              title: '账号中心',
+              icon: Icons.manage_accounts_outlined,
+              iconColor: AppColors.brand,
+              onTap: _openAccountCenter,
+            ),
+            _buildMenuItem(
+              title: '设置与账号安全',
+              icon: Icons.security_outlined,
+              iconColor: AppColors.accentDeep,
+              onTap: _openSettings,
+            ),
+            _buildMenuItem(
+              title: '帮助中心与反馈',
+              icon: Icons.help_outline_rounded,
+              iconColor: AppColors.textSecondary,
+              showDivider: false,
+              onTap: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const HelpCenterPage())),
+            ),
+          ]),
         ],
       ),
     );
   }
 
+  Widget _buildGroupCard(List<Widget> children) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.feedDivider),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: children),
+    );
+  }
+
   Widget _buildMenuItem({
     required String title,
+    IconData? icon,
+    Color? iconColor,
     String? trailing,
     bool showDivider = true,
     required VoidCallback onTap,
@@ -538,26 +668,43 @@ class _ProfilePageState extends State<ProfilePage> {
     return InkWell(
       onTap: onTap,
       child: Container(
-        height: 57,
+        constraints: const BoxConstraints(
+          minHeight: AppSpacing.preferredTapTarget,
+        ),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.cardPadding,
+          vertical: 10,
+        ),
         decoration: BoxDecoration(
           border: showDivider
-              ? const Border(bottom: BorderSide(color: Color(0xFFDCDAD2)))
+              ? const Border(bottom: BorderSide(color: AppColors.feedDivider))
               : null,
         ),
         child: Row(
           children: [
+            if (icon != null) ...[
+              Icon(icon, size: 19, color: iconColor ?? _muted),
+              const SizedBox(width: AppSpacing.avatarTextGap),
+            ],
             Expanded(
               child: Text(
                 title,
-                style: const TextStyle(fontSize: 14, color: _ink),
+                style: const TextStyle(
+                  fontSize: AppTypography.itemTitleSize,
+                  fontWeight: FontWeight.w500,
+                  color: _ink,
+                ),
               ),
             ),
             if (trailing != null)
               Text(
                 trailing,
-                style: const TextStyle(fontSize: 12, color: _muted),
+                style: const TextStyle(
+                  fontSize: AppTypography.metaSize,
+                  color: _muted,
+                ),
               ),
-            const SizedBox(width: 7),
+            const SizedBox(width: AppSpacing.titleSummaryGap),
             const Icon(
               Icons.arrow_forward_ios_rounded,
               size: 13,

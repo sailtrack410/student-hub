@@ -273,19 +273,19 @@ class _SchedulePageState extends State<SchedulePage> {
       return minutes >= now.hour * 60 + now.minute;
     }).firstOrNull;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: isCurrentWeek ? AppColors.brandSoft : AppColors.warningSoft,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
           Icon(
             isCurrentWeek ? Icons.today_outlined : Icons.history,
-            size: 20,
+            size: 16,
             color: isCurrentWeek ? AppColors.brand : AppColors.warning,
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               !isCurrentWeek
@@ -294,8 +294,13 @@ class _SchedulePageState extends State<SchedulePage> {
                   ? '今天没有课程安排'
                   : next == null
                   ? '今天 ${courses.length} 段课程，已全部结束'
-                  : '今天 ${courses.length} 段课程 · 下一节 ${_timeRange(next)}\n${next['courseName'] ?? '课程'} · ${next['location'] ?? '地点待公布'}',
-              style: Theme.of(context).textTheme.bodyMedium,
+                  : '今天 ${courses.length} 段课程 · 下一节 ${_timeRange(next)} · ${next['courseName'] ?? '课程'}（${next['location'] ?? '地点待公布'}）',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],
@@ -303,9 +308,50 @@ class _SchedulePageState extends State<SchedulePage> {
     );
   }
 
+  Widget _toolbarPill({
+    required String label,
+    required VoidCallback onTap,
+    IconData? icon,
+    bool highlighted = false,
+  }) {
+    final fg = highlighted ? AppColors.brand : AppColors.textSecondary;
+    final bg = highlighted ? AppColors.brandSoft : const Color(0xFFF1F5F9);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 32),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 14, color: fg),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: fg,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final grid = !_listView && MediaQuery.textScalerOf(context).scale(1) <= 1.2;
+    final isCurrentWeek =
+        _selectedWeek == null || _selectedWeek == _currentWeek;
     return Scaffold(
       appBar: AppBar(
         title: const Text('我的课表'),
@@ -335,40 +381,54 @@ class _SchedulePageState extends State<SchedulePage> {
         onRefresh: () => _load(),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
           children: [
             Row(
               children: [
                 IconButton(
                   tooltip: '上一周',
+                  visualDensity: VisualDensity.compact,
                   onPressed: (_selectedWeek ?? _currentWeek ?? 1) > 1
                       ? () => _load(week: (_selectedWeek ?? _currentWeek!) - 1)
                       : null,
                   icon: const Icon(Icons.chevron_left),
                 ),
                 Expanded(
-                  child: TextButton(
-                    onPressed: _pickWeek,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _selectedWeek == null
-                              ? '选择周次'
-                              : '第 $_selectedWeek 周'
-                                    '${_selectedWeek == _currentWeek ? ' · 本周' : ''} ▾',
-                        ),
-                        if (_weekRangeText.isNotEmpty)
+                  child: InkWell(
+                    onTap: _pickWeek,
+                    borderRadius: BorderRadius.circular(10),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 4,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
                           Text(
-                            _weekRangeText,
-                            style: Theme.of(context).textTheme.bodySmall,
+                            _selectedWeek == null
+                                ? '选择周次'
+                                : '第 $_selectedWeek 周'
+                                      '${_selectedWeek == _currentWeek ? ' · 本周' : ''} ▾',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
                           ),
-                      ],
+                          if (_weekRangeText.isNotEmpty)
+                            Text(
+                              _weekRangeText,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
                 IconButton(
                   tooltip: '下一周',
+                  visualDensity: VisualDensity.compact,
                   onPressed: (_selectedWeek ?? _currentWeek ?? 1) < _totalWeeks
                       ? () => _load(
                           week: (_selectedWeek ?? _currentWeek ?? 0) + 1,
@@ -378,28 +438,33 @@ class _SchedulePageState extends State<SchedulePage> {
                 ),
               ],
             ),
+            const SizedBox(height: 4),
             Wrap(
               alignment: WrapAlignment.spaceBetween,
               crossAxisAlignment: WrapCrossAlignment.center,
               spacing: 8,
+              runSpacing: 6,
               children: [
-                TextButton(onPressed: () => _load(), child: const Text('回到本周')),
-                TextButton.icon(
-                  onPressed: _openToday,
-                  icon: const Icon(Icons.today_outlined),
-                  label: const Text('今天'),
+                _toolbarPill(
+                  label: '回到本周',
+                  onTap: () => _load(),
+                  highlighted: !isCurrentWeek,
                 ),
-                TextButton.icon(
-                  onPressed: () => setState(() => _listView = grid),
-                  icon: Icon(
-                    grid
-                        ? Icons.view_agenda_outlined
-                        : Icons.calendar_view_week,
-                  ),
-                  label: Text(grid ? '列表视图' : '整周网格'),
+                _toolbarPill(
+                  label: '今天',
+                  icon: Icons.today_outlined,
+                  onTap: _openToday,
+                ),
+                _toolbarPill(
+                  label: grid ? '列表视图' : '整周网格',
+                  icon: grid
+                      ? Icons.view_agenda_outlined
+                      : Icons.calendar_view_week,
+                  onTap: () => setState(() => _listView = grid),
                 ),
               ],
             ),
+            const SizedBox(height: 6),
             if (_loading && _data == null)
               const AppStatusPanel(title: '正在加载课表', loading: true)
             else if (_failed && _data == null)
@@ -410,7 +475,7 @@ class _SchedulePageState extends State<SchedulePage> {
               ),
             if (_data != null) ...[
               _todaySummary(),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               AppRefreshStatus(
                 refreshing: _loading,
                 stale: _offline || _failed,
@@ -437,7 +502,7 @@ class _SchedulePageState extends State<SchedulePage> {
                         MediaQuery.sizeOf(context).height -
                         MediaQuery.paddingOf(context).top -
                         kToolbarHeight -
-                        270,
+                        196,
                     selectedWeekday: _selectedWeekday,
                     onSelectWeekday: (weekday) => setState(() {
                       _selectedWeekday = weekday;

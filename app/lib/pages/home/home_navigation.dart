@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
 import '../../api/auth_service.dart';
@@ -20,8 +21,13 @@ abstract final class HomeNavigation {
     required AuthService authService,
     required ValueChanged<int> switchTab,
     required VoidCallback onUnreadChanged,
+    ValueListenable<String?>? communitySearchKeyword,
   }) => switch (index) {
-    1 => CommunityHomePage(currentTabIndex: index, onTabChanged: (_) {}),
+    1 => CommunityHomePage(
+      currentTabIndex: index,
+      onTabChanged: (_) {},
+      externalSearchKeyword: communitySearchKeyword,
+    ),
     2 =>
       aiEnabled
           ? AIAssistantPage(currentTabIndex: index, onTabChanged: (_) {})

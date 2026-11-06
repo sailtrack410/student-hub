@@ -202,14 +202,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // 头部与快捷入口
+      // 头部与分类服务（不再重复展示顶部高频快捷办事胶囊行）
       expect(find.text('服务大厅'), findsOneWidget);
       expect(find.text('我的申请 (2)'), findsOneWidget);
-      expect(find.text('高频快捷办事'), findsOneWidget);
-      expect(find.text('宿舍报修'), findsWidgets);
-      expect(find.text('教室报修'), findsOneWidget);
-      expect(find.text('请假申请'), findsWidgets);
-      expect(find.text('在读证明'), findsOneWidget);
+      expect(find.text('高频快捷办事'), findsNothing);
+      expect(find.text('宿舍报修'), findsOneWidget);
+      expect(find.text('教室与公共区域报修'), findsOneWidget);
+      expect(find.text('请假申请'), findsOneWidget);
+      expect(find.text('在读证明申请'), findsOneWidget);
 
       // 分类组
       expect(find.text('后勤报修服务'), findsOneWidget);
@@ -510,8 +510,8 @@ void main() {
       // 5. 点击右上角“更多”弹出操作菜单 (非直接弹举报)
       await tester.tap(find.byIcon(Icons.more_horiz_rounded));
       await tester.pumpAndSettle();
-      expect(find.text('分享给同学 / 社交平台'), findsOneWidget);
-      expect(find.text('复制帖子内容'), findsOneWidget);
+      expect(find.text('标题＋链接分享'), findsOneWidget);
+      expect(find.text('复制链接'), findsOneWidget);
       expect(find.text('不感兴趣（在信息流隐藏此帖）'), findsOneWidget);
       expect(find.text('举报违规内容'), findsOneWidget);
       expect(find.text('取消'), findsOneWidget);
@@ -770,24 +770,22 @@ void main() {
     expect(find.textContaining('请输入'), findsWidgets);
   });
 
-  testWidgets('GradeQueryPage renders GPA summary and course list', (
-    WidgetTester tester,
+  testWidgets('GradeQueryPage shows retry after unavailable grades', (
+    tester,
   ) async {
-    tester.view.physicalSize = const Size(375, 812);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() => tester.view.resetPhysicalSize());
-
-    await tester.pumpWidget(const MaterialApp(home: GradeQueryPage()));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GradeQueryPage(
+          loadReport: () async => throw Exception('请先完成教务认证'),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
-
     expect(find.text('学期成绩与GPA'), findsOneWidget);
-    expect(find.text('平均学分绩点'), findsOneWidget);
-    expect(find.text('已修学分'), findsOneWidget);
-    expect(find.text('挂科科目'), findsOneWidget);
-    expect(find.text('高等数学 (下)'), findsOneWidget);
-    expect(find.text('92'), findsOneWidget);
-    expect(find.text('软件工程导论'), findsOneWidget);
-    expect(find.text('95'), findsOneWidget);
+    expect(find.text('重试'), findsOneWidget);
+    expect(find.text('教务认证'), findsOneWidget);
+    expect(find.text('高等数学 (下)'), findsNothing);
+    expect(find.text('3.99'), findsNothing);
   });
 
   testWidgets(

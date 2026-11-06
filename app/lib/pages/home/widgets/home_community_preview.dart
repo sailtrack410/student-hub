@@ -30,7 +30,7 @@ class HomeCommunityPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.homeHorizontal),
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(22),
@@ -45,7 +45,10 @@ class HomeCommunityPreview extends StatelessWidget {
         child: Stack(
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.cardGroupGap,
+                vertical: 4,
+              ),
               child: post == null
                   ? _EmptyFeed(onOpen: onOpen)
                   : Column(
@@ -95,7 +98,7 @@ class _LeadPost extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(13, 7, 5, 3),
+      padding: const EdgeInsets.fromLTRB(13, 6, 5, 3),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(17),
@@ -116,20 +119,20 @@ class _LeadPost extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 11,
+                      fontSize: AppTypography.metaSize,
                       color: AppColors.textSecondary,
                     ),
                   ),
-                  const SizedBox(height: 7),
+                  const SizedBox(height: AppSpacing.titleSummaryGap),
                   Text(
                     post.title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
+                      fontSize: AppTypography.postTitleSize,
+                      fontWeight: AppTypography.postTitleWeight,
                       color: AppColors.textPrimary,
-                      height: 1.4,
+                      height: AppTypography.titleLineHeight,
                     ),
                   ),
                 ],
@@ -145,8 +148,8 @@ class _LeadPost extends StatelessWidget {
               onTap: likePending ? null : onLike,
               borderRadius: BorderRadius.circular(12),
               child: SizedBox(
-                width: 48,
-                height: 48,
+                width: AppSpacing.preferredTapTarget,
+                height: AppSpacing.preferredTapTarget,
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -155,15 +158,17 @@ class _LeadPost extends StatelessWidget {
                           ? Icons.favorite_rounded
                           : Icons.favorite_border_rounded,
                       size: 18,
-                      color: liked ? AppColors.danger : AppColors.textSecondary,
+                      color: liked
+                          ? AppColors.likeActive
+                          : AppColors.textSecondary,
                     ),
                     const SizedBox(height: 2),
                     Text(
                       '$likeCount',
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: AppTypography.metaSize,
                         color: liked
-                            ? AppColors.danger
+                            ? AppColors.likeActive
                             : AppColors.textSecondary,
                       ),
                     ),
@@ -208,17 +213,17 @@ class _MorePostTile extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 13,
+                  fontSize: AppTypography.summarySize,
                   fontWeight: FontWeight.w600,
                   color: AppColors.textPrimary,
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.compactAvatarGap),
             Text(
               '${post.commentCount} 讨论',
               style: const TextStyle(
-                fontSize: 11,
+                fontSize: AppTypography.metaSize,
                 color: AppColors.textSecondary,
               ),
             ),

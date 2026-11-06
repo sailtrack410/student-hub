@@ -44,21 +44,65 @@ class HomeServiceHub extends StatelessWidget {
         selected.add(item);
       }
     }
+
+    final remaining = <ServiceItemData>[];
+    for (final code in HomeDashboardController.recommendedCodes) {
+      if (remaining.length >= 4) break;
+      for (final item in services) {
+        if (item.itemCode == code &&
+            !selected.any((current) => current.itemId == item.itemId) &&
+            !remaining.any((current) => current.itemId == item.itemId)) {
+          remaining.add(item);
+          break;
+        }
+      }
+    }
+    for (final item in services) {
+      if (remaining.length >= 4) break;
+      if (!selected.any((current) => current.itemId == item.itemId) &&
+          !remaining.any((current) => current.itemId == item.itemId)) {
+        remaining.add(item);
+      }
+    }
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: SizedBox(
-        height: 92 * MediaQuery.textScalerOf(context).scale(1),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (var i = 0; i < selected.length; i++) ...[
-              if (i > 0) const SizedBox(width: 8),
-              Expanded(child: _serviceTile(selected[i], i)),
-            ],
-            if (selected.isNotEmpty) const SizedBox(width: 8),
-            Expanded(child: _allServicesTile()),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.homeHorizontal),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            height: 72 * MediaQuery.textScalerOf(context).scale(1),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < selected.length; i++) ...[
+                  if (i > 0) const SizedBox(width: AppSpacing.compactAvatarGap),
+                  Expanded(child: _serviceTile(selected[i], i)),
+                ],
+                if (selected.isNotEmpty)
+                  const SizedBox(width: AppSpacing.compactAvatarGap),
+                Expanded(child: _allServicesTile()),
+              ],
+            ),
+          ),
+          if (remaining.isNotEmpty) ...[
+            const SizedBox(height: 5),
+            SizedBox(
+              height: 24,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: remaining.length,
+                separatorBuilder: (_, _) =>
+                    const SizedBox(width: AppSpacing.titleSummaryGap),
+                itemBuilder: (context, index) {
+                  final item = remaining[index];
+                  final tileIndex = selected.length + index;
+                  return _quickCapsule(item, tileIndex);
+                },
+              ),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -106,7 +150,7 @@ class HomeServiceHub extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 3),
+              const SizedBox(height: 2),
               Text(
                 HomeDashboardController.shortLabel(item),
                 maxLines: 1,
@@ -114,7 +158,7 @@ class HomeServiceHub extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: AppColors.textPrimary,
-                  fontSize: 12,
+                  fontSize: AppTypography.metaSize,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -124,6 +168,60 @@ class HomeServiceHub extends StatelessWidget {
       ),
     );
   }
+
+  Widget _quickCapsule(ServiceItemData item, int index) {
+    final pinned = isPinned(item.itemId);
+    return Semantics(
+      button: true,
+      selected: pinned,
+      label: '${item.name}，长按固定或取消固定',
+      child: InkWell(
+        key: ValueKey('home-service-$index'),
+        onTap: () => onOpen(item),
+        onLongPress: () => onTogglePin(item.itemId),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFD9E7FF)),
+          ),
+          alignment: Alignment.center,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                _capsuleIcon(item.itemCode),
+                size: 13,
+                color: AppColors.brand,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                HomeDashboardController.shortLabel(item),
+                style: const TextStyle(
+                  fontSize: AppTypography.feedMetaSize,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                  height: 1.1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  IconData _capsuleIcon(String code) => switch (code) {
+    'SCHEDULE-VIEW' => Icons.calendar_month_rounded,
+    'REPAIR-DORM' || 'REPAIR-PUBLIC' => Icons.handyman_rounded,
+    'AFFAIR-LEAVE' => Icons.description_rounded,
+    'AFFAIR-VENUE' => Icons.location_on_rounded,
+    'CERT-ENROLL' => Icons.workspace_premium_rounded,
+    'GUIDE-CONSULT' => Icons.auto_awesome_rounded,
+    _ => Icons.apps_rounded,
+  };
 
   Widget _allServicesTile() {
     return Semantics(
@@ -138,21 +236,21 @@ class HomeServiceHub extends StatelessWidget {
             Expanded(
               child: Center(
                 child: Container(
-                  width: 58,
-                  height: 58,
+                  width: 52,
+                  height: 52,
                   decoration: BoxDecoration(
                     color: AppColors.brandSoft,
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                   child: const Icon(
                     Icons.grid_view_rounded,
                     color: AppColors.brand,
-                    size: 27,
+                    size: 25,
                   ),
                 ),
               ),
             ),
-            const SizedBox(height: 3),
+            const SizedBox(height: 2),
             const Text(
               '全部服务',
               maxLines: 1,
